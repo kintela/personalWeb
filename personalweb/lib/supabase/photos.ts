@@ -38,6 +38,18 @@ export function getPhotoBucketName() {
   return process.env.NEXT_PUBLIC_SUPABASE_BUCKET ?? DEFAULT_BUCKET;
 }
 
+export function getPhotoPublicUrl(path: string, bucket = getPhotoBucketName()) {
+  const supabaseUrl = getSupabaseUrl();
+
+  if (!supabaseUrl) {
+    return "";
+  }
+
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+
+  return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(bucket)}/${encodedPath}`;
+}
+
 export async function getPhotoGallery(): Promise<PhotoGalleryResult> {
   const supabaseUrl = getSupabaseUrl();
   const supabaseKey = getSupabaseServerKey();
@@ -91,7 +103,7 @@ export async function getPhotoGallery(): Promise<PhotoGalleryResult> {
     .map((file) => ({
       id: file.id ?? file.name,
       name: file.name,
-      src: supabase.storage.from(bucket).getPublicUrl(file.name).data.publicUrl,
+      src: getPhotoPublicUrl(file.name, bucket),
       createdAt: file.created_at ?? null,
     }));
 

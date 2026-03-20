@@ -19,6 +19,8 @@ export type PhotoAuditResult = {
   error: string | null;
   databaseCount: number;
   storageCount: number;
+  storageBytes: number;
+  storageImages: string[];
   matchedCount: number;
   missingInStorage: string[];
   missingInDatabase: string[];
@@ -128,6 +130,7 @@ async function listBucketImages(
   bucket: string,
 ) {
   const images: string[] = [];
+  let totalBytes = 0;
 
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const { data, error } = await supabase.storage.from(bucket).list("", {
@@ -142,7 +145,10 @@ async function listBucketImages(
 
     const batch = (data ?? [])
       .filter((file) => IMAGE_FILE_PATTERN.test(file.name))
-      .map((file) => file.name);
+      .map((file) => {
+        totalBytes += file.metadata?.size ?? 0;
+        return file.name;
+      });
 
     images.push(...batch);
 
@@ -151,7 +157,10 @@ async function listBucketImages(
     }
   }
 
-  return sortNames(images);
+  return {
+    images: sortNames(images),
+    totalBytes,
+  };
 }
 
 async function listDatabaseImages(
@@ -207,6 +216,8 @@ export async function getPhotoAudit(): Promise<PhotoAuditResult> {
         "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
       databaseCount: 0,
       storageCount: 0,
+      storageBytes: 0,
+      storageImages: [],
       matchedCount: 0,
       missingInStorage: [],
       missingInDatabase: [],
@@ -223,11 +234,13 @@ export async function getPhotoAudit(): Promise<PhotoAuditResult> {
   });
 
   try {
-    const [{ count: databaseCount, images: databaseImages }, storageImages] =
-      await Promise.all([
-        listDatabaseImages(supabase, bucket),
-        listBucketImages(supabase, bucket),
-      ]);
+    const [
+      { count: databaseCount, images: databaseImages },
+      { images: storageImages, totalBytes: storageBytes },
+    ] = await Promise.all([
+      listDatabaseImages(supabase, bucket),
+      listBucketImages(supabase, bucket),
+    ]);
 
     const databaseSet = new Set(databaseImages);
     const storageSet = new Set(storageImages);
@@ -241,6 +254,8 @@ export async function getPhotoAudit(): Promise<PhotoAuditResult> {
       error: null,
       databaseCount,
       storageCount: storageImages.length,
+      storageBytes,
+      storageImages,
       matchedCount: databaseImages.filter((image) => storageSet.has(image)).length,
       missingInStorage,
       missingInDatabase,
@@ -254,6 +269,8 @@ export async function getPhotoAudit(): Promise<PhotoAuditResult> {
       error: error instanceof Error ? error.message : "No he podido auditar las fotos.",
       databaseCount: 0,
       storageCount: 0,
+      storageBytes: 0,
+      storageImages: [],
       matchedCount: 0,
       missingInStorage: [],
       missingInDatabase: [],

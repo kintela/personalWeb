@@ -1,5 +1,8 @@
+import Image from "next/image";
+import Link from "next/link";
 import { isAdminAuthenticated, isAdminConfigured } from "@/lib/admin/auth";
 import { getPhotoAudit } from "@/lib/admin/photos-audit";
+import { getPhotoPublicUrl } from "@/lib/supabase/photos";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +80,40 @@ function renderGapSummary(
   );
 }
 
+function formatBytes(bytes: number) {
+  if (bytes === 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const exponent = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
+  const value = bytes / 1024 ** exponent;
+
+  return `${value.toFixed(value >= 100 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+}
+
+function scoreBucketMatch(fileName: string, query: string) {
+  const normalizedFileName = fileName.toLowerCase();
+  const normalizedQuery = query.toLowerCase();
+
+  if (normalizedFileName === normalizedQuery) {
+    return 0;
+  }
+
+  if (normalizedFileName.startsWith(normalizedQuery)) {
+    return 1;
+  }
+
+  if (normalizedFileName.includes(normalizedQuery)) {
+    return 2;
+  }
+
+  return 3;
+}
+
 export default async function AdminPage(props: { searchParams: SearchParams }) {
   const searchParams = await props.searchParams;
   const errorMessage = getErrorMessage(getSingleValue(searchParams.error));
@@ -149,6 +186,28 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
   }
 
   const audit = await getPhotoAudit();
+  const bucketSearch = getSingleValue(searchParams.file).trim();
+  const matchedBucketFiles = bucketSearch
+    ? [...audit.storageImages]
+        .filter((fileName) =>
+          fileName.toLowerCase().includes(bucketSearch.toLowerCase()),
+        )
+        .sort((left, right) => {
+          const leftScore = scoreBucketMatch(left, bucketSearch);
+          const rightScore = scoreBucketMatch(right, bucketSearch);
+
+          if (leftScore !== rightScore) {
+            return leftScore - rightScore;
+          }
+
+          return left.localeCompare(right, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+        })
+    : [];
+  const previewFile = matchedBucketFiles[0] ?? null;
+  const previewUrl = previewFile ? getPhotoPublicUrl(previewFile, audit.bucket) : "";
 
   return (
     <main className="min-h-screen">
@@ -204,6 +263,15 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
             <p className="mt-3 text-3xl font-semibold text-white">
               {audit.storageCount}
             </p>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-400">
+              <span>Tamaño: {formatBytes(audit.storageBytes)}</span>
+              <span>
+                Último número: {audit.storageSequence.max?.toLocaleString("es-ES") ?? "sin datos"}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              {audit.storageBytes.toLocaleString("es-ES")} bytes
+            </p>
           </div>
           <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
             <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
@@ -221,6 +289,103 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
               {audit.error ? "Revisar" : "OK"}
             </p>
           </div>
+        </section>
+
+        <section className="rounded-[1.75rem] border border-white/10 bg-white/6 p-6 shadow-[0_24px_70px_rgba(15,23,42,0.22)]">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl space-y-2">
+              <h2 className="text-lg font-semibold text-white">
+                Buscar archivo en el bucket
+              </h2>
+              <p className="text-sm text-slate-400">
+                Filtra por nombre parcial o exacto. Si hay coincidencias, se
+                muestra primero la mejor y puedes cambiar a otra.
+              </p>
+            </div>
+
+            <form method="get" className="flex w-full max-w-xl flex-col gap-3 sm:flex-row">
+              <input
+                type="search"
+                name="file"
+                defaultValue={bucketSearch}
+                placeholder="Ejemplo: 1835 o 01_1835.jpg"
+                className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+              />
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+                >
+                  Buscar
+                </button>
+                <Link
+                  href="/admin"
+                  className="rounded-2xl border border-white/15 bg-black/20 px-5 py-3 text-sm font-medium text-slate-200 transition hover:border-cyan-300/40 hover:text-white"
+                >
+                  Limpiar
+                </Link>
+              </div>
+            </form>
+          </div>
+
+          {bucketSearch ? (
+            <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(320px,1.05fr)]">
+              <section className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <p className="text-sm text-slate-400">
+                  {matchedBucketFiles.length > 0
+                    ? `${matchedBucketFiles.length} coincidencias en el bucket.`
+                    : "No hay coincidencias en el bucket."}
+                </p>
+
+                {matchedBucketFiles.length > 0 ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {matchedBucketFiles.slice(0, 24).map((fileName) => (
+                      <Link
+                        key={fileName}
+                        href={`/admin?file=${encodeURIComponent(fileName)}`}
+                        className={`rounded-full border px-3 py-1 text-sm transition ${
+                          fileName === previewFile
+                            ? "border-cyan-300/50 bg-cyan-300/15 text-cyan-100"
+                            : "border-white/10 bg-white/5 text-slate-200 hover:border-cyan-300/35 hover:text-white"
+                        }`}
+                      >
+                        {fileName}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                {previewFile && previewUrl ? (
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
+                        Vista previa
+                      </p>
+                      <p className="break-all text-base font-medium text-white">
+                        {previewFile}
+                      </p>
+                    </div>
+                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/40">
+                      <Image
+                        src={previewUrl}
+                        alt={previewFile}
+                        width={1200}
+                        height={900}
+                        className="h-auto w-full object-contain"
+                        sizes="(max-width: 1280px) 100vw, 50vw"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">
+                    No hay una foto que mostrar con ese filtro.
+                  </p>
+                )}
+              </section>
+            </div>
+          ) : null}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
