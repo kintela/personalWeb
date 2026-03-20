@@ -34,6 +34,9 @@ type PhotoViewerProps = {
   initiallyUnlocked: boolean;
 };
 
+const PHOTO_VIEWER_GRID_STORAGE_KEY = "photo-viewer-compact-grid";
+type PhotoGridDensity = "default" | "compact" | "dense";
+
 function buildPhotoMeta(photo: PhotoAsset) {
   return [photo.dateLabel, photo.origin, photo.place].filter(Boolean).join(" · ");
 }
@@ -86,6 +89,31 @@ function buildVisiblePages(currentPage: number, totalPages: number) {
     .sort((left, right) => left - right);
 }
 
+function GridDensityIcon({
+  active,
+  columns,
+}: {
+  active: boolean;
+  columns: 4 | 6;
+}) {
+  const squareClassName = active
+    ? "border-cyan-300/60 bg-cyan-300/20"
+    : "border-white/20 bg-white/8";
+  const cells = columns === 6 ? 6 : 4;
+  const gridClassName = columns === 6 ? "grid-cols-3" : "grid-cols-2";
+
+  return (
+    <span className={`grid ${gridClassName} gap-1`}>
+      {Array.from({ length: cells }, (_, index) => (
+        <span
+          key={index}
+          className={`h-2.5 w-2.5 rounded-[0.2rem] border ${squareClassName}`}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function PhotoViewer({
   photos,
   configured,
@@ -106,6 +134,7 @@ export function PhotoViewer({
   const [filterInput, setFilterInput] = useState(filterValue);
   const [selectedPeopleGroup, setSelectedPeopleGroup] =
     useState<PhotoPeopleGroup>(peopleGroup);
+  const [gridDensity, setGridDensity] = useState<PhotoGridDensity>("default");
   const visiblePages = buildVisiblePages(currentPage, totalPages);
   const firstPosition = (currentPage - 1) * pageSize + 1;
   const lastPosition =
@@ -210,6 +239,30 @@ export function PhotoViewer({
     setSelectedPeopleGroup(peopleGroup);
   }, [peopleGroup]);
 
+  useEffect(() => {
+    const savedValue = window.localStorage.getItem(
+      PHOTO_VIEWER_GRID_STORAGE_KEY,
+    ) as PhotoGridDensity | null;
+
+    if (
+      savedValue === "compact" ||
+      savedValue === "dense" ||
+      savedValue === "default"
+    ) {
+      setGridDensity(savedValue);
+      return;
+    }
+
+    setGridDensity("default");
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      PHOTO_VIEWER_GRID_STORAGE_KEY,
+      gridDensity,
+    );
+  }, [gridDensity]);
+
   const renderPagination = () => {
     if (totalPages <= 1) {
       return null;
@@ -280,6 +333,19 @@ export function PhotoViewer({
       </div>
     );
   };
+
+  const gridClassName =
+    gridDensity === "dense"
+      ? "grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
+      : gridDensity === "compact"
+        ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        : "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3";
+  const imageSizes =
+    gridDensity === "dense"
+      ? "(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 16vw"
+      : gridDensity === "compact"
+        ? "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+        : "(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw";
 
   return (
     <section className="space-y-6">
@@ -388,27 +454,93 @@ export function PhotoViewer({
               ))}
             </div>
 
-            {hasActiveFilter || hasActivePeopleGroup ? (
-              <p className="text-sm text-slate-300">
-                {totalCount} resultados encontrados
-                {hasActiveFilter ? (
-                  <>
-                    {" "}para{" "}
-                    <span className="font-medium text-cyan-100">
-                      {filterValue}
-                    </span>
-                  </>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-h-6">
+                {hasActiveFilter || hasActivePeopleGroup ? (
+                  <p className="text-sm text-slate-300">
+                    {totalCount} resultados encontrados
+                    {hasActiveFilter ? (
+                      <>
+                        {" "}para{" "}
+                        <span className="font-medium text-cyan-100">
+                          {filterValue}
+                        </span>
+                      </>
+                    ) : null}
+                    {hasActivePeopleGroup ? (
+                      <>
+                        {" "}en{" "}
+                        <span className="font-medium text-cyan-100">
+                          {getPhotoPeopleGroupLabel(peopleGroup)}
+                        </span>
+                      </>
+                    ) : null}
+                  </p>
                 ) : null}
-                {hasActivePeopleGroup ? (
-                  <>
-                    {" "}en{" "}
-                    <span className="font-medium text-cyan-100">
-                      {getPhotoPeopleGroupLabel(peopleGroup)}
-                    </span>
-                  </>
-                ) : null}
-              </p>
-            ) : null}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  title={
+                    gridDensity === "compact"
+                      ? "Volver al tamaño normal"
+                      : "Ver 4 fotos por fila"
+                  }
+                  aria-pressed={gridDensity === "compact"}
+                  onClick={() =>
+                    setGridDensity((current) =>
+                      current === "compact" ? "default" : "compact",
+                    )
+                  }
+                  className={`inline-flex items-center justify-center rounded-2xl border px-3 py-3 text-sm transition ${
+                    gridDensity === "compact"
+                      ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
+                      : "border-white/12 bg-black/25 text-slate-100 hover:border-cyan-300/50 hover:text-white"
+                  }`}
+                >
+                  <span className="sr-only">
+                    {gridDensity === "compact"
+                      ? "Volver al tamaño normal"
+                      : "Activar vista compacta de 4 fotos por fila"}
+                  </span>
+                  <GridDensityIcon
+                    active={gridDensity === "compact"}
+                    columns={4}
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  title={
+                    gridDensity === "dense"
+                      ? "Volver al tamaño normal"
+                      : "Ver 6 fotos por fila"
+                  }
+                  aria-pressed={gridDensity === "dense"}
+                  onClick={() =>
+                    setGridDensity((current) =>
+                      current === "dense" ? "default" : "dense",
+                    )
+                  }
+                  className={`inline-flex items-center justify-center rounded-2xl border px-3 py-3 text-sm transition ${
+                    gridDensity === "dense"
+                      ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
+                      : "border-white/12 bg-black/25 text-slate-100 hover:border-cyan-300/50 hover:text-white"
+                  }`}
+                >
+                  <span className="sr-only">
+                    {gridDensity === "dense"
+                      ? "Volver al tamaño normal"
+                      : "Activar vista densa de 6 fotos por fila"}
+                  </span>
+                  <GridDensityIcon
+                    active={gridDensity === "dense"}
+                    columns={6}
+                  />
+                </button>
+              </div>
+            </div>
           </form>
         </div>
 
@@ -423,7 +555,7 @@ export function PhotoViewer({
         {photos.length > 0 ? (
           <>
             {renderPagination()}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className={gridClassName}>
               {photos.map((photo, index) => (
                 <button
                   type="button"
@@ -437,7 +569,7 @@ export function PhotoViewer({
                       alt={photo.name}
                       fill
                       unoptimized
-                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                      sizes={imageSizes}
                       className="object-cover transition duration-500 group-hover:scale-[1.03]"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/5 to-transparent" />
