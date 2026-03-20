@@ -8,7 +8,6 @@ import type { PhotoAsset } from "@/lib/supabase/photos";
 
 type PhotoViewerProps = {
   photos: PhotoAsset[];
-  bucketName: string;
   configured: boolean;
   error: string | null;
   totalCount: number;
@@ -20,6 +19,10 @@ type PhotoViewerProps = {
 
 function buildPhotoMeta(photo: PhotoAsset) {
   return [photo.dateLabel, photo.origin, photo.place].filter(Boolean).join(" · ");
+}
+
+function buildPhotoPeopleLabel(photo: PhotoAsset) {
+  return photo.people.join(", ");
 }
 
 function buildVisiblePages(currentPage: number, totalPages: number) {
@@ -44,7 +47,6 @@ function buildVisiblePages(currentPage: number, totalPages: number) {
 
 export function PhotoViewer({
   photos,
-  bucketName,
   configured,
   error,
   totalCount,
@@ -195,12 +197,11 @@ export function PhotoViewer({
             </p>
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
-                Archivo visual conectado a Supabase
+                Todos leyendas...
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                El visor usa los registros de la base de datos para el bucket{" "}
-                <span className="font-semibold text-white">{bucketName}</span>{" "}
-                y resuelve cada imagen desde Storage sin salir de la página.
+                disfruta de una pequeña coleccion de instantes inmortales del
+                Rock
               </p>
             </div>
           </div>
@@ -271,6 +272,11 @@ export function PhotoViewer({
                       {photo.groupName}
                     </p>
                   ) : null}
+                  {photo.people.length > 0 ? (
+                    <p className="line-clamp-2 text-xs leading-6 text-slate-300">
+                      {buildPhotoPeopleLabel(photo)}
+                    </p>
+                  ) : null}
                   {photo.description ? (
                     <p className="line-clamp-2 text-xs leading-6 text-slate-300">
                       {photo.description}
@@ -319,6 +325,11 @@ export function PhotoViewer({
                 {selectedPhoto.groupName ? (
                   <p className="truncate text-xs text-cyan-200/90">
                     {selectedPhoto.groupName}
+                  </p>
+                ) : null}
+                {selectedPhoto.people.length > 0 ? (
+                  <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
+                    {buildPhotoPeopleLabel(selectedPhoto)}
                   </p>
                 ) : null}
                 {selectedPhoto.description ? (

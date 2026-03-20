@@ -1,5 +1,6 @@
+import { PhotoPeopleList } from "@/components/photo-people-list";
 import { PhotoViewer } from "@/components/photo-viewer";
-import { getPhotoGallery } from "@/lib/supabase/photos";
+import { getPhotoGallery, getPhotoPeopleList } from "@/lib/supabase/photos";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,10 @@ function parsePage(value: string | string[] | undefined) {
 
 export default async function Home(props: { searchParams: SearchParams }) {
   const searchParams = await props.searchParams;
-  const gallery = await getPhotoGallery(parsePage(searchParams.page));
+  const [gallery, peopleList] = await Promise.all([
+    getPhotoGallery(parsePage(searchParams.page)),
+    getPhotoPeopleList(),
+  ]);
 
   return (
     <main className="min-h-screen">
@@ -40,7 +44,6 @@ export default async function Home(props: { searchParams: SearchParams }) {
 
         <PhotoViewer
           photos={gallery.photos}
-          bucketName={gallery.bucket}
           configured={gallery.configured}
           error={gallery.error}
           totalCount={gallery.totalCount}
@@ -48,6 +51,14 @@ export default async function Home(props: { searchParams: SearchParams }) {
           currentPage={gallery.currentPage}
           totalPages={gallery.totalPages}
           pageSize={gallery.pageSize}
+        />
+
+        <PhotoPeopleList
+          people={peopleList.people}
+          configured={peopleList.configured}
+          error={peopleList.error}
+          totalPeople={peopleList.totalPeople}
+          totalAppearances={peopleList.totalAppearances}
         />
       </div>
     </main>

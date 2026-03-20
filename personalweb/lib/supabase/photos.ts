@@ -11,11 +11,17 @@ export type PhotoAsset = {
   name: string;
   title: string;
   src: string;
+  people: string[];
   dateLabel: string | null;
   origin: string | null;
   place: string | null;
   description: string | null;
   groupName: string | null;
+};
+
+export type PhotoPerson = {
+  name: string;
+  photoCount: number;
 };
 
 export type PhotoGalleryResult = {
@@ -28,6 +34,14 @@ export type PhotoGalleryResult = {
   currentPage: number;
   totalPages: number;
   pageSize: number;
+};
+
+export type PhotoPeopleResult = {
+  people: PhotoPerson[];
+  configured: boolean;
+  error: string | null;
+  totalPeople: number;
+  totalAppearances: number;
 };
 
 function getSupabaseUrl() {
@@ -118,15 +132,30 @@ function getPhotoGroupName(
   return group.nombre ?? null;
 }
 
-export async function getPhotoGallery(page = 1): Promise<PhotoGalleryResult> {
+function createSupabaseServerClient() {
   const supabaseUrl = getSupabaseUrl();
   const supabaseKey = getSupabaseServerKey();
+
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+export async function getPhotoGallery(page = 1): Promise<PhotoGalleryResult> {
   const bucket = getPhotoBucketName();
   const currentPage = normalizePageNumber(page);
   const rangeFrom = (currentPage - 1) * PHOTO_GALLERY_PAGE_SIZE;
   const rangeTo = rangeFrom + PHOTO_GALLERY_PAGE_SIZE - 1;
+  const supabase = createSupabaseServerClient();
 
-  if (!supabaseUrl || !supabaseKey) {
+  if (!supabase) {
     return {
       photos: [],
       bucket,
@@ -141,17 +170,10 @@ export async function getPhotoGallery(page = 1): Promise<PhotoGalleryResult> {
     };
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-
   const { data, error, count } = await supabase
     .from("fotos")
     .select(
-      "id, bucket, imagen, titulo, fecha, anio, origen, lugar, descripcion, grupo:grupos!fotos_grupo_id_fkey(nombre)",
+      "id, bucket, imagen, titulo, personas, fecha, anio, origen, lugar, descripcion, grupo:grupos!fotos_grupo_id_fkey(nombre)",
       {
         count: "exact",
       },
@@ -181,6 +203,9 @@ export async function getPhotoGallery(page = 1): Promise<PhotoGalleryResult> {
       name: photo.imagen,
       title: photo.titulo?.trim() || photo.imagen,
       src: getPhotoPublicUrl(photo.imagen, photo.bucket ?? bucket),
+      people: (photo.personas ?? [])
+        .map((person) => person?.trim())
+        .filter((person): person is string => Boolean(person)),
       dateLabel: buildPhotoDateLabel(photo.fecha, photo.anio),
       origin: photo.origen ?? null,
       place: photo.lugar?.trim() || null,
@@ -201,5 +226,87 @@ export async function getPhotoGallery(page = 1): Promise<PhotoGalleryResult> {
     currentPage: Math.min(currentPage, totalPages),
     totalPages,
     pageSize: PHOTO_GALLERY_PAGE_SIZE,
+  };
+}
+
+export async function getPhotoPeopleList(): Promise<PhotoPeopleResult> {
+  const bucket = getPhotoBucketName();
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      people: [],
+      configured: false,
+      error:
+        "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
+      totalPeople: 0,
+      totalAppearances: 0,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("fotos")
+    .select("personas")
+    .eq("bucket", bucket);
+
+  if (error) {
+    return {
+      people: [],
+      configured: true,
+      error: `No he podido leer las personas de la base de datos para el bucket "${bucket}": ${error.message}`,
+      totalPeople: 0,
+      totalAppearances: 0,
+    };
+  }
+
+  const peopleByKey = new Map<string, PhotoPerson>();
+  let totalAppearances = 0;
+
+  for (const photo of data ?? []) {
+    const normalizedPeopleInPhoto = new Set<string>();
+
+    for (const rawPerson of photo.personas ?? []) {
+      const personName = rawPerson?.trim();
+
+      if (!personName) {
+        continue;
+      }
+
+      const normalizedKey = personName.toLocaleLowerCase("es-ES");
+
+      if (normalizedPeopleInPhoto.has(normalizedKey)) {
+        continue;
+      }
+
+      normalizedPeopleInPhoto.add(normalizedKey);
+      totalAppearances += 1;
+
+      const currentPerson = peopleByKey.get(normalizedKey);
+
+      if (currentPerson) {
+        currentPerson.photoCount += 1;
+        continue;
+      }
+
+      peopleByKey.set(normalizedKey, {
+        name: personName,
+        photoCount: 1,
+      });
+    }
+  }
+
+  const people = [...peopleByKey.values()].sort((left, right) =>
+    left.name.localeCompare(right.name, "es", {
+      sensitivity: "base",
+      numeric: true,
+    }),
+  );
+
+  return {
+    people,
+    configured: true,
+    error: null,
+    totalPeople: people.length,
+    totalAppearances,
   };
 }
