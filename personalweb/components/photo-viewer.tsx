@@ -359,6 +359,9 @@ export function PhotoViewer({
               <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
                 Todos leyendas...
               </h2>
+              <p className="mt-2 text-sm text-slate-300 md:text-base">
+                igual hasta tu también apareces
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3 self-start">
