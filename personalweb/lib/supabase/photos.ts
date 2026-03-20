@@ -2,9 +2,17 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 
+import {
+  hasActivePhotoFilter,
+  type PhotoFilterField,
+} from "@/lib/photo-filters";
+
 const IMAGE_FILE_PATTERN = /\.(avif|gif|jpe?g|png|webp)$/i;
 const DEFAULT_BUCKET = "fotos";
-const PHOTO_GALLERY_PAGE_SIZE = 48;
+const PHOTO_GALLERY_PAGE_SIZE = 200;
+const PHOTO_FILTER_BATCH_SIZE = 1000;
+const PHOTO_SELECT_COLUMNS =
+  "id, bucket, imagen, titulo, personas, anio, grupo_id, origen, descripcion, fecha, lugar, categoria, concierto_id, created_at, updated_at, grupo:grupos!fotos_grupo_id_fkey(nombre)";
 
 export type PhotoAsset = {
   id: string;
@@ -34,6 +42,8 @@ export type PhotoGalleryResult = {
   currentPage: number;
   totalPages: number;
   pageSize: number;
+  filterField: PhotoFilterField;
+  filterValue: string;
 };
 
 export type PhotoPeopleResult = {
@@ -132,6 +142,167 @@ function getPhotoGroupName(
   return group.nombre ?? null;
 }
 
+function normalizePhotoFilterText(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("es-ES");
+}
+
+function buildPhotoFilterValues(
+  photo: {
+    id: number;
+    bucket: string | null;
+    imagen: string | null;
+    titulo: string | null;
+    personas: string[] | null;
+    anio: number | null;
+    grupo_id: number | null;
+    origen: string | null;
+    descripcion: string | null;
+    fecha: string | null;
+    lugar: string | null;
+    categoria: string | null;
+    concierto_id: number | null;
+    created_at: string | null;
+    updated_at: string | null;
+    grupo:
+      | {
+          nombre: string | null;
+        }
+      | {
+          nombre: string | null;
+        }[]
+      | null
+      | undefined;
+  },
+) {
+  const groupName = getPhotoGroupName(photo.grupo);
+  const people = (photo.personas ?? [])
+    .map((person) => person?.trim())
+    .filter((person): person is string => Boolean(person));
+
+  return {
+    all: [
+      photo.id,
+      photo.bucket,
+      photo.imagen,
+      photo.titulo,
+      people.join(", "),
+      photo.anio,
+      groupName,
+      photo.grupo_id,
+      photo.origen,
+      photo.descripcion,
+      photo.fecha,
+      photo.lugar,
+      photo.categoria,
+      photo.concierto_id,
+      photo.created_at,
+      photo.updated_at,
+    ],
+    id: [photo.id],
+    bucket: [photo.bucket],
+    imagen: [photo.imagen],
+    titulo: [photo.titulo],
+    personas: people,
+    anio: [photo.anio],
+    grupo: [groupName],
+    grupo_id: [photo.grupo_id],
+    origen: [photo.origen],
+    descripcion: [photo.descripcion],
+    fecha: [photo.fecha],
+    lugar: [photo.lugar],
+    categoria: [photo.categoria],
+    concierto_id: [photo.concierto_id],
+    created_at: [photo.created_at],
+    updated_at: [photo.updated_at],
+  } satisfies Record<PhotoFilterField, Array<string | number | null | undefined>>;
+}
+
+function matchesPhotoFilter(
+  photo: Parameters<typeof buildPhotoFilterValues>[0],
+  filterField: PhotoFilterField,
+  filterValue: string,
+) {
+  if (!hasActivePhotoFilter(filterValue)) {
+    return true;
+  }
+
+  const normalizedFilterValue = normalizePhotoFilterText(filterValue);
+  const filterValues = buildPhotoFilterValues(photo)[filterField];
+
+  return filterValues.some((value) =>
+    normalizePhotoFilterText(value).includes(normalizedFilterValue),
+  );
+}
+
+async function fetchAllPhotosForFiltering(
+  supabase: NonNullable<ReturnType<typeof createSupabaseServerClient>>,
+  bucket: string,
+) {
+  const photos: Array<{
+    id: number;
+    bucket: string | null;
+    imagen: string;
+    titulo: string | null;
+    personas: string[] | null;
+    anio: number | null;
+    grupo_id: number | null;
+    origen: string | null;
+    descripcion: string | null;
+    fecha: string | null;
+    lugar: string | null;
+    categoria: string | null;
+    concierto_id: number | null;
+    created_at: string | null;
+    updated_at: string | null;
+    grupo:
+      | {
+          nombre: string | null;
+        }
+      | {
+          nombre: string | null;
+        }[]
+      | null
+      | undefined;
+  }> = [];
+  let rangeFrom = 0;
+
+  while (true) {
+    const rangeTo = rangeFrom + PHOTO_FILTER_BATCH_SIZE - 1;
+    const { data, error } = await supabase
+      .from("fotos")
+      .select(PHOTO_SELECT_COLUMNS)
+      .eq("bucket", bucket)
+      .order("id", { ascending: true })
+      .range(rangeFrom, rangeTo);
+
+    if (error) {
+      return {
+        data: null,
+        error,
+      };
+    }
+
+    if (!data || data.length === 0) {
+      break;
+    }
+
+    photos.push(...data);
+
+    if (data.length < PHOTO_FILTER_BATCH_SIZE) {
+      break;
+    }
+
+    rangeFrom += PHOTO_FILTER_BATCH_SIZE;
+  }
+
+  return {
+    data: photos,
+    error: null,
+  };
+}
+
 function createSupabaseServerClient() {
   const supabaseUrl = getSupabaseUrl();
   const supabaseKey = getSupabaseServerKey();
@@ -148,11 +319,15 @@ function createSupabaseServerClient() {
   });
 }
 
-export async function getPhotoGallery(page = 1): Promise<PhotoGalleryResult> {
+export async function getPhotoGallery(options?: {
+  page?: number;
+  filterField?: PhotoFilterField;
+  filterValue?: string;
+}): Promise<PhotoGalleryResult> {
   const bucket = getPhotoBucketName();
-  const currentPage = normalizePageNumber(page);
-  const rangeFrom = (currentPage - 1) * PHOTO_GALLERY_PAGE_SIZE;
-  const rangeTo = rangeFrom + PHOTO_GALLERY_PAGE_SIZE - 1;
+  const requestedPage = normalizePageNumber(options?.page ?? 1);
+  const filterField = options?.filterField ?? "all";
+  const filterValue = options?.filterValue?.trim() ?? "";
   const supabase = createSupabaseServerClient();
 
   if (!supabase) {
@@ -164,20 +339,85 @@ export async function getPhotoGallery(page = 1): Promise<PhotoGalleryResult> {
         "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
       totalCount: 0,
       loadedCount: 0,
-      currentPage,
+      currentPage: requestedPage,
       totalPages: 1,
       pageSize: PHOTO_GALLERY_PAGE_SIZE,
+      filterField,
+      filterValue,
     };
   }
 
+  if (hasActivePhotoFilter(filterValue)) {
+    const { data, error } = await fetchAllPhotosForFiltering(supabase, bucket);
+
+    if (error) {
+      return {
+        photos: [],
+        bucket,
+        configured: true,
+        error: `No he podido leer las fotos de la base de datos para el bucket "${bucket}": ${error.message}`,
+        totalCount: 0,
+        loadedCount: 0,
+        currentPage: requestedPage,
+        totalPages: 1,
+        pageSize: PHOTO_GALLERY_PAGE_SIZE,
+        filterField,
+        filterValue,
+      };
+    }
+
+    const filteredPhotos = (data ?? []).filter((photo) =>
+      matchesPhotoFilter(photo, filterField, filterValue),
+    );
+    const totalCount = filteredPhotos.length;
+    const totalPages = Math.max(
+      1,
+      Math.ceil(totalCount / PHOTO_GALLERY_PAGE_SIZE),
+    );
+    const currentPage = Math.min(requestedPage, totalPages);
+    const rangeFrom = (currentPage - 1) * PHOTO_GALLERY_PAGE_SIZE;
+    const rangeTo = rangeFrom + PHOTO_GALLERY_PAGE_SIZE;
+
+    const photos = filteredPhotos
+      .slice(rangeFrom, rangeTo)
+      .filter((photo) => IMAGE_FILE_PATTERN.test(photo.imagen))
+      .map((photo) => ({
+        id: String(photo.id),
+        name: photo.imagen,
+        title: photo.titulo?.trim() || photo.imagen,
+        src: getPhotoPublicUrl(photo.imagen, photo.bucket ?? bucket),
+        people: (photo.personas ?? [])
+          .map((person) => person?.trim())
+          .filter((person): person is string => Boolean(person)),
+        dateLabel: buildPhotoDateLabel(photo.fecha, photo.anio),
+        origin: photo.origen ?? null,
+        place: photo.lugar?.trim() || null,
+        description: photo.descripcion?.trim() || null,
+        groupName: getPhotoGroupName(photo.grupo),
+      }));
+
+    return {
+      photos,
+      bucket,
+      configured: true,
+      error: null,
+      totalCount,
+      loadedCount: photos.length,
+      currentPage,
+      totalPages,
+      pageSize: PHOTO_GALLERY_PAGE_SIZE,
+      filterField,
+      filterValue,
+    };
+  }
+
+  const currentPage = requestedPage;
+  const rangeFrom = (currentPage - 1) * PHOTO_GALLERY_PAGE_SIZE;
+  const rangeTo = rangeFrom + PHOTO_GALLERY_PAGE_SIZE - 1;
+
   const { data, error, count } = await supabase
     .from("fotos")
-    .select(
-      "id, bucket, imagen, titulo, personas, fecha, anio, origen, lugar, descripcion, grupo:grupos!fotos_grupo_id_fkey(nombre)",
-      {
-        count: "exact",
-      },
-    )
+    .select(PHOTO_SELECT_COLUMNS, { count: "exact" })
     .eq("bucket", bucket)
     .order("id", { ascending: true })
     .range(rangeFrom, rangeTo);
@@ -193,6 +433,8 @@ export async function getPhotoGallery(page = 1): Promise<PhotoGalleryResult> {
       currentPage,
       totalPages: 1,
       pageSize: PHOTO_GALLERY_PAGE_SIZE,
+      filterField,
+      filterValue,
     };
   }
 
@@ -226,6 +468,8 @@ export async function getPhotoGallery(page = 1): Promise<PhotoGalleryResult> {
     currentPage: Math.min(currentPage, totalPages),
     totalPages,
     pageSize: PHOTO_GALLERY_PAGE_SIZE,
+    filterField,
+    filterValue,
   };
 }
 

@@ -1,10 +1,19 @@
 import { PhotoPeopleList } from "@/components/photo-people-list";
 import { PhotoViewer } from "@/components/photo-viewer";
+import { normalizePhotoFilterValue } from "@/lib/photo-filters";
 import { getPhotoGallery, getPhotoPeopleList } from "@/lib/supabase/photos";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function getSingleValue(value: string | string[] | undefined) {
+  if (Array.isArray(value)) {
+    return value[0] ?? "";
+  }
+
+  return value ?? "";
+}
 
 function parsePage(value: string | string[] | undefined) {
   const rawValue = Array.isArray(value) ? value[0] : value;
@@ -19,8 +28,15 @@ function parsePage(value: string | string[] | undefined) {
 
 export default async function Home(props: { searchParams: SearchParams }) {
   const searchParams = await props.searchParams;
+  const filterValue = normalizePhotoFilterValue(
+    getSingleValue(searchParams.filterValue),
+  );
   const [gallery, peopleList] = await Promise.all([
-    getPhotoGallery(parsePage(searchParams.page)),
+    getPhotoGallery({
+      page: parsePage(searchParams.page),
+      filterField: "all",
+      filterValue,
+    }),
     getPhotoPeopleList(),
   ]);
 
@@ -51,6 +67,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
           currentPage={gallery.currentPage}
           totalPages={gallery.totalPages}
           pageSize={gallery.pageSize}
+          filterValue={gallery.filterValue}
         />
 
         <PhotoPeopleList

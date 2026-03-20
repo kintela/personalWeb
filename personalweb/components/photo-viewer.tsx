@@ -2,8 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState, useEffectEvent } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  startTransition,
+  useDeferredValue,
+  useEffect,
+  useState,
+  useEffectEvent,
+} from "react";
 
+import { hasActivePhotoFilter } from "@/lib/photo-filters";
 import type { PhotoAsset } from "@/lib/supabase/photos";
 
 type PhotoViewerProps = {
@@ -15,6 +23,7 @@ type PhotoViewerProps = {
   currentPage: number;
   totalPages: number;
   pageSize: number;
+  filterValue: string;
 };
 
 function buildPhotoMeta(photo: PhotoAsset) {
@@ -23,6 +32,25 @@ function buildPhotoMeta(photo: PhotoAsset) {
 
 function buildPhotoPeopleLabel(photo: PhotoAsset) {
   return photo.people.join(", ");
+}
+
+function buildGalleryHref(
+  page: number,
+  filterValue: string,
+) {
+  const params = new URLSearchParams();
+
+  if (page > 1) {
+    params.set("page", String(page));
+  }
+
+  if (hasActivePhotoFilter(filterValue)) {
+    params.set("filterValue", filterValue);
+  }
+
+  const query = params.toString();
+
+  return query ? `/?${query}` : "/";
 }
 
 function buildVisiblePages(currentPage: number, totalPages: number) {
@@ -54,17 +82,45 @@ export function PhotoViewer({
   currentPage,
   totalPages,
   pageSize,
+  filterValue,
 }: PhotoViewerProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [filterInput, setFilterInput] = useState(filterValue);
+  const deferredFilterInput = useDeferredValue(filterInput);
   const visiblePages = buildVisiblePages(currentPage, totalPages);
   const firstPosition = (currentPage - 1) * pageSize + 1;
   const lastPosition =
     loadedCount === 0 ? 0 : firstPosition + loadedCount - 1;
+  const hasActiveFilter = hasActivePhotoFilter(filterValue);
 
   const selectedPhoto =
     selectedIndex === null ? null : photos.at(selectedIndex) ?? null;
 
   const closeViewer = () => setSelectedIndex(null);
+
+  const updateFilter = useEffectEvent((nextFilterValue: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    const trimmedFilterValue = nextFilterValue.trim();
+
+    params.delete("page");
+    params.delete("filterField");
+
+    if (trimmedFilterValue) {
+      params.set("filterValue", trimmedFilterValue);
+    } else {
+      params.delete("filterValue");
+    }
+
+    const query = params.toString();
+    const href = query ? `${pathname}?${query}` : pathname;
+
+    startTransition(() => {
+      router.replace(href, { scroll: false });
+    });
+  });
 
   const showPreviousPhoto = () => {
     setSelectedIndex((current) => {
@@ -120,6 +176,24 @@ export function PhotoViewer({
     };
   }, [selectedIndex]);
 
+  useEffect(() => {
+    setFilterInput(filterValue);
+  }, [filterValue]);
+
+  useEffect(() => {
+    if (deferredFilterInput.trim() === filterValue.trim()) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      updateFilter(deferredFilterInput);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [deferredFilterInput, filterValue]);
+
   const renderPagination = () => {
     if (totalPages <= 1) {
       return null;
@@ -136,7 +210,7 @@ export function PhotoViewer({
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href={currentPage > 1 ? `/?page=${currentPage - 1}` : "/"}
+            href={buildGalleryHref(currentPage - 1, filterValue)}
             aria-disabled={currentPage === 1}
             className={`rounded-full border px-4 py-2 text-sm transition ${
               currentPage === 1
@@ -157,7 +231,7 @@ export function PhotoViewer({
                   <span className="px-1 text-sm text-slate-500">…</span>
                 ) : null}
                 <Link
-                  href={page === 1 ? "/" : `/?page=${page}`}
+                  href={buildGalleryHref(page, filterValue)}
                   aria-current={page === currentPage ? "page" : undefined}
                   className={`rounded-full border px-3 py-2 text-sm transition ${
                     page === currentPage
@@ -172,7 +246,10 @@ export function PhotoViewer({
           })}
 
           <Link
-            href={currentPage < totalPages ? `/?page=${currentPage + 1}` : `/?page=${totalPages}`}
+            href={buildGalleryHref(
+              currentPage < totalPages ? currentPage + 1 : totalPages,
+              filterValue,
+            )}
             aria-disabled={currentPage === totalPages}
             className={`rounded-full border px-4 py-2 text-sm transition ${
               currentPage === totalPages
@@ -199,10 +276,6 @@ export function PhotoViewer({
               <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
                 Todos leyendas...
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                disfruta de una pequeña coleccion de instantes inmortales del
-                Rock
-              </p>
             </div>
           </div>
           <div className="flex items-center gap-3 self-start rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-slate-200">
@@ -229,10 +302,39 @@ export function PhotoViewer({
           </div>
         ) : null}
 
+        <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+          <div className="flex flex-col gap-5">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-200">
+              Filtro
+            </h3>
+
+            <div className="max-w-3xl">
+              <label className="block">
+                <span className="sr-only">Texto a filtrar</span>
+                <input
+                  type="search"
+                  value={filterInput}
+                  onChange={(event) => setFilterInput(event.target.value)}
+                  placeholder="Ejemplo: Facebook, Keith Richards, Bilbao, 1978..."
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                />
+              </label>
+            </div>
+
+            {hasActiveFilter ? (
+              <p className="text-sm text-slate-300">
+                {totalCount} resultados encontrados para{" "}
+                <span className="font-medium text-cyan-100">{filterValue}</span>
+              </p>
+            ) : null}
+          </div>
+        </div>
+
         {configured && !error && photos.length === 0 ? (
           <div className="rounded-[1.75rem] border border-dashed border-white/14 bg-black/15 px-6 py-12 text-center text-sm leading-7 text-slate-300">
-            La tabla `public.fotos` está accesible, pero no hay registros con
-            imágenes compatibles para este bucket.
+            {hasActiveFilter
+              ? "No hay fotos que coincidan con el filtro actual."
+              : "La tabla `public.fotos` está accesible, pero no hay registros con imágenes compatibles para este bucket."}
           </div>
         ) : null}
 
