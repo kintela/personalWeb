@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 
 const ADMIN_COOKIE_NAME = "personalweb-admin-session";
 const ADMIN_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+const ADMIN_COOKIE_PATH = "/";
 
 function getAdminPasswordValue() {
   return process.env.ADMIN_PASSWORD?.trim() ?? "";
@@ -43,6 +44,10 @@ export function getAdminCookieName() {
 
 export function getAdminCookieMaxAge() {
   return ADMIN_COOKIE_MAX_AGE;
+}
+
+export function getAdminCookiePath() {
+  return ADMIN_COOKIE_PATH;
 }
 
 export function getAdminSessionValue() {

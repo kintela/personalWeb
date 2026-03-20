@@ -17,6 +17,7 @@ import {
   PHOTO_PEOPLE_GROUP_OPTIONS,
   type PhotoPeopleGroup,
 } from "@/lib/photo-filters";
+import { PhotoUploadPanel } from "@/components/photo-upload-panel";
 import type { PhotoAsset } from "@/lib/supabase/photos";
 
 type PhotoViewerProps = {
@@ -30,6 +31,7 @@ type PhotoViewerProps = {
   pageSize: number;
   filterValue: string;
   peopleGroup: PhotoPeopleGroup;
+  initiallyUnlocked: boolean;
 };
 
 function buildPhotoMeta(photo: PhotoAsset) {
@@ -95,6 +97,7 @@ export function PhotoViewer({
   pageSize,
   filterValue,
   peopleGroup,
+  initiallyUnlocked,
 }: PhotoViewerProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -292,13 +295,16 @@ export function PhotoViewer({
               </h2>
             </div>
           </div>
-          <div className="flex items-center gap-3 self-start rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-slate-200">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            <span>
-              {totalPages > 1
-                ? `Página ${currentPage} de ${totalPages}`
-                : `${totalCount} fotos detectadas`}
-            </span>
+          <div className="flex items-center gap-3 self-start">
+            <PhotoUploadPanel initiallyUnlocked={initiallyUnlocked} />
+            <div className="flex items-center gap-3 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-slate-200">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <span>
+                {totalPages > 1
+                  ? `Página ${currentPage} de ${totalPages}`
+                  : `${totalCount} fotos detectadas`}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -430,6 +436,7 @@ export function PhotoViewer({
                       src={photo.src}
                       alt={photo.name}
                       fill
+                      unoptimized
                       sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
                       className="object-cover transition duration-500 group-hover:scale-[1.03]"
                     />
@@ -537,6 +544,7 @@ export function PhotoViewer({
                   alt={selectedPhoto.name}
                   fill
                   priority
+                  unoptimized
                   sizes="100vw"
                   className="object-contain"
                 />

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getAdminCookieMaxAge,
   getAdminCookieName,
+  getAdminCookiePath,
   getAdminSessionValue,
   isAdminConfigured,
   verifyAdminPassword,
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
       value: sessionValue,
       httpOnly: true,
       maxAge: getAdminCookieMaxAge(),
-      path: "/admin",
+      path: getAdminCookiePath(),
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
     });

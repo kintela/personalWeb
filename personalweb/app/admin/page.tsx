@@ -373,6 +373,7 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
                         alt={previewFile}
                         width={1200}
                         height={900}
+                        unoptimized
                         className="h-auto w-full object-contain"
                         sizes="(max-width: 1280px) 100vw, 50vw"
                       />

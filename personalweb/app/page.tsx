@@ -1,5 +1,6 @@
 import { PhotoPeopleList } from "@/components/photo-people-list";
 import { PhotoViewer } from "@/components/photo-viewer";
+import { isAdminAuthenticated } from "@/lib/admin/auth";
 import {
   normalizePhotoFilterValue,
   normalizePhotoPeopleGroup,
@@ -37,7 +38,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const peopleGroup = normalizePhotoPeopleGroup(
     getSingleValue(searchParams.peopleGroup),
   );
-  const [gallery, peopleList] = await Promise.all([
+  const [gallery, peopleList, isUploaderUnlocked] = await Promise.all([
     getPhotoGallery({
       page: parsePage(searchParams.page),
       filterField: "all",
@@ -45,6 +46,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
       peopleGroup,
     }),
     getPhotoPeopleList(),
+    isAdminAuthenticated(),
   ]);
 
   return (
@@ -76,6 +78,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
           pageSize={gallery.pageSize}
           filterValue={gallery.filterValue}
           peopleGroup={gallery.peopleGroup}
+          initiallyUnlocked={isUploaderUnlocked}
         />
 
         <PhotoPeopleList

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminCookieName } from "@/lib/admin/auth";
+import { getAdminCookieName, getAdminCookiePath } from "@/lib/admin/auth";
 
 export const runtime = "nodejs";
 
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     value: "",
     httpOnly: true,
     maxAge: 0,
-    path: "/admin",
+    path: getAdminCookiePath(),
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
   });
