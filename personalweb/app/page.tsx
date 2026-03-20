@@ -3,8 +3,22 @@ import { getPhotoGallery } from "@/lib/supabase/photos";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  const gallery = await getPhotoGallery();
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function parsePage(value: string | string[] | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const page = Number.parseInt(rawValue ?? "", 10);
+
+  if (!Number.isInteger(page) || page < 1) {
+    return 1;
+  }
+
+  return page;
+}
+
+export default async function Home(props: { searchParams: SearchParams }) {
+  const searchParams = await props.searchParams;
+  const gallery = await getPhotoGallery(parsePage(searchParams.page));
 
   return (
     <main className="min-h-screen">
@@ -41,7 +55,7 @@ export default async function Home() {
                   Fotos
                 </p>
                 <p className="mt-3 text-2xl font-semibold text-white">
-                  {gallery.photos.length}
+                  {gallery.totalCount}
                 </p>
               </div>
               <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
@@ -61,6 +75,11 @@ export default async function Home() {
           bucketName={gallery.bucket}
           configured={gallery.configured}
           error={gallery.error}
+          totalCount={gallery.totalCount}
+          loadedCount={gallery.loadedCount}
+          currentPage={gallery.currentPage}
+          totalPages={gallery.totalPages}
+          pageSize={gallery.pageSize}
         />
       </div>
     </main>
