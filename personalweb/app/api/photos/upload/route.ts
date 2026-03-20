@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
 import { getPhotoBucketName } from "@/lib/supabase/photos";
 
@@ -84,7 +84,7 @@ function extractImageNumber(fileName: string) {
 }
 
 async function getNextImageNumber(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient<any>,
   bucket: string,
 ) {
   let maxNumber = 0;
@@ -117,7 +117,7 @@ async function getNextImageNumber(
 }
 
 async function resolveGroupId(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient<any>,
   groupName: string | null,
 ) {
   if (!groupName) {
