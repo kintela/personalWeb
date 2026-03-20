@@ -1,11 +1,10 @@
-import { PhotoPeopleList } from "@/components/photo-people-list";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
 import {
   normalizePhotoFilterValue,
   normalizePhotoPeopleGroup,
 } from "@/lib/photo-filters";
-import { getPhotoGallery, getPhotoPeopleList } from "@/lib/supabase/photos";
+import { getPhotoGallery } from "@/lib/supabase/photos";
 
 export const dynamic = "force-dynamic";
 
@@ -38,14 +37,13 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const peopleGroup = normalizePhotoPeopleGroup(
     getSingleValue(searchParams.peopleGroup),
   );
-  const [gallery, peopleList, isUploaderUnlocked] = await Promise.all([
+  const [gallery, isUploaderUnlocked] = await Promise.all([
     getPhotoGallery({
       page: parsePage(searchParams.page),
       filterField: "all",
       filterValue,
       peopleGroup,
     }),
-    getPhotoPeopleList(),
     isAdminAuthenticated(),
   ]);
 
@@ -79,14 +77,6 @@ export default async function Home(props: { searchParams: SearchParams }) {
           filterValue={gallery.filterValue}
           peopleGroup={gallery.peopleGroup}
           initiallyUnlocked={isUploaderUnlocked}
-        />
-
-        <PhotoPeopleList
-          people={peopleList.people}
-          configured={peopleList.configured}
-          error={peopleList.error}
-          totalPeople={peopleList.totalPeople}
-          totalAppearances={peopleList.totalAppearances}
         />
       </div>
     </main>
