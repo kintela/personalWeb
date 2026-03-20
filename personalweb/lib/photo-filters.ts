@@ -20,6 +20,17 @@ export const PHOTO_FILTER_OPTIONS = [
 
 export type PhotoFilterField = (typeof PHOTO_FILTER_OPTIONS)[number]["value"];
 
+export const PHOTO_PEOPLE_GROUP_OPTIONS = [
+  { value: "all", label: "Todas" },
+  { value: "solo", label: "Solo" },
+  { value: "pair", label: "En pareja" },
+  { value: "trio", label: "En Trio" },
+  { value: "crowd", label: "En cuadrilla" },
+] as const;
+
+export type PhotoPeopleGroup =
+  (typeof PHOTO_PEOPLE_GROUP_OPTIONS)[number]["value"];
+
 export function normalizePhotoFilterField(
   value: string | null | undefined,
 ): PhotoFilterField {
@@ -41,13 +52,39 @@ export function normalizePhotoFilterValue(
   return value?.trim() ?? "";
 }
 
+export function normalizePhotoPeopleGroup(
+  value: string | null | undefined,
+): PhotoPeopleGroup {
+  const normalizedValue = value?.trim();
+
+  if (
+    normalizedValue &&
+    PHOTO_PEOPLE_GROUP_OPTIONS.some((option) => option.value === normalizedValue)
+  ) {
+    return normalizedValue as PhotoPeopleGroup;
+  }
+
+  return "all";
+}
+
 export function hasActivePhotoFilter(value: string) {
   return value.trim().length > 0;
+}
+
+export function hasActivePhotoPeopleGroup(value: PhotoPeopleGroup) {
+  return value !== "all";
 }
 
 export function getPhotoFilterLabel(field: PhotoFilterField) {
   return (
     PHOTO_FILTER_OPTIONS.find((option) => option.value === field)?.label ??
     "Todos los campos"
+  );
+}
+
+export function getPhotoPeopleGroupLabel(value: PhotoPeopleGroup) {
+  return (
+    PHOTO_PEOPLE_GROUP_OPTIONS.find((option) => option.value === value)?.label ??
+    "Todas"
   );
 }

@@ -5,13 +5,18 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   startTransition,
-  useDeferredValue,
   useEffect,
   useState,
   useEffectEvent,
 } from "react";
 
-import { hasActivePhotoFilter } from "@/lib/photo-filters";
+import {
+  getPhotoPeopleGroupLabel,
+  hasActivePhotoFilter,
+  hasActivePhotoPeopleGroup,
+  PHOTO_PEOPLE_GROUP_OPTIONS,
+  type PhotoPeopleGroup,
+} from "@/lib/photo-filters";
 import type { PhotoAsset } from "@/lib/supabase/photos";
 
 type PhotoViewerProps = {
@@ -24,6 +29,7 @@ type PhotoViewerProps = {
   totalPages: number;
   pageSize: number;
   filterValue: string;
+  peopleGroup: PhotoPeopleGroup;
 };
 
 function buildPhotoMeta(photo: PhotoAsset) {
@@ -37,6 +43,7 @@ function buildPhotoPeopleLabel(photo: PhotoAsset) {
 function buildGalleryHref(
   page: number,
   filterValue: string,
+  peopleGroup: PhotoPeopleGroup,
 ) {
   const params = new URLSearchParams();
 
@@ -46,6 +53,10 @@ function buildGalleryHref(
 
   if (hasActivePhotoFilter(filterValue)) {
     params.set("filterValue", filterValue);
+  }
+
+  if (hasActivePhotoPeopleGroup(peopleGroup)) {
+    params.set("peopleGroup", peopleGroup);
   }
 
   const query = params.toString();
@@ -83,25 +94,31 @@ export function PhotoViewer({
   totalPages,
   pageSize,
   filterValue,
+  peopleGroup,
 }: PhotoViewerProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [filterInput, setFilterInput] = useState(filterValue);
-  const deferredFilterInput = useDeferredValue(filterInput);
+  const [selectedPeopleGroup, setSelectedPeopleGroup] =
+    useState<PhotoPeopleGroup>(peopleGroup);
   const visiblePages = buildVisiblePages(currentPage, totalPages);
   const firstPosition = (currentPage - 1) * pageSize + 1;
   const lastPosition =
     loadedCount === 0 ? 0 : firstPosition + loadedCount - 1;
   const hasActiveFilter = hasActivePhotoFilter(filterValue);
+  const hasActivePeopleGroup = hasActivePhotoPeopleGroup(peopleGroup);
 
   const selectedPhoto =
     selectedIndex === null ? null : photos.at(selectedIndex) ?? null;
 
   const closeViewer = () => setSelectedIndex(null);
 
-  const updateFilter = useEffectEvent((nextFilterValue: string) => {
+  const applyFilter = (
+    nextFilterValue: string,
+    nextPeopleGroup: PhotoPeopleGroup,
+  ) => {
     const params = new URLSearchParams(searchParams.toString());
     const trimmedFilterValue = nextFilterValue.trim();
 
@@ -114,13 +131,19 @@ export function PhotoViewer({
       params.delete("filterValue");
     }
 
+    if (hasActivePhotoPeopleGroup(nextPeopleGroup)) {
+      params.set("peopleGroup", nextPeopleGroup);
+    } else {
+      params.delete("peopleGroup");
+    }
+
     const query = params.toString();
     const href = query ? `${pathname}?${query}` : pathname;
 
     startTransition(() => {
       router.replace(href, { scroll: false });
     });
-  });
+  };
 
   const showPreviousPhoto = () => {
     setSelectedIndex((current) => {
@@ -181,18 +204,8 @@ export function PhotoViewer({
   }, [filterValue]);
 
   useEffect(() => {
-    if (deferredFilterInput.trim() === filterValue.trim()) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      updateFilter(deferredFilterInput);
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [deferredFilterInput, filterValue]);
+    setSelectedPeopleGroup(peopleGroup);
+  }, [peopleGroup]);
 
   const renderPagination = () => {
     if (totalPages <= 1) {
@@ -210,7 +223,7 @@ export function PhotoViewer({
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href={buildGalleryHref(currentPage - 1, filterValue)}
+            href={buildGalleryHref(currentPage - 1, filterValue, peopleGroup)}
             aria-disabled={currentPage === 1}
             className={`rounded-full border px-4 py-2 text-sm transition ${
               currentPage === 1
@@ -231,7 +244,7 @@ export function PhotoViewer({
                   <span className="px-1 text-sm text-slate-500">…</span>
                 ) : null}
                 <Link
-                  href={buildGalleryHref(page, filterValue)}
+                  href={buildGalleryHref(page, filterValue, peopleGroup)}
                   aria-current={page === currentPage ? "page" : undefined}
                   className={`rounded-full border px-3 py-2 text-sm transition ${
                     page === currentPage
@@ -249,6 +262,7 @@ export function PhotoViewer({
             href={buildGalleryHref(
               currentPage < totalPages ? currentPage + 1 : totalPages,
               filterValue,
+              peopleGroup,
             )}
             aria-disabled={currentPage === totalPages}
             className={`rounded-full border px-4 py-2 text-sm transition ${
@@ -303,13 +317,19 @@ export function PhotoViewer({
         ) : null}
 
         <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-          <div className="flex flex-col gap-5">
+          <form
+            className="flex flex-col gap-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              applyFilter(filterInput, selectedPeopleGroup);
+            }}
+          >
             <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-200">
               Filtro
             </h3>
 
-            <div className="max-w-3xl">
-              <label className="block">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <label className="block lg:min-w-0 lg:flex-1">
                 <span className="sr-only">Texto a filtrar</span>
                 <input
                   type="search"
@@ -319,20 +339,76 @@ export function PhotoViewer({
                   className="w-full rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
                 />
               </label>
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+                >
+                  Aplicar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterInput("");
+                    setSelectedPeopleGroup("all");
+                    applyFilter("", "all");
+                  }}
+                  className="rounded-2xl border border-white/12 bg-black/25 px-5 py-3 text-sm font-medium text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
+                >
+                  Limpiar
+                </button>
+              </div>
             </div>
 
-            {hasActiveFilter ? (
+            <div className="flex flex-wrap gap-3">
+              {PHOTO_PEOPLE_GROUP_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setSelectedPeopleGroup(option.value);
+                    applyFilter(filterInput, option.value);
+                  }}
+                  aria-pressed={selectedPeopleGroup === option.value}
+                  className={`rounded-full border px-4 py-2 text-sm transition ${
+                    selectedPeopleGroup === option.value
+                      ? "border-cyan-300/55 bg-cyan-300/15 text-cyan-100"
+                      : "border-white/12 bg-black/25 text-slate-100 hover:border-cyan-300/50 hover:text-white"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+            {hasActiveFilter || hasActivePeopleGroup ? (
               <p className="text-sm text-slate-300">
-                {totalCount} resultados encontrados para{" "}
-                <span className="font-medium text-cyan-100">{filterValue}</span>
+                {totalCount} resultados encontrados
+                {hasActiveFilter ? (
+                  <>
+                    {" "}para{" "}
+                    <span className="font-medium text-cyan-100">
+                      {filterValue}
+                    </span>
+                  </>
+                ) : null}
+                {hasActivePeopleGroup ? (
+                  <>
+                    {" "}en{" "}
+                    <span className="font-medium text-cyan-100">
+                      {getPhotoPeopleGroupLabel(peopleGroup)}
+                    </span>
+                  </>
+                ) : null}
               </p>
             ) : null}
-          </div>
+          </form>
         </div>
 
         {configured && !error && photos.length === 0 ? (
           <div className="rounded-[1.75rem] border border-dashed border-white/14 bg-black/15 px-6 py-12 text-center text-sm leading-7 text-slate-300">
-            {hasActiveFilter
+            {hasActiveFilter || hasActivePeopleGroup
               ? "No hay fotos que coincidan con el filtro actual."
               : "La tabla `public.fotos` está accesible, pero no hay registros con imágenes compatibles para este bucket."}
           </div>

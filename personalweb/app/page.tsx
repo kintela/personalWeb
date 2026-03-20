@@ -1,6 +1,9 @@
 import { PhotoPeopleList } from "@/components/photo-people-list";
 import { PhotoViewer } from "@/components/photo-viewer";
-import { normalizePhotoFilterValue } from "@/lib/photo-filters";
+import {
+  normalizePhotoFilterValue,
+  normalizePhotoPeopleGroup,
+} from "@/lib/photo-filters";
 import { getPhotoGallery, getPhotoPeopleList } from "@/lib/supabase/photos";
 
 export const dynamic = "force-dynamic";
@@ -31,11 +34,15 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const filterValue = normalizePhotoFilterValue(
     getSingleValue(searchParams.filterValue),
   );
+  const peopleGroup = normalizePhotoPeopleGroup(
+    getSingleValue(searchParams.peopleGroup),
+  );
   const [gallery, peopleList] = await Promise.all([
     getPhotoGallery({
       page: parsePage(searchParams.page),
       filterField: "all",
       filterValue,
+      peopleGroup,
     }),
     getPhotoPeopleList(),
   ]);
@@ -68,6 +75,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
           totalPages={gallery.totalPages}
           pageSize={gallery.pageSize}
           filterValue={gallery.filterValue}
+          peopleGroup={gallery.peopleGroup}
         />
 
         <PhotoPeopleList

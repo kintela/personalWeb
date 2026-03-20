@@ -4,7 +4,9 @@ import { createClient } from "@supabase/supabase-js";
 
 import {
   hasActivePhotoFilter,
+  hasActivePhotoPeopleGroup,
   type PhotoFilterField,
+  type PhotoPeopleGroup,
 } from "@/lib/photo-filters";
 
 const IMAGE_FILE_PATTERN = /\.(avif|gif|jpe?g|png|webp)$/i;
@@ -44,6 +46,7 @@ export type PhotoGalleryResult = {
   pageSize: number;
   filterField: PhotoFilterField;
   filterValue: string;
+  peopleGroup: PhotoPeopleGroup;
 };
 
 export type PhotoPeopleResult = {
@@ -148,6 +151,12 @@ function normalizePhotoFilterText(value: string | number | null | undefined) {
     .toLocaleLowerCase("es-ES");
 }
 
+function getNormalizedPhotoPeopleCount(personas: string[] | null | undefined) {
+  return (personas ?? [])
+    .map((person) => person?.trim())
+    .filter((person): person is string => Boolean(person)).length;
+}
+
 function buildPhotoFilterValues(
   photo: {
     id: number;
@@ -234,6 +243,30 @@ function matchesPhotoFilter(
   return filterValues.some((value) =>
     normalizePhotoFilterText(value).includes(normalizedFilterValue),
   );
+}
+
+function matchesPhotoPeopleGroup(
+  photo: Parameters<typeof buildPhotoFilterValues>[0],
+  peopleGroup: PhotoPeopleGroup,
+) {
+  if (!hasActivePhotoPeopleGroup(peopleGroup)) {
+    return true;
+  }
+
+  const peopleCount = getNormalizedPhotoPeopleCount(photo.personas);
+
+  switch (peopleGroup) {
+    case "solo":
+      return peopleCount === 1;
+    case "pair":
+      return peopleCount === 2;
+    case "trio":
+      return peopleCount === 3;
+    case "crowd":
+      return peopleCount > 3;
+    default:
+      return true;
+  }
 }
 
 async function fetchAllPhotosForFiltering(
@@ -323,11 +356,13 @@ export async function getPhotoGallery(options?: {
   page?: number;
   filterField?: PhotoFilterField;
   filterValue?: string;
+  peopleGroup?: PhotoPeopleGroup;
 }): Promise<PhotoGalleryResult> {
   const bucket = getPhotoBucketName();
   const requestedPage = normalizePageNumber(options?.page ?? 1);
   const filterField = options?.filterField ?? "all";
   const filterValue = options?.filterValue?.trim() ?? "";
+  const peopleGroup = options?.peopleGroup ?? "all";
   const supabase = createSupabaseServerClient();
 
   if (!supabase) {
@@ -344,10 +379,11 @@ export async function getPhotoGallery(options?: {
       pageSize: PHOTO_GALLERY_PAGE_SIZE,
       filterField,
       filterValue,
+      peopleGroup,
     };
   }
 
-  if (hasActivePhotoFilter(filterValue)) {
+  if (hasActivePhotoFilter(filterValue) || hasActivePhotoPeopleGroup(peopleGroup)) {
     const { data, error } = await fetchAllPhotosForFiltering(supabase, bucket);
 
     if (error) {
@@ -363,11 +399,14 @@ export async function getPhotoGallery(options?: {
         pageSize: PHOTO_GALLERY_PAGE_SIZE,
         filterField,
         filterValue,
+        peopleGroup,
       };
     }
 
-    const filteredPhotos = (data ?? []).filter((photo) =>
-      matchesPhotoFilter(photo, filterField, filterValue),
+    const filteredPhotos = (data ?? []).filter(
+      (photo) =>
+        matchesPhotoFilter(photo, filterField, filterValue) &&
+        matchesPhotoPeopleGroup(photo, peopleGroup),
     );
     const totalCount = filteredPhotos.length;
     const totalPages = Math.max(
@@ -408,6 +447,7 @@ export async function getPhotoGallery(options?: {
       pageSize: PHOTO_GALLERY_PAGE_SIZE,
       filterField,
       filterValue,
+      peopleGroup,
     };
   }
 
@@ -435,6 +475,7 @@ export async function getPhotoGallery(options?: {
       pageSize: PHOTO_GALLERY_PAGE_SIZE,
       filterField,
       filterValue,
+      peopleGroup,
     };
   }
 
@@ -470,6 +511,7 @@ export async function getPhotoGallery(options?: {
     pageSize: PHOTO_GALLERY_PAGE_SIZE,
     filterField,
     filterValue,
+    peopleGroup,
   };
 }
 
