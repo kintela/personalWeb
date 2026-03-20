@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { ConcertAsset } from "@/lib/supabase/concerts";
 
 type ConcertsViewerProps = {
@@ -148,11 +149,49 @@ export function ConcertsViewer({
                         ))}
                     </div>
 
-                    {concert.ticket || concert.poster ? (
+                    {concert.ticketImageSrc || concert.posterImageSrc ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {concert.ticketImageSrc ? (
+                          <div className="space-y-2">
+                            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                              Entrada
+                            </p>
+                            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                              <Image
+                                src={concert.ticketImageSrc}
+                                alt={`${concert.groupName ?? "Concierto"} entrada`}
+                                width={1200}
+                                height={700}
+                                unoptimized
+                                className="h-auto w-full object-contain"
+                                sizes="(max-width: 640px) 100vw, 50vw"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {concert.posterImageSrc ? (
+                          <div className="space-y-2">
+                            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                              Cartel
+                            </p>
+                            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                              <Image
+                                src={concert.posterImageSrc}
+                                alt={`${concert.groupName ?? "Concierto"} cartel`}
+                                width={1200}
+                                height={700}
+                                unoptimized
+                                className="h-auto w-full object-contain"
+                                sizes="(max-width: 640px) 100vw, 50vw"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : concert.ticket || concert.poster ? (
                       <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                        {[concert.ticket, concert.poster]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        {[concert.ticket, concert.poster].filter(Boolean).join(" · ")}
                       </p>
                     ) : null}
                   </div>

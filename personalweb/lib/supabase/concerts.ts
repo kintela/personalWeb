@@ -38,6 +38,8 @@ export type ConcertAsset = {
   hasPhotos: boolean;
   ticket: string | null;
   poster: string | null;
+  ticketImageSrc: string | null;
+  posterImageSrc: string | null;
   description: string | null;
   review: string | null;
   videos: string[];
@@ -108,6 +110,40 @@ function normalizeLinks(values: string[] | null | undefined) {
     .filter((value): value is string => Boolean(value));
 }
 
+function getStorageAssetPublicUrl(
+  assetPath: string | null,
+  defaultBucket: string,
+) {
+  const normalizedPath = assetPath?.trim();
+  const supabaseUrl = getSupabaseUrl()?.trim();
+
+  if (!normalizedPath || !supabaseUrl) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(normalizedPath)) {
+    return normalizedPath;
+  }
+
+  const segments = normalizedPath.split("/").filter(Boolean);
+  const hasExplicitBucket = segments.length > 1;
+  const bucket = hasExplicitBucket ? segments[0] : defaultBucket;
+  const objectPath = hasExplicitBucket
+    ? segments.slice(1).join("/").trim()
+    : normalizedPath;
+
+  if (!bucket || !objectPath) {
+    return null;
+  }
+
+  const encodedPath = objectPath
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
+
+  return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(bucket)}/${encodedPath}`;
+}
+
 function createSupabaseServerClient(): SupabaseClient | null {
   const supabaseUrl = getSupabaseUrl();
   const supabaseKey = getSupabaseServerKey();
@@ -163,6 +199,8 @@ export async function getConcertList(): Promise<ConcertListResult> {
     hasPhotos: Boolean(concert.fotos),
     ticket: concert.entrada?.trim() || null,
     poster: concert.cartel?.trim() || null,
+    ticketImageSrc: getStorageAssetPublicUrl(concert.entrada, "entradas"),
+    posterImageSrc: getStorageAssetPublicUrl(concert.cartel, "carteles"),
     description: concert.descripcion?.trim() || null,
     review: concert.cronica?.trim() || null,
     videos: normalizeLinks(concert.videos),
