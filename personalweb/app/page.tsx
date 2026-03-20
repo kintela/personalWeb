@@ -1,9 +1,11 @@
+import { ConcertsViewer } from "@/components/concerts-viewer";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
 import {
   normalizePhotoFilterValue,
   normalizePhotoPeopleGroup,
 } from "@/lib/photo-filters";
+import { getConcertList } from "@/lib/supabase/concerts";
 import { getPhotoGallery } from "@/lib/supabase/photos";
 
 export const dynamic = "force-dynamic";
@@ -37,13 +39,14 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const peopleGroup = normalizePhotoPeopleGroup(
     getSingleValue(searchParams.peopleGroup),
   );
-  const [gallery, isUploaderUnlocked] = await Promise.all([
+  const [gallery, concerts, isUploaderUnlocked] = await Promise.all([
     getPhotoGallery({
       page: parsePage(searchParams.page),
       filterField: "all",
       filterValue,
       peopleGroup,
     }),
+    getConcertList(),
     isAdminAuthenticated(),
   ]);
 
@@ -77,6 +80,13 @@ export default async function Home(props: { searchParams: SearchParams }) {
           filterValue={gallery.filterValue}
           peopleGroup={gallery.peopleGroup}
           initiallyUnlocked={isUploaderUnlocked}
+        />
+
+        <ConcertsViewer
+          concerts={concerts.concerts}
+          configured={concerts.configured}
+          error={concerts.error}
+          totalCount={concerts.totalCount}
         />
       </div>
     </main>
