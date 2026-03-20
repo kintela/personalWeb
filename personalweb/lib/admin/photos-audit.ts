@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getPhotoBucketName } from "@/lib/supabase/photos";
 
 const IMAGE_FILE_PATTERN = /\.(avif|gif|jpe?g|png|webp)$/i;
@@ -26,6 +26,10 @@ export type PhotoAuditResult = {
   missingInDatabase: string[];
   databaseSequence: NumericSummary;
   storageSequence: NumericSummary;
+};
+
+type DatabaseImageRow = {
+  imagen: string | null;
 };
 
 function getSupabaseUrl() {
@@ -126,7 +130,7 @@ function summarizeNumericSequence(names: string[]): NumericSummary {
 }
 
 async function listBucketImages(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   bucket: string,
 ) {
   const images: string[] = [];
@@ -164,7 +168,7 @@ async function listBucketImages(
 }
 
 async function listDatabaseImages(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   bucket: string,
 ) {
   const images: string[] = [];
@@ -194,7 +198,13 @@ async function listDatabaseImages(
       );
     }
 
-    images.push(...(data ?? []).map((row) => row.imagen as string));
+    const rows = (data as DatabaseImageRow[] | null) ?? [];
+
+    images.push(
+      ...rows
+        .map((row) => row.imagen?.trim() ?? "")
+        .filter(Boolean),
+    );
   }
 
   return {

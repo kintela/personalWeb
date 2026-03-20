@@ -84,7 +84,7 @@ function extractImageNumber(fileName: string) {
 }
 
 async function getNextImageNumber(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   bucket: string,
 ) {
   let maxNumber = 0;
@@ -117,7 +117,7 @@ async function getNextImageNumber(
 }
 
 async function resolveGroupId(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   groupName: string | null,
 ) {
   if (!groupName) {

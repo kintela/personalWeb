@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import {
   hasActivePhotoFilter,
@@ -55,6 +55,39 @@ export type PhotoPeopleResult = {
   error: string | null;
   totalPeople: number;
   totalAppearances: number;
+};
+
+type PhotoGroupRelation =
+  | {
+      nombre: string | null;
+    }
+  | {
+      nombre: string | null;
+    }[]
+  | null
+  | undefined;
+
+type PhotoDatabaseRow = {
+  id: number;
+  bucket: string | null;
+  imagen: string;
+  titulo: string | null;
+  personas: string[] | null;
+  anio: number | null;
+  grupo_id: number | null;
+  origen: string | null;
+  descripcion: string | null;
+  fecha: string | null;
+  lugar: string | null;
+  categoria: string | null;
+  concierto_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  grupo: PhotoGroupRelation;
+};
+
+type PhotoPeopleRow = {
+  personas: string[] | null;
 };
 
 function getSupabaseUrl() {
@@ -124,15 +157,7 @@ function normalizePageNumber(page: number) {
 }
 
 function getPhotoGroupName(
-  group:
-    | {
-        nombre: string | null;
-      }
-    | {
-        nombre: string | null;
-      }[]
-    | null
-    | undefined,
+  group: PhotoGroupRelation,
 ) {
   if (!group) {
     return null;
@@ -158,32 +183,7 @@ function getNormalizedPhotoPeopleCount(personas: string[] | null | undefined) {
 }
 
 function buildPhotoFilterValues(
-  photo: {
-    id: number;
-    bucket: string | null;
-    imagen: string | null;
-    titulo: string | null;
-    personas: string[] | null;
-    anio: number | null;
-    grupo_id: number | null;
-    origen: string | null;
-    descripcion: string | null;
-    fecha: string | null;
-    lugar: string | null;
-    categoria: string | null;
-    concierto_id: number | null;
-    created_at: string | null;
-    updated_at: string | null;
-    grupo:
-      | {
-          nombre: string | null;
-        }
-      | {
-          nombre: string | null;
-        }[]
-      | null
-      | undefined;
-  },
+  photo: PhotoDatabaseRow,
 ) {
   const groupName = getPhotoGroupName(photo.grupo);
   const people = (photo.personas ?? [])
@@ -273,32 +273,7 @@ async function fetchAllPhotosForFiltering(
   supabase: NonNullable<ReturnType<typeof createSupabaseServerClient>>,
   bucket: string,
 ) {
-  const photos: Array<{
-    id: number;
-    bucket: string | null;
-    imagen: string;
-    titulo: string | null;
-    personas: string[] | null;
-    anio: number | null;
-    grupo_id: number | null;
-    origen: string | null;
-    descripcion: string | null;
-    fecha: string | null;
-    lugar: string | null;
-    categoria: string | null;
-    concierto_id: number | null;
-    created_at: string | null;
-    updated_at: string | null;
-    grupo:
-      | {
-          nombre: string | null;
-        }
-      | {
-          nombre: string | null;
-        }[]
-      | null
-      | undefined;
-  }> = [];
+  const photos: PhotoDatabaseRow[] = [];
   let rangeFrom = 0;
 
   while (true) {
@@ -321,7 +296,7 @@ async function fetchAllPhotosForFiltering(
       break;
     }
 
-    photos.push(...data);
+    photos.push(...((data as PhotoDatabaseRow[] | null) ?? []));
 
     if (data.length < PHOTO_FILTER_BATCH_SIZE) {
       break;
@@ -336,7 +311,7 @@ async function fetchAllPhotosForFiltering(
   };
 }
 
-function createSupabaseServerClient() {
+function createSupabaseServerClient(): SupabaseClient | null {
   const supabaseUrl = getSupabaseUrl();
   const supabaseKey = getSupabaseServerKey();
 
@@ -479,7 +454,9 @@ export async function getPhotoGallery(options?: {
     };
   }
 
-  const photos = [...(data ?? [])]
+  const rows = (data as PhotoDatabaseRow[] | null) ?? [];
+
+  const photos = [...rows]
     .filter((photo) => IMAGE_FILE_PATTERN.test(photo.imagen))
     .map((photo) => ({
       id: String(photo.id),
@@ -548,7 +525,7 @@ export async function getPhotoPeopleList(): Promise<PhotoPeopleResult> {
   const peopleByKey = new Map<string, PhotoPerson>();
   let totalAppearances = 0;
 
-  for (const photo of data ?? []) {
+  for (const photo of ((data as PhotoPeopleRow[] | null) ?? [])) {
     const normalizedPeopleInPhoto = new Set<string>();
 
     for (const rawPerson of photo.personas ?? []) {
