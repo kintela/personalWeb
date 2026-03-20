@@ -135,11 +135,19 @@ async function resolveGroupId(
     throw new Error(`No he podido comprobar el grupo "${groupName}": ${error.message}`);
   }
 
-  if (!data) {
+  const group = data as { id: number | string | null } | null;
+
+  if (!group) {
     throw new Error(`El grupo "${groupName}" no existe.`);
   }
 
-  return data.id as number;
+  const groupId = Number(group.id);
+
+  if (!Number.isInteger(groupId)) {
+    throw new Error(`El grupo "${groupName}" no tiene un id valido.`);
+  }
+
+  return groupId;
 }
 
 export async function POST(request: Request) {
