@@ -43,6 +43,17 @@ export type BookListResult = {
   configured: boolean;
   error: string | null;
   totalCount: number;
+  filterValue: string;
+  categoryValue: string;
+  protagonistValue: string;
+  categoryOptions: string[];
+  protagonistOptions: string[];
+};
+
+type GetBookListOptions = {
+  filterValue?: string | null;
+  categoryValue?: string | null;
+  protagonistValue?: string | null;
 };
 
 function getSupabaseUrl() {
@@ -117,8 +128,40 @@ function mapBook(row: BookDatabaseRow): BookAsset {
   };
 }
 
-export async function getBookList(): Promise<BookListResult> {
+function normalizeBookFilterValue(value: string | null | undefined) {
+  return value?.trim() ?? "";
+}
+
+function buildBookSearchHaystack(book: BookDatabaseRow) {
+  return [
+    String(book.id),
+    book.titulo,
+    book.categoria,
+    book.autor,
+    book.isbn,
+    book.caratula,
+    book.enlace,
+    book.deposito_legal,
+    book.editorial,
+    book.protagonista,
+    book.sinopsis,
+    book.created_at,
+    book.updated_at,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(" \n")
+    .toLocaleLowerCase("es-ES");
+}
+
+export async function getBookList(
+  options: GetBookListOptions = {},
+): Promise<BookListResult> {
   const supabase = createSupabaseServerClient();
+  const requestedFilterValue = normalizeBookFilterValue(options.filterValue);
+  const requestedCategoryValue = normalizeBookFilterValue(options.categoryValue);
+  const requestedProtagonistValue = normalizeBookFilterValue(
+    options.protagonistValue,
+  );
 
   if (!supabase) {
     return {
@@ -127,6 +170,11 @@ export async function getBookList(): Promise<BookListResult> {
       error:
         "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
       totalCount: 0,
+      filterValue: requestedFilterValue,
+      categoryValue: requestedCategoryValue,
+      protagonistValue: requestedProtagonistValue,
+      categoryOptions: [],
+      protagonistOptions: [],
     };
   }
 
@@ -141,15 +189,62 @@ export async function getBookList(): Promise<BookListResult> {
       configured: true,
       error: `No he podido leer los libros: ${error.message}`,
       totalCount: 0,
+      filterValue: requestedFilterValue,
+      categoryValue: requestedCategoryValue,
+      protagonistValue: requestedProtagonistValue,
+      categoryOptions: [],
+      protagonistOptions: [],
     };
   }
 
-  const books = ((data as BookDatabaseRow[] | null) ?? []).map(mapBook);
+  const rows = (data as BookDatabaseRow[] | null) ?? [];
+  const categoryOptions = [
+    ...new Set(
+      rows
+        .map((row) => row.categoria?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ].sort((left, right) => left.localeCompare(right, "es"));
+  const protagonistOptions = [
+    ...new Set(
+      rows
+        .map((row) => row.protagonista?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ].sort((left, right) => left.localeCompare(right, "es"));
+  const normalizedCategoryValue = categoryOptions.includes(requestedCategoryValue)
+    ? requestedCategoryValue
+    : "";
+  const normalizedProtagonistValue = protagonistOptions.includes(
+    requestedProtagonistValue,
+  )
+    ? requestedProtagonistValue
+    : "";
+  const normalizedFilterValue = requestedFilterValue.toLocaleLowerCase("es-ES");
+  const filteredRows = rows.filter((book) => {
+    const matchesCategory =
+      !normalizedCategoryValue ||
+      (book.categoria?.trim() ?? "") === normalizedCategoryValue;
+    const matchesProtagonist =
+      !normalizedProtagonistValue ||
+      (book.protagonista?.trim() ?? "") === normalizedProtagonistValue;
+    const matchesSearch =
+      !normalizedFilterValue ||
+      buildBookSearchHaystack(book).includes(normalizedFilterValue);
+
+    return matchesCategory && matchesProtagonist && matchesSearch;
+  });
+  const books = filteredRows.map(mapBook);
 
   return {
     books,
     configured: true,
     error: null,
     totalCount: books.length,
+    filterValue: requestedFilterValue,
+    categoryValue: normalizedCategoryValue,
+    protagonistValue: normalizedProtagonistValue,
+    categoryOptions,
+    protagonistOptions,
   };
 }

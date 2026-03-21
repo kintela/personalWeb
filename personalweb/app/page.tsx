@@ -45,6 +45,11 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const concertYearValue = getSingleValue(searchParams.concertYear).trim();
   const concertCityValue = getSingleValue(searchParams.concertCity).trim();
   const concertGroupValue = getSingleValue(searchParams.concertGroup).trim();
+  const bookFilterValue = getSingleValue(searchParams.bookFilter).trim();
+  const bookCategoryValue = getSingleValue(searchParams.bookCategory).trim();
+  const bookProtagonistValue = getSingleValue(
+    searchParams.bookProtagonist,
+  ).trim();
   const [gallery, concerts, books, isUploaderUnlocked] = await Promise.all([
     getPhotoGallery({
       page: parsePage(searchParams.page),
@@ -58,7 +63,11 @@ export default async function Home(props: { searchParams: SearchParams }) {
       cityValue: concertCityValue,
       groupValue: concertGroupValue,
     }),
-    getBookList(),
+    getBookList({
+      filterValue: bookFilterValue,
+      categoryValue: bookCategoryValue,
+      protagonistValue: bookProtagonistValue,
+    }),
     isAdminAuthenticated(),
   ]);
 
@@ -113,6 +122,11 @@ export default async function Home(props: { searchParams: SearchParams }) {
           configured={books.configured}
           error={books.error}
           totalCount={books.totalCount}
+          filterValue={books.filterValue}
+          categoryValue={books.categoryValue}
+          protagonistValue={books.protagonistValue}
+          categoryOptions={books.categoryOptions}
+          protagonistOptions={books.protagonistOptions}
         />
       </div>
     </main>

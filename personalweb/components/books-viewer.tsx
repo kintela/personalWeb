@@ -1,4 +1,8 @@
+"use client";
+
 import Image from "next/image";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { startTransition, useEffect, useState } from "react";
 
 import type { BookAsset } from "@/lib/supabase/books";
 
@@ -7,6 +11,11 @@ type BooksViewerProps = {
   configured: boolean;
   error: string | null;
   totalCount: number;
+  filterValue: string;
+  categoryValue: string;
+  protagonistValue: string;
+  categoryOptions: string[];
+  protagonistOptions: string[];
 };
 
 function buildBookMeta(book: BookAsset) {
@@ -30,7 +39,95 @@ export function BooksViewer({
   configured,
   error,
   totalCount,
+  filterValue,
+  categoryValue,
+  protagonistValue,
+  categoryOptions,
+  protagonistOptions,
 }: BooksViewerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [filterInput, setFilterInput] = useState(filterValue);
+  const [selectedCategory, setSelectedCategory] = useState(categoryValue);
+  const [selectedProtagonist, setSelectedProtagonist] =
+    useState(protagonistValue);
+  const hasActiveFilters = Boolean(
+    filterValue || categoryValue || protagonistValue,
+  );
+
+  useEffect(() => {
+    setFilterInput(filterValue);
+  }, [filterValue]);
+
+  useEffect(() => {
+    setSelectedCategory(categoryValue);
+  }, [categoryValue]);
+
+  useEffect(() => {
+    setSelectedProtagonist(protagonistValue);
+  }, [protagonistValue]);
+
+  function applyFilters({
+    nextFilterValue,
+    nextCategoryValue,
+    nextProtagonistValue,
+  }: {
+    nextFilterValue: string;
+    nextCategoryValue: string;
+    nextProtagonistValue: string;
+  }) {
+    const params = new URLSearchParams(searchParams.toString());
+    const normalizedFilterValue = nextFilterValue.trim();
+    const normalizedCategoryValue = nextCategoryValue.trim();
+    const normalizedProtagonistValue = nextProtagonistValue.trim();
+
+    if (normalizedFilterValue) {
+      params.set("bookFilter", normalizedFilterValue);
+    } else {
+      params.delete("bookFilter");
+    }
+
+    if (normalizedCategoryValue) {
+      params.set("bookCategory", normalizedCategoryValue);
+    } else {
+      params.delete("bookCategory");
+    }
+
+    if (normalizedProtagonistValue) {
+      params.set("bookProtagonist", normalizedProtagonistValue);
+    } else {
+      params.delete("bookProtagonist");
+    }
+
+    startTransition(() => {
+      router.replace(
+        params.toString() ? `${pathname}?${params.toString()}` : pathname,
+        { scroll: false },
+      );
+    });
+  }
+
+  function handleApply(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    applyFilters({
+      nextFilterValue: filterInput,
+      nextCategoryValue: selectedCategory,
+      nextProtagonistValue: selectedProtagonist,
+    });
+  }
+
+  function handleReset() {
+    setFilterInput("");
+    setSelectedCategory("");
+    setSelectedProtagonist("");
+    applyFilters({
+      nextFilterValue: "",
+      nextCategoryValue: "",
+      nextProtagonistValue: "",
+    });
+  }
+
   return (
     <section className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/6 px-6 py-8 shadow-[0_32px_90px_rgba(15,23,42,0.25)] backdrop-blur md:px-10 md:py-10">
       <div className="space-y-8">
@@ -56,6 +153,96 @@ export function BooksViewer({
           </div>
         </div>
 
+        <div className="rounded-[2rem] border border-white/10 bg-slate-950/35 p-5">
+          <form className="space-y-5" onSubmit={handleApply}>
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-[0.38em] text-slate-300">
+                Filtro
+              </p>
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_220px_280px_auto_auto] xl:items-center">
+                <input
+                  type="search"
+                  value={filterInput}
+                  onChange={(event) => setFilterInput(event.target.value)}
+                  placeholder="Ejemplo: Bowie, Biografía, Liburuak, ISBN..."
+                  className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/70"
+                />
+
+                <select
+                  value={selectedCategory}
+                  onChange={(event) => setSelectedCategory(event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-sm text-white outline-none transition focus:border-cyan-300/70"
+                >
+                  <option value="">Todas las categorías</option>
+                  {categoryOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={selectedProtagonist}
+                  onChange={(event) =>
+                    setSelectedProtagonist(event.target.value)
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-sm text-white outline-none transition focus:border-cyan-300/70"
+                >
+                  <option value="">Todos los protagonistas</option>
+                  {protagonistOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-cyan-400 px-6 py-4 text-base font-semibold text-slate-950 transition hover:bg-cyan-300"
+                >
+                  Aplicar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="rounded-2xl border border-white/12 bg-black/20 px-6 py-4 text-base text-slate-100 transition hover:border-white/25 hover:text-white"
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+
+            {hasActiveFilters ? (
+              <p className="text-sm text-slate-300">
+                {totalCount} libros encontrados
+                {filterValue ? (
+                  <>
+                    {" "}
+                    para <span className="font-semibold text-white">{filterValue}</span>
+                  </>
+                ) : null}
+                {categoryValue ? (
+                  <>
+                    {" "}
+                    en{" "}
+                    <span className="font-semibold text-white">{categoryValue}</span>
+                  </>
+                ) : null}
+                {protagonistValue ? (
+                  <>
+                    {" "}
+                    sobre{" "}
+                    <span className="font-semibold text-white">
+                      {protagonistValue}
+                    </span>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+          </form>
+        </div>
+
         {!configured ? (
           <div className="rounded-[1.75rem] border border-amber-400/25 bg-amber-400/10 px-5 py-4 text-sm text-amber-100">
             Configura las variables de entorno de Supabase para mostrar los
@@ -70,7 +257,7 @@ export function BooksViewer({
             No hay libros cargados todavía.
           </div>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid gap-5 lg:grid-cols-2">
             {books.map((book) => {
               const meta = buildBookMeta(book);
               const details = buildBookDetails(book);
@@ -78,35 +265,34 @@ export function BooksViewer({
               return (
                 <article
                   key={book.id}
-                  className="group flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                  className="group flex h-full gap-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                 >
-                  <div className="relative aspect-[3/4] overflow-hidden bg-slate-900">
+                  <div className="relative w-24 shrink-0 overflow-hidden rounded-[1.2rem] border border-white/10 bg-slate-900 sm:w-28">
                     {book.coverSrc ? (
                       <Image
                         src={book.coverSrc}
                         alt={`Carátula de ${book.title}`}
-                        fill
+                        width={280}
+                        height={400}
                         unoptimized
-                        className="object-cover transition duration-500 group-hover:scale-[1.02]"
-                        sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 33vw, 25vw"
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                        sizes="112px"
                       />
                     ) : (
-                      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-8 text-center text-sm uppercase tracking-[0.3em] text-slate-400">
+                      <div className="flex h-full min-h-40 items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-3 text-center text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
                         Sin carátula
                       </div>
                     )}
-
-                    {book.category ? (
-                      <div className="absolute left-4 top-4">
-                        <span className="rounded-full border border-cyan-300/35 bg-slate-950/75 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.18em] text-cyan-200 backdrop-blur">
-                          {book.category}
-                        </span>
-                      </div>
-                    ) : null}
                   </div>
 
-                  <div className="flex flex-1 flex-col gap-4 p-5">
+                  <div className="flex min-w-0 flex-1 flex-col gap-4">
                     <div className="space-y-2">
+                      {book.category ? (
+                        <p className="text-[0.7rem] font-medium uppercase tracking-[0.22em] text-cyan-200">
+                          {book.category}
+                        </p>
+                      ) : null}
+
                       <h3 className="text-xl font-semibold leading-tight text-white">
                         {book.title}
                       </h3>
@@ -128,7 +314,7 @@ export function BooksViewer({
                         style={{
                           display: "-webkit-box",
                           WebkitBoxOrient: "vertical",
-                          WebkitLineClamp: 5,
+                          WebkitLineClamp: 4,
                           overflow: "hidden",
                         }}
                       >
