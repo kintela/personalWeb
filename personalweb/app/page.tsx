@@ -1,6 +1,7 @@
 import { BooksViewer } from "@/components/books-viewer";
 import { ConcertsViewer } from "@/components/concerts-viewer";
 import { PhotoViewer } from "@/components/photo-viewer";
+import { VideosViewer } from "@/components/videos-viewer";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
 import {
   normalizePhotoFilterValue,
@@ -9,6 +10,7 @@ import {
 import { getBookList } from "@/lib/supabase/books";
 import { getConcertList } from "@/lib/supabase/concerts";
 import { getPhotoGallery } from "@/lib/supabase/photos";
+import { getVideoList } from "@/lib/supabase/videos";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +52,11 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const bookProtagonistValue = getSingleValue(
     searchParams.bookProtagonist,
   ).trim();
-  const [gallery, concerts, books, isUploaderUnlocked] = await Promise.all([
+  const videoFilterValue = getSingleValue(searchParams.videoFilter).trim();
+  const videoCategoryValue = getSingleValue(searchParams.videoCategory).trim();
+  const videoPlatformValue = getSingleValue(searchParams.videoPlatform).trim();
+  const [gallery, concerts, books, videos, isUploaderUnlocked] =
+    await Promise.all([
     getPhotoGallery({
       page: parsePage(searchParams.page),
       filterField: "all",
@@ -68,8 +74,13 @@ export default async function Home(props: { searchParams: SearchParams }) {
       categoryValue: bookCategoryValue,
       protagonistValue: bookProtagonistValue,
     }),
+    getVideoList({
+      filterValue: videoFilterValue,
+      categoryValue: videoCategoryValue,
+      platformValue: videoPlatformValue,
+    }),
     isAdminAuthenticated(),
-  ]);
+    ]);
 
   return (
     <main className="min-h-screen">
@@ -127,6 +138,18 @@ export default async function Home(props: { searchParams: SearchParams }) {
           protagonistValue={books.protagonistValue}
           categoryOptions={books.categoryOptions}
           protagonistOptions={books.protagonistOptions}
+        />
+
+        <VideosViewer
+          videos={videos.videos}
+          configured={videos.configured}
+          error={videos.error}
+          totalCount={videos.totalCount}
+          filterValue={videos.filterValue}
+          categoryValue={videos.categoryValue}
+          platformValue={videos.platformValue}
+          categoryOptions={videos.categoryOptions}
+          platformOptions={videos.platformOptions}
         />
       </div>
     </main>
