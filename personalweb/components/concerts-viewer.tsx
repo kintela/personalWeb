@@ -14,7 +14,7 @@ type ConcertsViewerProps = {
 type SelectedConcertVideo = {
   concertName: string;
   label: string;
-  sourceUrl: string;
+  externalUrl: string;
   embedUrl: string;
   platform: "youtube" | "instagram";
 };
@@ -78,6 +78,43 @@ function getYouTubeEmbedUrl(rawUrl: string) {
   }
 }
 
+function getYouTubeExternalUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+    let videoId: string | null = null;
+
+    if (hostname === "youtu.be") {
+      videoId = url.pathname.split("/").filter(Boolean)[0] ?? null;
+    } else if (hostname === "youtube.com" || hostname.endsWith(".youtube.com")) {
+      if (url.pathname.startsWith("/embed/")) {
+        videoId = url.pathname.split("/").filter(Boolean)[1] ?? null;
+      } else {
+        videoId = url.searchParams.get("v");
+      }
+    }
+
+    if (!videoId) {
+      return rawUrl;
+    }
+
+    const externalUrl = new URL("https://www.youtube.com/watch");
+    externalUrl.searchParams.set("v", videoId);
+
+    for (const key of ["start", "list", "si"]) {
+      const value = url.searchParams.get(key);
+
+      if (value) {
+        externalUrl.searchParams.set(key, value);
+      }
+    }
+
+    return externalUrl.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
 function getInstagramEmbedUrl(rawUrl: string) {
   try {
     const url = new URL(rawUrl);
@@ -101,6 +138,29 @@ function getInstagramEmbedUrl(rawUrl: string) {
   }
 }
 
+function getInstagramExternalUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (hostname !== "instagram.com" && !hostname.endsWith(".instagram.com")) {
+      return rawUrl;
+    }
+
+    const segments = url.pathname.split("/").filter(Boolean);
+    const contentType = segments[0];
+    const contentId = segments[1];
+
+    if (!contentType || !contentId || !["p", "reel", "tv"].includes(contentType)) {
+      return rawUrl;
+    }
+
+    return `https://www.instagram.com/${contentType}/${contentId}/`;
+  } catch {
+    return rawUrl;
+  }
+}
+
 function getConcertVideoDescriptor(
   rawUrl: string,
   concertName: string,
@@ -112,7 +172,7 @@ function getConcertVideoDescriptor(
     return {
       concertName,
       label,
-      sourceUrl: rawUrl,
+      externalUrl: getYouTubeExternalUrl(rawUrl),
       embedUrl: youTubeEmbedUrl,
       platform: "youtube",
     };
@@ -124,7 +184,7 @@ function getConcertVideoDescriptor(
     return {
       concertName,
       label,
-      sourceUrl: rawUrl,
+      externalUrl: getInstagramExternalUrl(rawUrl),
       embedUrl: instagramEmbedUrl,
       platform: "instagram",
     };
@@ -427,7 +487,7 @@ export function ConcertsViewer({
 
               <div className="flex items-center gap-3">
                 <a
-                  href={selectedVideo.sourceUrl}
+                  href={selectedVideo.externalUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
