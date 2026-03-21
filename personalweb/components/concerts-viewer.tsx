@@ -2,7 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useEffectEvent, useState } from "react";
-import type { ConcertAsset } from "@/lib/supabase/concerts";
+import type {
+  ConcertAsset,
+  ConcertPhotoAsset,
+} from "@/lib/supabase/concerts";
 
 type ConcertsViewerProps = {
   concerts: ConcertAsset[];
@@ -19,8 +22,26 @@ type SelectedConcertVideo = {
   platform: "youtube" | "instagram";
 };
 
+type SelectedConcertPhotoViewer = {
+  concertName: string;
+  photos: ConcertPhotoAsset[];
+  selectedIndex: number;
+};
+
 function buildConcertLocation(concert: ConcertAsset) {
   return [concert.city, concert.venue].filter(Boolean).join(" · ");
+}
+
+function buildConcertPhotoMeta(photo: ConcertPhotoAsset) {
+  return [photo.dateLabel, photo.origin, photo.place].filter(Boolean).join(" · ");
+}
+
+function buildConcertPhotoPeopleLabel(photo: ConcertPhotoAsset) {
+  return photo.people.join(", ");
+}
+
+function getConcertPhotoCountLabel(count: number) {
+  return `${count} foto${count === 1 ? "" : "s"}`;
 }
 
 function getYouTubeEmbedUrl(rawUrl: string) {
@@ -202,21 +223,75 @@ export function ConcertsViewer({
   const [selectedVideo, setSelectedVideo] = useState<SelectedConcertVideo | null>(
     null,
   );
+  const [selectedPhotoViewer, setSelectedPhotoViewer] =
+    useState<SelectedConcertPhotoViewer | null>(null);
 
-  const closeViewer = () => setSelectedVideo(null);
+  const selectedConcertPhoto =
+    selectedPhotoViewer?.photos.at(selectedPhotoViewer.selectedIndex) ?? null;
+
+  const closeVideoViewer = () => setSelectedVideo(null);
+  const closePhotoViewer = () => setSelectedPhotoViewer(null);
+
+  const showPreviousConcertPhoto = () => {
+    setSelectedPhotoViewer((current) => {
+      if (!current || current.photos.length <= 1) {
+        return current;
+      }
+
+      return {
+        ...current,
+        selectedIndex:
+          current.selectedIndex === 0
+            ? current.photos.length - 1
+            : current.selectedIndex - 1,
+      };
+    });
+  };
+
+  const showNextConcertPhoto = () => {
+    setSelectedPhotoViewer((current) => {
+      if (!current || current.photos.length <= 1) {
+        return current;
+      }
+
+      return {
+        ...current,
+        selectedIndex:
+          current.selectedIndex === current.photos.length - 1
+            ? 0
+            : current.selectedIndex + 1,
+      };
+    });
+  };
 
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (selectedPhotoViewer !== null) {
+      if (event.key === "Escape") {
+        closePhotoViewer();
+      }
+
+      if (event.key === "ArrowLeft") {
+        showPreviousConcertPhoto();
+      }
+
+      if (event.key === "ArrowRight") {
+        showNextConcertPhoto();
+      }
+
+      return;
+    }
+
     if (selectedVideo === null) {
       return;
     }
 
     if (event.key === "Escape") {
-      closeViewer();
+      closeVideoViewer();
     }
   });
 
   useEffect(() => {
-    if (selectedVideo === null) {
+    if (selectedVideo === null && selectedPhotoViewer === null) {
       return;
     }
 
@@ -229,7 +304,7 @@ export function ConcertsViewer({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [selectedVideo]);
+  }, [selectedPhotoViewer, selectedVideo]);
 
   return (
     <section className="space-y-6">
@@ -308,9 +383,24 @@ export function ConcertsViewer({
                             Festival
                           </span>
                         ) : null}
-                        {concert.hasPhotos ? (
-                          <span className="rounded-full border border-cyan-300/35 bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-100">
-                            Fotos
+                        {concert.photoCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedVideo(null);
+                              setSelectedPhotoViewer({
+                                concertName,
+                                photos: concert.photos,
+                                selectedIndex: 0,
+                              });
+                            }}
+                            className="rounded-full border border-cyan-300/35 bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-100 transition hover:border-cyan-200/60 hover:bg-cyan-300/18"
+                          >
+                            {getConcertPhotoCountLabel(concert.photoCount)}
+                          </button>
+                        ) : concert.hasPhotos ? (
+                          <span className="rounded-full border border-cyan-300/20 bg-cyan-300/6 px-3 py-1 text-xs font-medium text-cyan-100/70">
+                            Fotos sin vincular
                           </span>
                         ) : null}
                         {concert.videos.length > 0 ? (
@@ -350,7 +440,10 @@ export function ConcertsViewer({
                             <button
                               type="button"
                               key={videoUrl}
-                              onClick={() => setSelectedVideo(descriptor)}
+                              onClick={() => {
+                                setSelectedPhotoViewer(null);
+                                setSelectedVideo(descriptor);
+                              }}
                               className="rounded-full border border-white/12 bg-black/25 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
                             >
                               {label}
@@ -370,6 +463,7 @@ export function ConcertsViewer({
                           </a>
                         );
                       })}
+
                       {concert.instagramVideos
                         .slice(0, 2)
                         .map((videoUrl, index) => {
@@ -385,7 +479,10 @@ export function ConcertsViewer({
                               <button
                                 type="button"
                                 key={videoUrl}
-                                onClick={() => setSelectedVideo(descriptor)}
+                                onClick={() => {
+                                  setSelectedPhotoViewer(null);
+                                  setSelectedVideo(descriptor);
+                                }}
                                 className="rounded-full border border-white/12 bg-black/25 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
                               >
                                 {label}
@@ -470,7 +567,7 @@ export function ConcertsViewer({
             type="button"
             aria-label="Cerrar visor de video"
             className="absolute inset-0 cursor-default"
-            onClick={closeViewer}
+            onClick={closeVideoViewer}
           />
 
           <div className="relative z-10 flex w-full max-w-6xl flex-col gap-4">
@@ -496,7 +593,7 @@ export function ConcertsViewer({
                 </a>
                 <button
                   type="button"
-                  onClick={closeViewer}
+                  onClick={closeVideoViewer}
                   className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
                 >
                   Cerrar
@@ -521,6 +618,104 @@ export function ConcertsViewer({
                   allowFullScreen
                 />
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedPhotoViewer && selectedConcertPhoto ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/92 px-4 py-8 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            aria-label="Cerrar visor de fotos del concierto"
+            className="absolute inset-0 cursor-default"
+            onClick={closePhotoViewer}
+          />
+
+          <div className="relative z-10 flex w-full max-w-6xl flex-col gap-4">
+            <div className="flex items-center justify-between gap-4 rounded-full border border-white/10 bg-white/6 px-5 py-3 text-sm text-slate-200">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-white">
+                  {selectedPhotoViewer.concertName}
+                </p>
+                <p className="truncate text-xs text-slate-400">
+                  {selectedConcertPhoto.title}
+                </p>
+                <p className="truncate text-xs text-slate-500">
+                  {selectedConcertPhoto.name}
+                </p>
+                {buildConcertPhotoMeta(selectedConcertPhoto) ? (
+                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
+                    {buildConcertPhotoMeta(selectedConcertPhoto)}
+                  </p>
+                ) : null}
+                {selectedConcertPhoto.groupName ? (
+                  <p className="truncate text-xs text-cyan-200/90">
+                    {selectedConcertPhoto.groupName}
+                  </p>
+                ) : null}
+                {selectedConcertPhoto.people.length > 0 ? (
+                  <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
+                    {buildConcertPhotoPeopleLabel(selectedConcertPhoto)}
+                  </p>
+                ) : null}
+                {selectedConcertPhoto.description ? (
+                  <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
+                    {selectedConcertPhoto.description}
+                  </p>
+                ) : null}
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
+                  {selectedPhotoViewer.selectedIndex + 1} /{" "}
+                  {selectedPhotoViewer.photos.length}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closePhotoViewer}
+                className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+              <div className="relative aspect-[16/11] min-h-[55vh]">
+                <Image
+                  src={selectedConcertPhoto.src}
+                  alt={selectedConcertPhoto.name}
+                  fill
+                  priority
+                  unoptimized
+                  sizes="100vw"
+                  className="object-contain"
+                />
+              </div>
+
+              {selectedPhotoViewer.photos.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Foto anterior del concierto"
+                    onClick={showPreviousConcertPhoto}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Foto siguiente del concierto"
+                    onClick={showNextConcertPhoto}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90"
+                  >
+                    Next
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
