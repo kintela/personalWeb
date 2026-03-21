@@ -14,6 +14,9 @@ type ConcertsViewerProps = {
   totalCount: number;
 };
 
+const CONCERTS_VIEWER_GRID_STORAGE_KEY = "concerts-viewer-grid-density";
+type ConcertGridDensity = "default" | "compact" | "dense";
+
 type SelectedConcertVideo = {
   concertName: string;
   label: string;
@@ -42,6 +45,31 @@ function buildConcertPhotoPeopleLabel(photo: ConcertPhotoAsset) {
 
 function getConcertPhotoCountLabel(count: number) {
   return `${count} foto${count === 1 ? "" : "s"}`;
+}
+
+function GridDensityIcon({
+  active,
+  columns,
+}: {
+  active: boolean;
+  columns: 4 | 6;
+}) {
+  const squareClassName = active
+    ? "border-cyan-300/60 bg-cyan-300/20"
+    : "border-white/20 bg-white/8";
+  const cells = columns === 6 ? 6 : 4;
+  const gridClassName = columns === 6 ? "grid-cols-3" : "grid-cols-2";
+
+  return (
+    <span className={`grid ${gridClassName} gap-1`}>
+      {Array.from({ length: cells }, (_, index) => (
+        <span
+          key={index}
+          className={`h-2.5 w-2.5 rounded-[0.2rem] border ${squareClassName}`}
+        />
+      ))}
+    </span>
+  );
 }
 
 function getYouTubeEmbedUrl(rawUrl: string) {
@@ -220,11 +248,36 @@ export function ConcertsViewer({
   error,
   totalCount,
 }: ConcertsViewerProps) {
+  const [gridDensity, setGridDensity] = useState<ConcertGridDensity>(() => {
+    if (typeof window === "undefined") {
+      return "default";
+    }
+
+    const savedValue = window.localStorage.getItem(
+      CONCERTS_VIEWER_GRID_STORAGE_KEY,
+    );
+
+    if (
+      savedValue === "compact" ||
+      savedValue === "dense" ||
+      savedValue === "default"
+    ) {
+      return savedValue;
+    }
+
+    return "default";
+  });
   const [selectedVideo, setSelectedVideo] = useState<SelectedConcertVideo | null>(
     null,
   );
   const [selectedPhotoViewer, setSelectedPhotoViewer] =
     useState<SelectedConcertPhotoViewer | null>(null);
+  const gridClassName =
+    gridDensity === "dense"
+      ? "grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6"
+      : gridDensity === "compact"
+        ? "grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        : "grid gap-4 xl:grid-cols-2";
 
   const selectedConcertPhoto =
     selectedPhotoViewer?.photos.at(selectedPhotoViewer.selectedIndex) ?? null;
@@ -306,6 +359,13 @@ export function ConcertsViewer({
     };
   }, [selectedPhotoViewer, selectedVideo]);
 
+  useEffect(() => {
+    window.localStorage.setItem(
+      CONCERTS_VIEWER_GRID_STORAGE_KEY,
+      gridDensity,
+    );
+  }, [gridDensity]);
+
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/6 p-6 shadow-[0_24px_80px_rgba(3,7,18,0.24)] backdrop-blur">
@@ -316,7 +376,7 @@ export function ConcertsViewer({
             </p>
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
-                Bolos a los que me he escapado...
+                Bolos inolvidables....
               </h2>
               <p className="text-sm text-slate-300 md:text-base">
                 Fechas, salas, ciudades y unos cuantos vídeos para recordar la
@@ -325,9 +385,68 @@ export function ConcertsViewer({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-slate-200">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            <span>{totalCount} conciertos cargados</span>
+          <div className="flex items-center gap-2 self-start md:self-auto">
+            <button
+              type="button"
+              title={
+                gridDensity === "compact"
+                  ? "Volver al tamaño normal"
+                  : "Ver 4 conciertos por fila"
+              }
+              aria-pressed={gridDensity === "compact"}
+              onClick={() =>
+                setGridDensity((current) =>
+                  current === "compact" ? "default" : "compact",
+                )
+              }
+              className={`inline-flex items-center justify-center rounded-2xl border px-3 py-3 text-sm transition ${
+                gridDensity === "compact"
+                  ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
+                  : "border-white/12 bg-black/25 text-slate-100 hover:border-cyan-300/50 hover:text-white"
+              }`}
+            >
+              <span className="sr-only">
+                {gridDensity === "compact"
+                  ? "Volver al tamaño normal"
+                  : "Activar vista compacta de 4 conciertos por fila"}
+              </span>
+              <GridDensityIcon
+                active={gridDensity === "compact"}
+                columns={4}
+              />
+            </button>
+
+            <button
+              type="button"
+              title={
+                gridDensity === "dense"
+                  ? "Volver al tamaño normal"
+                  : "Ver 6 conciertos por fila"
+              }
+              aria-pressed={gridDensity === "dense"}
+              onClick={() =>
+                setGridDensity((current) =>
+                  current === "dense" ? "default" : "dense",
+                )
+              }
+              className={`inline-flex items-center justify-center rounded-2xl border px-3 py-3 text-sm transition ${
+                gridDensity === "dense"
+                  ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
+                  : "border-white/12 bg-black/25 text-slate-100 hover:border-cyan-300/50 hover:text-white"
+              }`}
+            >
+              <span className="sr-only">
+                {gridDensity === "dense"
+                  ? "Volver al tamaño normal"
+                  : "Activar vista densa de 6 conciertos por fila"}
+              </span>
+              <GridDensityIcon active={gridDensity === "dense"} columns={6} />
+            </button>
+
+            <div className="flex items-center gap-3 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-slate-200">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <span>{totalCount} conciertos cargados</span>
+            </div>
           </div>
         </div>
 
@@ -353,7 +472,7 @@ export function ConcertsViewer({
         ) : null}
 
         {concerts.length > 0 ? (
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className={gridClassName}>
             {concerts.map((concert) => {
               const location = buildConcertLocation(concert);
               const concertName = concert.groupName ?? "Grupo sin vincular";
