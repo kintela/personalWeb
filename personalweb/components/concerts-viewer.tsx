@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { ConcertAsset } from "@/lib/supabase/concerts";
 
 type ConcertsViewerProps = {
@@ -8,8 +11,126 @@ type ConcertsViewerProps = {
   totalCount: number;
 };
 
+type SelectedConcertVideo = {
+  concertName: string;
+  label: string;
+  sourceUrl: string;
+  embedUrl: string;
+  platform: "youtube" | "instagram";
+};
+
 function buildConcertLocation(concert: ConcertAsset) {
   return [concert.city, concert.venue].filter(Boolean).join(" · ");
+}
+
+function getYouTubeEmbedUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (hostname === "youtu.be") {
+      const videoId = url.pathname.split("/").filter(Boolean)[0];
+
+      if (!videoId) {
+        return null;
+      }
+
+      const embedUrl = new URL(`https://www.youtube.com/embed/${videoId}`);
+
+      for (const key of ["start", "list", "si"]) {
+        const value = url.searchParams.get(key);
+
+        if (value) {
+          embedUrl.searchParams.set(key, value);
+        }
+      }
+
+      return embedUrl.toString();
+    }
+
+    if (hostname === "youtube.com" || hostname.endsWith(".youtube.com")) {
+      if (url.pathname.startsWith("/embed/")) {
+        return url.toString();
+      }
+
+      const videoId = url.searchParams.get("v");
+
+      if (!videoId) {
+        return null;
+      }
+
+      const embedUrl = new URL(`https://www.youtube.com/embed/${videoId}`);
+
+      for (const key of ["start", "list", "si"]) {
+        const value = url.searchParams.get(key);
+
+        if (value) {
+          embedUrl.searchParams.set(key, value);
+        }
+      }
+
+      return embedUrl.toString();
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getInstagramEmbedUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (hostname !== "instagram.com" && !hostname.endsWith(".instagram.com")) {
+      return null;
+    }
+
+    const segments = url.pathname.split("/").filter(Boolean);
+    const contentType = segments[0];
+    const contentId = segments[1];
+
+    if (!contentType || !contentId || !["p", "reel", "tv"].includes(contentType)) {
+      return null;
+    }
+
+    return `https://www.instagram.com/${contentType}/${contentId}/embed`;
+  } catch {
+    return null;
+  }
+}
+
+function getConcertVideoDescriptor(
+  rawUrl: string,
+  concertName: string,
+  label: string,
+): SelectedConcertVideo | null {
+  const youTubeEmbedUrl = getYouTubeEmbedUrl(rawUrl);
+
+  if (youTubeEmbedUrl) {
+    return {
+      concertName,
+      label,
+      sourceUrl: rawUrl,
+      embedUrl: youTubeEmbedUrl,
+      platform: "youtube",
+    };
+  }
+
+  const instagramEmbedUrl = getInstagramEmbedUrl(rawUrl);
+
+  if (instagramEmbedUrl) {
+    return {
+      concertName,
+      label,
+      sourceUrl: rawUrl,
+      embedUrl: instagramEmbedUrl,
+      platform: "instagram",
+    };
+  }
+
+  return null;
 }
 
 export function ConcertsViewer({
@@ -18,6 +139,38 @@ export function ConcertsViewer({
   error,
   totalCount,
 }: ConcertsViewerProps) {
+  const [selectedVideo, setSelectedVideo] = useState<SelectedConcertVideo | null>(
+    null,
+  );
+
+  const closeViewer = () => setSelectedVideo(null);
+
+  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (selectedVideo === null) {
+      return;
+    }
+
+    if (event.key === "Escape") {
+      closeViewer();
+    }
+  });
+
+  useEffect(() => {
+    if (selectedVideo === null) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [selectedVideo]);
+
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/6 p-6 shadow-[0_24px_80px_rgba(3,7,18,0.24)] backdrop-blur">
@@ -68,6 +221,7 @@ export function ConcertsViewer({
           <div className="grid gap-4 xl:grid-cols-2">
             {concerts.map((concert) => {
               const location = buildConcertLocation(concert);
+              const concertName = concert.groupName ?? "Grupo sin vincular";
 
               return (
                 <article
@@ -81,7 +235,7 @@ export function ConcertsViewer({
                           {concert.dateLabel}
                         </p>
                         <h3 className="text-xl font-semibold text-white">
-                          {concert.groupName ?? "Grupo sin vincular"}
+                          {concertName}
                         </h3>
                         {location ? (
                           <p className="text-sm text-slate-300">{location}</p>
@@ -123,20 +277,28 @@ export function ConcertsViewer({
                     ) : null}
 
                     <div className="flex flex-wrap gap-2">
-                      {concert.videos.slice(0, 3).map((videoUrl, index) => (
-                        <a
-                          key={videoUrl}
-                          href={videoUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-full border border-white/12 bg-black/25 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
-                        >
-                          Video {index + 1}
-                        </a>
-                      ))}
-                      {concert.instagramVideos
-                        .slice(0, 2)
-                        .map((videoUrl, index) => (
+                      {concert.videos.slice(0, 3).map((videoUrl, index) => {
+                        const label = `Video ${index + 1}`;
+                        const descriptor = getConcertVideoDescriptor(
+                          videoUrl,
+                          concertName,
+                          label,
+                        );
+
+                        if (descriptor) {
+                          return (
+                            <button
+                              type="button"
+                              key={videoUrl}
+                              onClick={() => setSelectedVideo(descriptor)}
+                              className="rounded-full border border-white/12 bg-black/25 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
+                            >
+                              {label}
+                            </button>
+                          );
+                        }
+
+                        return (
                           <a
                             key={videoUrl}
                             href={videoUrl}
@@ -144,9 +306,45 @@ export function ConcertsViewer({
                             rel="noreferrer"
                             className="rounded-full border border-white/12 bg-black/25 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
                           >
-                            Instagram {index + 1}
+                            {label}
                           </a>
-                        ))}
+                        );
+                      })}
+                      {concert.instagramVideos
+                        .slice(0, 2)
+                        .map((videoUrl, index) => {
+                          const label = `Instagram ${index + 1}`;
+                          const descriptor = getConcertVideoDescriptor(
+                            videoUrl,
+                            concertName,
+                            label,
+                          );
+
+                          if (descriptor) {
+                            return (
+                              <button
+                                type="button"
+                                key={videoUrl}
+                                onClick={() => setSelectedVideo(descriptor)}
+                                className="rounded-full border border-white/12 bg-black/25 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
+                              >
+                                {label}
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <a
+                              key={videoUrl}
+                              href={videoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-full border border-white/12 bg-black/25 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
+                            >
+                              {label}
+                            </a>
+                          );
+                        })}
                     </div>
 
                     {concert.ticketImageSrc || concert.posterImageSrc ? (
@@ -201,6 +399,72 @@ export function ConcertsViewer({
           </div>
         ) : null}
       </div>
+
+      {selectedVideo ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/92 px-4 py-8 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            aria-label="Cerrar visor de video"
+            className="absolute inset-0 cursor-default"
+            onClick={closeViewer}
+          />
+
+          <div className="relative z-10 flex w-full max-w-6xl flex-col gap-4">
+            <div className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-white">
+                  {selectedVideo.concertName}
+                </p>
+                <p className="truncate text-xs uppercase tracking-[0.24em] text-slate-400">
+                  {selectedVideo.label} ·{" "}
+                  {selectedVideo.platform === "youtube" ? "YouTube" : "Instagram"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <a
+                  href={selectedVideo.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
+                >
+                  Abrir fuera
+                </a>
+                <button
+                  type="button"
+                  onClick={closeViewer}
+                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+              <div
+                className={
+                  selectedVideo.platform === "instagram"
+                    ? "mx-auto aspect-[9/16] min-h-[70vh] w-full max-w-[420px]"
+                    : "aspect-video min-h-[60vh] w-full"
+                }
+              >
+                <iframe
+                  key={selectedVideo.embedUrl}
+                  src={selectedVideo.embedUrl}
+                  title={`${selectedVideo.concertName} ${selectedVideo.label}`}
+                  className="h-full w-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

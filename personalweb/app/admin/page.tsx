@@ -1,6 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { isAdminAuthenticated, isAdminConfigured } from "@/lib/admin/auth";
+import {
+  getConcertAssetsAudit,
+  type ConcertStorageAudit,
+} from "@/lib/admin/concert-assets-audit";
 import { getPhotoAudit } from "@/lib/admin/photos-audit";
 import { getPhotoPublicUrl } from "@/lib/supabase/photos";
 
@@ -95,6 +99,110 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(value >= 100 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
+function renderConcertBucketAudit(audit: ConcertStorageAudit) {
+  return (
+    <section className="rounded-[1.75rem] border border-white/10 bg-white/6 p-6 shadow-[0_24px_70px_rgba(15,23,42,0.22)]">
+      <div className="space-y-2">
+        <h3 className="text-lg font-semibold text-white">{audit.label}</h3>
+        <p className="text-sm text-slate-400">
+          Bucket: <code>{audit.bucket}</code>
+        </p>
+      </div>
+
+      {audit.error ? (
+        <div className="mt-4 rounded-2xl border border-rose-300/20 bg-rose-400/10 p-4 text-sm leading-7 text-rose-100">
+          {audit.error}
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
+                Referencias BD
+              </p>
+              <p className="mt-3 text-2xl font-semibold text-white">
+                {audit.databaseUsageCount}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                {audit.databaseUniqueCount} archivos únicos
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
+                Archivos bucket
+              </p>
+              <p className="mt-3 text-2xl font-semibold text-white">
+                {audit.storageCount}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                {formatBytes(audit.storageBytes)}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
+                Coinciden
+              </p>
+              <p className="mt-3 text-2xl font-semibold text-white">
+                {audit.matchedCount}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Archivos únicos referenciados y presentes
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
+                Desfase
+              </p>
+              <p className="mt-3 text-2xl font-semibold text-white">
+                {audit.missingInStorage.length + audit.missingInDatabase.length}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                {audit.missingInStorage.length} faltan en bucket,{" "}
+                {audit.missingInDatabase.length} sobran en bucket
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-6 xl:grid-cols-2">
+            <section className="space-y-3">
+              <div className="space-y-1">
+                <h4 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-300">
+                  En BD pero no en bucket
+                </h4>
+                <p className="text-sm text-slate-400">
+                  Total: {audit.missingInStorage.length}
+                </p>
+              </div>
+              {renderList(
+                audit.missingInStorage,
+                "No falta ningún archivo referenciado en la base de datos.",
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <div className="space-y-1">
+                <h4 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-300">
+                  En bucket pero no en BD
+                </h4>
+                <p className="text-sm text-slate-400">
+                  Total: {audit.missingInDatabase.length}
+                </p>
+              </div>
+              {renderList(
+                audit.missingInDatabase,
+                "No sobra ningún archivo en el bucket.",
+              )}
+            </section>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function scoreBucketMatch(fileName: string, query: string) {
   const normalizedFileName = fileName.toLowerCase();
   const normalizedQuery = query.toLowerCase();
@@ -185,7 +293,10 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
     );
   }
 
-  const audit = await getPhotoAudit();
+  const [audit, concertAssetsAudit] = await Promise.all([
+    getPhotoAudit(),
+    getConcertAssetsAudit(),
+  ]);
   const bucketSearch = getSingleValue(searchParams.file).trim();
   const matchedBucketFiles = bucketSearch
     ? [...audit.storageImages]
@@ -439,6 +550,24 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
                 "No sobra ninguna imagen en el bucket.",
               )}
             </div>
+          </section>
+        </section>
+
+        <section className="space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold tracking-tight text-white">
+              Desfase en entradas y carteles
+            </h2>
+            <p className="max-w-3xl text-sm leading-7 text-slate-400">
+              Cruce entre <code>public.conciertos.entrada</code> y el bucket{" "}
+              <code>entradas</code>, y entre <code>public.conciertos.cartel</code>{" "}
+              y el bucket <code>carteles</code>.
+            </p>
+          </div>
+
+          <section className="grid gap-6 xl:grid-cols-2">
+            {renderConcertBucketAudit(concertAssetsAudit.entradas)}
+            {renderConcertBucketAudit(concertAssetsAudit.carteles)}
           </section>
         </section>
       </div>
