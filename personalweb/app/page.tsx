@@ -1,3 +1,4 @@
+import { BooksViewer } from "@/components/books-viewer";
 import { ConcertsViewer } from "@/components/concerts-viewer";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
@@ -5,6 +6,7 @@ import {
   normalizePhotoFilterValue,
   normalizePhotoPeopleGroup,
 } from "@/lib/photo-filters";
+import { getBookList } from "@/lib/supabase/books";
 import { getConcertList } from "@/lib/supabase/concerts";
 import { getPhotoGallery } from "@/lib/supabase/photos";
 
@@ -43,7 +45,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const concertYearValue = getSingleValue(searchParams.concertYear).trim();
   const concertCityValue = getSingleValue(searchParams.concertCity).trim();
   const concertGroupValue = getSingleValue(searchParams.concertGroup).trim();
-  const [gallery, concerts, isUploaderUnlocked] = await Promise.all([
+  const [gallery, concerts, books, isUploaderUnlocked] = await Promise.all([
     getPhotoGallery({
       page: parsePage(searchParams.page),
       filterField: "all",
@@ -56,6 +58,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
       cityValue: concertCityValue,
       groupValue: concertGroupValue,
     }),
+    getBookList(),
     isAdminAuthenticated(),
   ]);
 
@@ -103,6 +106,13 @@ export default async function Home(props: { searchParams: SearchParams }) {
           yearOptions={concerts.yearOptions}
           cityOptions={concerts.cityOptions}
           groupOptions={concerts.groupOptions}
+        />
+
+        <BooksViewer
+          books={books.books}
+          configured={books.configured}
+          error={books.error}
+          totalCount={books.totalCount}
         />
       </div>
     </main>
