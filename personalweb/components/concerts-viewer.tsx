@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useEffectEvent, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { startTransition, useEffect, useEffectEvent, useState } from "react";
 import type {
   ConcertAsset,
   ConcertPhotoAsset,
@@ -12,6 +13,13 @@ type ConcertsViewerProps = {
   configured: boolean;
   error: string | null;
   totalCount: number;
+  filterValue: string;
+  yearValue: string;
+  cityValue: string;
+  groupValue: string;
+  yearOptions: string[];
+  cityOptions: string[];
+  groupOptions: string[];
 };
 
 const CONCERTS_VIEWER_GRID_STORAGE_KEY = "concerts-viewer-grid-density";
@@ -247,7 +255,17 @@ export function ConcertsViewer({
   configured,
   error,
   totalCount,
+  filterValue,
+  yearValue,
+  cityValue,
+  groupValue,
+  yearOptions,
+  cityOptions,
+  groupOptions,
 }: ConcertsViewerProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [gridDensity, setGridDensity] = useState<ConcertGridDensity>(() => {
     if (typeof window === "undefined") {
       return "default";
@@ -272,18 +290,66 @@ export function ConcertsViewer({
   );
   const [selectedPhotoViewer, setSelectedPhotoViewer] =
     useState<SelectedConcertPhotoViewer | null>(null);
+  const [filterInput, setFilterInput] = useState(filterValue);
+  const [selectedYear, setSelectedYear] = useState(yearValue);
+  const [selectedCity, setSelectedCity] = useState(cityValue);
+  const [selectedGroup, setSelectedGroup] = useState(groupValue);
   const gridClassName =
     gridDensity === "dense"
       ? "grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6"
       : gridDensity === "compact"
         ? "grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         : "grid gap-4 xl:grid-cols-2";
+  const hasActiveFilters = Boolean(
+    filterValue || yearValue || cityValue || groupValue,
+  );
 
   const selectedConcertPhoto =
     selectedPhotoViewer?.photos.at(selectedPhotoViewer.selectedIndex) ?? null;
 
   const closeVideoViewer = () => setSelectedVideo(null);
   const closePhotoViewer = () => setSelectedPhotoViewer(null);
+
+  const applyFilters = (
+    nextFilterValue: string,
+    nextYearValue: string,
+    nextCityValue: string,
+    nextGroupValue: string,
+  ) => {
+    const params = new URLSearchParams(searchParams.toString());
+    const trimmedFilterValue = nextFilterValue.trim();
+
+    if (trimmedFilterValue) {
+      params.set("concertFilter", trimmedFilterValue);
+    } else {
+      params.delete("concertFilter");
+    }
+
+    if (nextYearValue) {
+      params.set("concertYear", nextYearValue);
+    } else {
+      params.delete("concertYear");
+    }
+
+    if (nextCityValue) {
+      params.set("concertCity", nextCityValue);
+    } else {
+      params.delete("concertCity");
+    }
+
+    if (nextGroupValue) {
+      params.set("concertGroup", nextGroupValue);
+    } else {
+      params.delete("concertGroup");
+    }
+
+    const query = params.toString();
+    const href = query ? `${pathname}?${query}` : pathname;
+
+    startTransition(() => {
+      router.replace(href, { scroll: false });
+    });
+  };
 
   const showPreviousConcertPhoto = () => {
     setSelectedPhotoViewer((current) => {
@@ -365,6 +431,22 @@ export function ConcertsViewer({
       gridDensity,
     );
   }, [gridDensity]);
+
+  useEffect(() => {
+    setFilterInput(filterValue);
+  }, [filterValue]);
+
+  useEffect(() => {
+    setSelectedYear(yearValue);
+  }, [yearValue]);
+
+  useEffect(() => {
+    setSelectedCity(cityValue);
+  }, [cityValue]);
+
+  useEffect(() => {
+    setSelectedGroup(groupValue);
+  }, [groupValue]);
 
   return (
     <section className="space-y-6">
@@ -464,10 +546,144 @@ export function ConcertsViewer({
           </div>
         ) : null}
 
+        {configured ? (
+          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/35 p-4 md:p-5">
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                applyFilters(
+                  filterInput,
+                  selectedYear,
+                  selectedCity,
+                  selectedGroup,
+                );
+              }}
+            >
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-[0.3em] text-slate-300">
+                  Filtro
+                </p>
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_160px_220px_240px_auto_auto]">
+                <input
+                  type="search"
+                  value={filterInput}
+                  onChange={(event) => setFilterInput(event.target.value)}
+                  placeholder="Ejemplo: Bilbao, Santana 27, Mike Farris, festival..."
+                  className="w-full rounded-2xl border border-white/10 bg-[#050816] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/50"
+                />
+
+                <select
+                  value={selectedYear}
+                  onChange={(event) => setSelectedYear(event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-[#050816] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/50"
+                >
+                  <option value="">Todos los años</option>
+                  {yearOptions.map((yearOption) => (
+                    <option key={yearOption} value={yearOption}>
+                      {yearOption}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={selectedCity}
+                  onChange={(event) => setSelectedCity(event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-[#050816] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/50"
+                >
+                  <option value="">Todas las ciudades</option>
+                  {cityOptions.map((cityOption) => (
+                    <option key={cityOption} value={cityOption}>
+                      {cityOption}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={selectedGroup}
+                  onChange={(event) => setSelectedGroup(event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-[#050816] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/50"
+                >
+                  <option value="">Todos los grupos</option>
+                  {groupOptions.map((groupOption) => (
+                    <option key={groupOption} value={groupOption}>
+                      {groupOption}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-cyan-300"
+                >
+                  Aplicar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterInput("");
+                    setSelectedYear("");
+                    setSelectedCity("");
+                    setSelectedGroup("");
+                    applyFilters("", "", "", "");
+                  }}
+                  className="rounded-2xl border border-white/12 px-5 py-3 text-sm font-medium text-slate-100 transition hover:border-white/35 hover:bg-white/6"
+                >
+                  Limpiar
+                </button>
+              </div>
+
+              <div className="min-h-6">
+                {hasActiveFilters ? (
+                  <p className="text-sm text-slate-300">
+                    {totalCount} resultados encontrados
+                    {filterValue ? (
+                      <>
+                        {" "}para{" "}
+                        <span className="font-medium text-cyan-100">
+                          {filterValue}
+                        </span>
+                      </>
+                    ) : null}
+                    {yearValue ? (
+                      <>
+                        {" "}en{" "}
+                        <span className="font-medium text-cyan-100">
+                          {yearValue}
+                        </span>
+                      </>
+                    ) : null}
+                    {cityValue ? (
+                      <>
+                        {" "}en{" "}
+                        <span className="font-medium text-cyan-100">
+                          {cityValue}
+                        </span>
+                      </>
+                    ) : null}
+                    {groupValue ? (
+                      <>
+                        {" "}de{" "}
+                        <span className="font-medium text-cyan-100">
+                          {groupValue}
+                        </span>
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
+              </div>
+            </form>
+          </div>
+        ) : null}
+
         {configured && !error && concerts.length === 0 ? (
           <div className="rounded-[1.75rem] border border-dashed border-white/14 bg-black/15 px-6 py-12 text-center text-sm leading-7 text-slate-300">
-            La tabla `public.conciertos` está accesible, pero todavía no hay
-            conciertos cargados.
+            {hasActiveFilters
+              ? "No hay conciertos que coincidan con el filtro actual."
+              : "La tabla `public.conciertos` está accesible, pero todavía no hay conciertos cargados."}
           </div>
         ) : null}
 

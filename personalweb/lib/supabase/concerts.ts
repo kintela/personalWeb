@@ -19,6 +19,7 @@ type ConcertDatabaseRow = {
   fecha: string;
   sala: string | null;
   ciudad: string | null;
+  grupo_id: number | string | null;
   festival: boolean | null;
   fotos: boolean | null;
   entrada: string | null;
@@ -27,6 +28,8 @@ type ConcertDatabaseRow = {
   cronica: string | null;
   videos: string[] | null;
   videos_instagram: string[] | null;
+  created_at: string | null;
+  updated_at: string | null;
   grupo: ConcertGroupRelation;
 };
 
@@ -93,12 +96,26 @@ export type ConcertListResult = {
   configured: boolean;
   error: string | null;
   totalCount: number;
+  filterValue: string;
+  yearValue: string;
+  cityValue: string;
+  groupValue: string;
+  yearOptions: string[];
+  cityOptions: string[];
+  groupOptions: string[];
 };
 
 const CONCERTS_SELECT_COLUMNS =
-  "id, fecha, sala, ciudad, festival, fotos, entrada, descripcion, cartel, cronica, videos, videos_instagram, grupo:grupos!conciertos_grupo_id_fkey(nombre)";
+  "id, fecha, sala, ciudad, grupo_id, festival, fotos, entrada, descripcion, cartel, cronica, videos, videos_instagram, created_at, updated_at, grupo:grupos!conciertos_grupo_id_fkey(nombre)";
 const CONCERT_PHOTOS_SELECT_COLUMNS =
   "id, bucket, imagen, titulo, personas, anio, origen, descripcion, fecha, lugar, concierto_id, grupo:grupos!fotos_grupo_id_fkey(nombre)";
+
+type GetConcertListOptions = {
+  filterValue?: string | null;
+  yearValue?: string | null;
+  cityValue?: string | null;
+  groupValue?: string | null;
+};
 
 function getSupabaseUrl() {
   return process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -189,6 +206,53 @@ function parseIntegerIdentifier(value: number | string | null | undefined) {
   }
 
   return null;
+}
+
+function normalizeConcertFilterValue(value: string | null | undefined) {
+  return value?.trim() ?? "";
+}
+
+function normalizeConcertOptionValue(value: string | null | undefined) {
+  return value?.trim() ?? "";
+}
+
+function getConcertYearValue(date: string) {
+  const yearValue = date.split("-")[0]?.trim() ?? "";
+
+  return /^\d{4}$/.test(yearValue) ? yearValue : null;
+}
+
+function buildConcertSearchHaystack(concert: ConcertDatabaseRow) {
+  const yearValue = getConcertYearValue(concert.fecha);
+  const groupName = getConcertGroupName(concert.grupo);
+
+  return [
+    String(concert.id),
+    concert.fecha,
+    buildConcertDateLabel(concert.fecha),
+    yearValue,
+    concert.sala,
+    concert.ciudad,
+    concert.grupo_id === null ? null : String(concert.grupo_id),
+    groupName,
+    concert.festival ? "festival" : null,
+    concert.festival === null ? null : concert.festival ? "true" : "false",
+    concert.festival === null ? null : concert.festival ? "si" : "no",
+    concert.fotos ? "fotos" : null,
+    concert.fotos === null ? null : concert.fotos ? "true" : "false",
+    concert.fotos === null ? null : concert.fotos ? "si" : "no",
+    concert.entrada,
+    concert.descripcion,
+    concert.cartel,
+    concert.cronica,
+    concert.created_at,
+    concert.updated_at,
+    ...(concert.videos ?? []),
+    ...(concert.videos_instagram ?? []),
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(" \n")
+    .toLocaleLowerCase("es-ES");
 }
 
 function normalizeLinks(values: string[] | null | undefined) {
@@ -350,8 +414,14 @@ function createSupabaseServerClient(): SupabaseClient | null {
   });
 }
 
-export async function getConcertList(): Promise<ConcertListResult> {
+export async function getConcertList(
+  options: GetConcertListOptions = {},
+): Promise<ConcertListResult> {
   const supabase = createSupabaseServerClient();
+  const requestedFilterValue = normalizeConcertFilterValue(options.filterValue);
+  const requestedYearValue = normalizeConcertOptionValue(options.yearValue);
+  const requestedCityValue = normalizeConcertOptionValue(options.cityValue);
+  const requestedGroupValue = normalizeConcertOptionValue(options.groupValue);
 
   if (!supabase) {
     return {
@@ -360,6 +430,13 @@ export async function getConcertList(): Promise<ConcertListResult> {
       error:
         "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
       totalCount: 0,
+      filterValue: requestedFilterValue,
+      yearValue: requestedYearValue,
+      cityValue: requestedCityValue,
+      groupValue: requestedGroupValue,
+      yearOptions: [],
+      cityOptions: [],
+      groupOptions: [],
     };
   }
 
@@ -375,17 +452,67 @@ export async function getConcertList(): Promise<ConcertListResult> {
       configured: true,
       error: `No he podido leer los conciertos: ${error.message}`,
       totalCount: 0,
+      filterValue: requestedFilterValue,
+      yearValue: requestedYearValue,
+      cityValue: requestedCityValue,
+      groupValue: requestedGroupValue,
+      yearOptions: [],
+      cityOptions: [],
+      groupOptions: [],
     };
   }
 
   const rows = (data as ConcertDatabaseRow[] | null) ?? [];
-  const concertIds = rows
+  const yearOptions = [...new Set(rows.map((row) => getConcertYearValue(row.fecha)).filter((value): value is string => Boolean(value)))].sort(
+    (left, right) => Number.parseInt(right, 10) - Number.parseInt(left, 10),
+  );
+  const cityOptions = [
+    ...new Set(
+      rows
+        .map((row) => row.ciudad?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ].sort((left, right) => left.localeCompare(right, "es"));
+  const groupOptions = [
+    ...new Set(
+      rows
+        .map((row) => getConcertGroupName(row.grupo))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ].sort((left, right) => left.localeCompare(right, "es"));
+  const normalizedYearValue = yearOptions.includes(requestedYearValue)
+    ? requestedYearValue
+    : "";
+  const normalizedCityValue = cityOptions.includes(requestedCityValue)
+    ? requestedCityValue
+    : "";
+  const normalizedGroupValue = groupOptions.includes(requestedGroupValue)
+    ? requestedGroupValue
+    : "";
+  const normalizedFilterValue = requestedFilterValue.toLocaleLowerCase("es-ES");
+  const filteredRows = rows.filter((concert) => {
+    const matchesYear =
+      !normalizedYearValue ||
+      getConcertYearValue(concert.fecha) === normalizedYearValue;
+    const matchesCity =
+      !normalizedCityValue ||
+      (concert.ciudad?.trim() ?? "") === normalizedCityValue;
+    const matchesGroup =
+      !normalizedGroupValue ||
+      (getConcertGroupName(concert.grupo) ?? "") === normalizedGroupValue;
+    const matchesSearch =
+      !normalizedFilterValue ||
+      buildConcertSearchHaystack(concert).includes(normalizedFilterValue);
+
+    return matchesYear && matchesCity && matchesGroup && matchesSearch;
+  });
+  const concertIds = filteredRows
     .map((concert) => parseIntegerIdentifier(concert.id))
     .filter((concertId): concertId is number => concertId !== null);
   const { photosByConcertId, error: photosError } =
     await getConcertPhotosByConcertId(supabase, concertIds);
 
-  const normalizedConcerts = rows.map((concert) => {
+  const normalizedConcerts = filteredRows.map((concert) => {
     const normalizedConcertId = parseIntegerIdentifier(concert.id);
     const photos =
       normalizedConcertId === null
@@ -418,5 +545,12 @@ export async function getConcertList(): Promise<ConcertListResult> {
     configured: true,
     error: photosError,
     totalCount: normalizedConcerts.length,
+    filterValue: requestedFilterValue,
+    yearValue: normalizedYearValue,
+    cityValue: normalizedCityValue,
+    groupValue: normalizedGroupValue,
+    yearOptions,
+    cityOptions,
+    groupOptions,
   };
 }

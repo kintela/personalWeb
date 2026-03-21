@@ -39,6 +39,10 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const peopleGroup = normalizePhotoPeopleGroup(
     getSingleValue(searchParams.peopleGroup),
   );
+  const concertFilterValue = getSingleValue(searchParams.concertFilter).trim();
+  const concertYearValue = getSingleValue(searchParams.concertYear).trim();
+  const concertCityValue = getSingleValue(searchParams.concertCity).trim();
+  const concertGroupValue = getSingleValue(searchParams.concertGroup).trim();
   const [gallery, concerts, isUploaderUnlocked] = await Promise.all([
     getPhotoGallery({
       page: parsePage(searchParams.page),
@@ -46,7 +50,12 @@ export default async function Home(props: { searchParams: SearchParams }) {
       filterValue,
       peopleGroup,
     }),
-    getConcertList(),
+    getConcertList({
+      filterValue: concertFilterValue,
+      yearValue: concertYearValue,
+      cityValue: concertCityValue,
+      groupValue: concertGroupValue,
+    }),
     isAdminAuthenticated(),
   ]);
 
@@ -87,6 +96,13 @@ export default async function Home(props: { searchParams: SearchParams }) {
           configured={concerts.configured}
           error={concerts.error}
           totalCount={concerts.totalCount}
+          filterValue={concerts.filterValue}
+          yearValue={concerts.yearValue}
+          cityValue={concerts.cityValue}
+          groupValue={concerts.groupValue}
+          yearOptions={concerts.yearOptions}
+          cityOptions={concerts.cityOptions}
+          groupOptions={concerts.groupOptions}
         />
       </div>
     </main>
