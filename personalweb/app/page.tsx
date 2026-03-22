@@ -16,6 +16,29 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+const SECTION_SHORTCUTS = [
+  {
+    href: "#fotos",
+    label: "Fotos",
+    eyebrow: "Photo Viewer",
+  },
+  {
+    href: "#conciertos",
+    label: "Conciertos",
+    eyebrow: "Directo",
+  },
+  {
+    href: "#libros",
+    label: "Libros",
+    eyebrow: "Lecturas",
+  },
+  {
+    href: "#videos",
+    label: "Vídeos",
+    eyebrow: "Películas",
+  },
+] as const;
+
 function getSingleValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
     return value[0] ?? "";
@@ -57,29 +80,29 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const videoPlatformValue = getSingleValue(searchParams.videoPlatform).trim();
   const [gallery, concerts, books, videos, isUploaderUnlocked] =
     await Promise.all([
-    getPhotoGallery({
-      page: parsePage(searchParams.page),
-      filterField: "all",
-      filterValue,
-      peopleGroup,
-    }),
-    getConcertList({
-      filterValue: concertFilterValue,
-      yearValue: concertYearValue,
-      cityValue: concertCityValue,
-      groupValue: concertGroupValue,
-    }),
-    getBookList({
-      filterValue: bookFilterValue,
-      categoryValue: bookCategoryValue,
-      protagonistValue: bookProtagonistValue,
-    }),
-    getVideoList({
-      filterValue: videoFilterValue,
-      categoryValue: videoCategoryValue,
-      platformValue: videoPlatformValue,
-    }),
-    isAdminAuthenticated(),
+      getPhotoGallery({
+        page: parsePage(searchParams.page),
+        filterField: "all",
+        filterValue,
+        peopleGroup,
+      }),
+      getConcertList({
+        filterValue: concertFilterValue,
+        yearValue: concertYearValue,
+        cityValue: concertCityValue,
+        groupValue: concertGroupValue,
+      }),
+      getBookList({
+        filterValue: bookFilterValue,
+        categoryValue: bookCategoryValue,
+        protagonistValue: bookProtagonistValue,
+      }),
+      getVideoList({
+        filterValue: videoFilterValue,
+        categoryValue: videoCategoryValue,
+        platformValue: videoPlatformValue,
+      }),
+      isAdminAuthenticated(),
     ]);
 
   return (
@@ -100,57 +123,92 @@ export default async function Home(props: { searchParams: SearchParams }) {
           </div>
         </section>
 
-        <PhotoViewer
-          photos={gallery.photos}
-          configured={gallery.configured}
-          error={gallery.error}
-          totalCount={gallery.totalCount}
-          loadedCount={gallery.loadedCount}
-          currentPage={gallery.currentPage}
-          totalPages={gallery.totalPages}
-          pageSize={gallery.pageSize}
-          filterValue={gallery.filterValue}
-          peopleGroup={gallery.peopleGroup}
-          initiallyUnlocked={isUploaderUnlocked}
-        />
+        <nav
+          aria-label="Accesos rápidos"
+          className="sticky top-4 z-20 rounded-[2rem] border border-white/10 bg-slate-950/55 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.2)] backdrop-blur"
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {SECTION_SHORTCUTS.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                className="group flex items-center justify-between gap-4 rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-3 transition hover:border-cyan-300/45 hover:bg-cyan-300/10"
+              >
+                <span className="space-y-1">
+                  <span className="block text-[0.68rem] uppercase tracking-[0.28em] text-cyan-300/80">
+                    {item.eyebrow}
+                  </span>
+                  <span className="block text-base font-semibold text-white">
+                    {item.label}
+                  </span>
+                </span>
+                <span className="text-xl text-cyan-200 transition group-hover:translate-x-1">
+                  →
+                </span>
+              </a>
+            ))}
+          </div>
+        </nav>
 
-        <ConcertsViewer
-          concerts={concerts.concerts}
-          configured={concerts.configured}
-          error={concerts.error}
-          totalCount={concerts.totalCount}
-          filterValue={concerts.filterValue}
-          yearValue={concerts.yearValue}
-          cityValue={concerts.cityValue}
-          groupValue={concerts.groupValue}
-          yearOptions={concerts.yearOptions}
-          cityOptions={concerts.cityOptions}
-          groupOptions={concerts.groupOptions}
-        />
+        <div id="fotos" className="scroll-mt-32">
+          <PhotoViewer
+            photos={gallery.photos}
+            configured={gallery.configured}
+            error={gallery.error}
+            totalCount={gallery.totalCount}
+            loadedCount={gallery.loadedCount}
+            currentPage={gallery.currentPage}
+            totalPages={gallery.totalPages}
+            pageSize={gallery.pageSize}
+            filterValue={gallery.filterValue}
+            peopleGroup={gallery.peopleGroup}
+            initiallyUnlocked={isUploaderUnlocked}
+          />
+        </div>
 
-        <BooksViewer
-          books={books.books}
-          configured={books.configured}
-          error={books.error}
-          totalCount={books.totalCount}
-          filterValue={books.filterValue}
-          categoryValue={books.categoryValue}
-          protagonistValue={books.protagonistValue}
-          categoryOptions={books.categoryOptions}
-          protagonistOptions={books.protagonistOptions}
-        />
+        <div id="conciertos" className="scroll-mt-32">
+          <ConcertsViewer
+            concerts={concerts.concerts}
+            configured={concerts.configured}
+            error={concerts.error}
+            totalCount={concerts.totalCount}
+            filterValue={concerts.filterValue}
+            yearValue={concerts.yearValue}
+            cityValue={concerts.cityValue}
+            groupValue={concerts.groupValue}
+            yearOptions={concerts.yearOptions}
+            cityOptions={concerts.cityOptions}
+            groupOptions={concerts.groupOptions}
+          />
+        </div>
 
-        <VideosViewer
-          videos={videos.videos}
-          configured={videos.configured}
-          error={videos.error}
-          totalCount={videos.totalCount}
-          filterValue={videos.filterValue}
-          categoryValue={videos.categoryValue}
-          platformValue={videos.platformValue}
-          categoryOptions={videos.categoryOptions}
-          platformOptions={videos.platformOptions}
-        />
+        <div id="libros" className="scroll-mt-32">
+          <BooksViewer
+            books={books.books}
+            configured={books.configured}
+            error={books.error}
+            totalCount={books.totalCount}
+            filterValue={books.filterValue}
+            categoryValue={books.categoryValue}
+            protagonistValue={books.protagonistValue}
+            categoryOptions={books.categoryOptions}
+            protagonistOptions={books.protagonistOptions}
+          />
+        </div>
+
+        <div id="videos" className="scroll-mt-32">
+          <VideosViewer
+            videos={videos.videos}
+            configured={videos.configured}
+            error={videos.error}
+            totalCount={videos.totalCount}
+            filterValue={videos.filterValue}
+            categoryValue={videos.categoryValue}
+            platformValue={videos.platformValue}
+            categoryOptions={videos.categoryOptions}
+            platformOptions={videos.platformOptions}
+          />
+        </div>
       </div>
     </main>
   );
