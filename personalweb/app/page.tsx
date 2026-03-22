@@ -81,7 +81,6 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const cdGroupValue = getSingleValue(searchParams.cdGroup).trim();
   const cdYearValue = getSingleValue(searchParams.cdYear).trim();
   const cdSpotifyValue = getSingleValue(searchParams.cdSpotify).trim();
-  const cdSignedValue = getSingleValue(searchParams.cdSigned).trim();
   const bookFilterValue = getSingleValue(searchParams.bookFilter).trim();
   const bookCategoryValue = getSingleValue(searchParams.bookCategory).trim();
   const bookProtagonistValue = getSingleValue(
@@ -109,7 +108,6 @@ export default async function Home(props: { searchParams: SearchParams }) {
         groupValue: cdGroupValue,
         yearValue: cdYearValue,
         spotifyValue: cdSpotifyValue,
-        signedValue: cdSignedValue,
       }),
       getBookList({
         filterValue: bookFilterValue,
@@ -211,7 +209,6 @@ export default async function Home(props: { searchParams: SearchParams }) {
             groupValue={cds.groupValue}
             yearValue={cds.yearValue}
             spotifyValue={cds.spotifyValue}
-            signedValue={cds.signedValue}
             groupOptions={cds.groupOptions}
             yearOptions={cds.yearOptions}
           />

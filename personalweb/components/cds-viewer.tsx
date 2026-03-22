@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
@@ -15,7 +14,6 @@ type CdsViewerProps = {
   groupValue: string;
   yearValue: string;
   spotifyValue: string;
-  signedValue: string;
   groupOptions: string[];
   yearOptions: string[];
 };
@@ -32,17 +30,6 @@ function buildCdStatusLabel(cd: CdAsset) {
   ]
     .filter(Boolean)
     .join(" · ");
-}
-
-function getCdMonogram(cd: CdAsset) {
-  const baseText = (cd.groupName || cd.title)
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? "")
-    .join("");
-
-  return baseText || "CD";
 }
 
 function getBooleanFilterLabel(
@@ -70,7 +57,6 @@ export function CdsViewer({
   groupValue,
   yearValue,
   spotifyValue,
-  signedValue,
   groupOptions,
   yearOptions,
 }: CdsViewerProps) {
@@ -81,10 +67,7 @@ export function CdsViewer({
   const [selectedGroup, setSelectedGroup] = useState(groupValue);
   const [selectedYear, setSelectedYear] = useState(yearValue);
   const [selectedSpotify, setSelectedSpotify] = useState(spotifyValue);
-  const [selectedSigned, setSelectedSigned] = useState(signedValue);
-  const hasActiveFilters = Boolean(
-    filterValue || groupValue || yearValue || spotifyValue || signedValue,
-  );
+  const hasActiveFilters = Boolean(filterValue || groupValue || yearValue || spotifyValue);
 
   useEffect(() => {
     setFilterInput(filterValue);
@@ -102,29 +85,22 @@ export function CdsViewer({
     setSelectedSpotify(spotifyValue);
   }, [spotifyValue]);
 
-  useEffect(() => {
-    setSelectedSigned(signedValue);
-  }, [signedValue]);
-
   function applyFilters({
     nextFilterValue,
     nextGroupValue,
     nextYearValue,
     nextSpotifyValue,
-    nextSignedValue,
   }: {
     nextFilterValue: string;
     nextGroupValue: string;
     nextYearValue: string;
     nextSpotifyValue: string;
-    nextSignedValue: string;
   }) {
     const params = new URLSearchParams(searchParams.toString());
     const normalizedFilterValue = nextFilterValue.trim();
     const normalizedGroupValue = nextGroupValue.trim();
     const normalizedYearValue = nextYearValue.trim();
     const normalizedSpotifyValue = nextSpotifyValue.trim();
-    const normalizedSignedValue = nextSignedValue.trim();
 
     if (normalizedFilterValue) {
       params.set("cdFilter", normalizedFilterValue);
@@ -150,12 +126,6 @@ export function CdsViewer({
       params.delete("cdSpotify");
     }
 
-    if (normalizedSignedValue) {
-      params.set("cdSigned", normalizedSignedValue);
-    } else {
-      params.delete("cdSigned");
-    }
-
     startTransition(() => {
       router.replace(
         params.toString() ? `${pathname}?${params.toString()}` : pathname,
@@ -171,7 +141,6 @@ export function CdsViewer({
       nextGroupValue: selectedGroup,
       nextYearValue: selectedYear,
       nextSpotifyValue: selectedSpotify,
-      nextSignedValue: selectedSigned,
     });
   }
 
@@ -180,13 +149,11 @@ export function CdsViewer({
     setSelectedGroup("");
     setSelectedYear("");
     setSelectedSpotify("");
-    setSelectedSigned("");
     applyFilters({
       nextFilterValue: "",
       nextGroupValue: "",
       nextYearValue: "",
       nextSpotifyValue: "",
-      nextSignedValue: "",
     });
   }
 
@@ -194,11 +161,6 @@ export function CdsViewer({
     spotifyValue,
     "En Spotify",
     "Fuera de Spotify",
-  );
-  const signedLabel = getBooleanFilterLabel(
-    signedValue,
-    "Firmados",
-    "Sin firmar",
   );
 
   return (
@@ -232,15 +194,15 @@ export function CdsViewer({
               <p className="text-xs font-medium uppercase tracking-[0.38em] text-slate-300">
                 Filtro
               </p>
-              <div className="grid gap-3 2xl:grid-cols-[minmax(0,1.4fr)_280px_170px_170px_170px_auto_auto] 2xl:items-center">
-                <input
-                  type="search"
-                  value={filterInput}
-                  onChange={(event) => setFilterInput(event.target.value)}
-                  placeholder="Ejemplo: Springsteen, 1991, firmado, Pearl Jam..."
-                  className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/70"
-                />
+              <input
+                type="search"
+                value={filterInput}
+                onChange={(event) => setFilterInput(event.target.value)}
+                placeholder="Buscar por disco, grupo, año, etiqueta..."
+                className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/70"
+              />
 
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_170px_170px_auto_auto] xl:items-center">
                 <select
                   value={selectedGroup}
                   onChange={(event) => setSelectedGroup(event.target.value)}
@@ -275,16 +237,6 @@ export function CdsViewer({
                   <option value="">Todo Spotify</option>
                   <option value="si">En Spotify</option>
                   <option value="no">Fuera de Spotify</option>
-                </select>
-
-                <select
-                  value={selectedSigned}
-                  onChange={(event) => setSelectedSigned(event.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-sm text-white outline-none transition focus:border-cyan-300/70"
-                >
-                  <option value="">Todas las firmas</option>
-                  <option value="si">Firmados</option>
-                  <option value="no">Sin firmar</option>
                 </select>
 
                 <button
@@ -331,12 +283,6 @@ export function CdsViewer({
                     con <span className="font-semibold text-white">{spotifyLabel}</span>
                   </>
                 ) : null}
-                {signedLabel ? (
-                  <>
-                    {" "}
-                    y <span className="font-semibold text-white">{signedLabel}</span>
-                  </>
-                ) : null}
               </p>
             ) : null}
           </form>
@@ -362,69 +308,45 @@ export function CdsViewer({
               return (
                 <article
                   key={cd.id}
-                  className="group flex h-full gap-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                  className="group flex h-full flex-col gap-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                 >
-                  <div className="relative aspect-square w-28 shrink-0 overflow-hidden rounded-[1.2rem] border border-white/10 bg-slate-900">
-                    {cd.coverSrc ? (
-                      <Image
-                        src={cd.coverSrc}
-                        alt={`Carátula de ${cd.title}`}
-                        fill
-                        unoptimized
-                        className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                        sizes="112px"
-                      />
-                    ) : (
-                      <div className="flex h-full flex-col justify-between bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_62%),linear-gradient(180deg,rgba(15,23,42,0.92),rgba(2,6,23,0.98))] p-4">
-                        <span className="text-[0.65rem] uppercase tracking-[0.32em] text-cyan-200/80">
-                          CD
-                        </span>
-                        <span className="text-3xl font-semibold tracking-tight text-white/85">
-                          {getCdMonogram(cd)}
-                        </span>
-                      </div>
-                    )}
+                  <div className="flex flex-wrap gap-2">
+                    {cd.groupName ? (
+                      <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-cyan-100">
+                        {cd.groupName}
+                      </span>
+                    ) : null}
+                    {Number.isInteger(cd.year) ? (
+                      <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
+                        {cd.year}
+                      </span>
+                    ) : null}
+                    {cd.signed === true ? (
+                      <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-emerald-100">
+                        Firmado
+                      </span>
+                    ) : null}
                   </div>
 
-                  <div className="flex flex-1 flex-col gap-4">
-                    <div className="flex flex-wrap gap-2">
-                      {cd.groupName ? (
-                        <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-cyan-100">
-                          {cd.groupName}
-                        </span>
-                      ) : null}
-                      {Number.isInteger(cd.year) ? (
-                        <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
-                          {cd.year}
-                        </span>
-                      ) : null}
-                      {cd.signed === true ? (
-                        <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-emerald-100">
-                          Firmado
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-2">
-                      <h3 className="text-xl font-semibold leading-tight text-white">
-                        {cd.title}
-                      </h3>
-                      <p className="text-sm leading-6 text-slate-300">
-                        {cd.groupName || "Grupo sin asignar"}
-                      </p>
-                      {statusLabel ? (
-                        <p className="text-sm leading-6 text-slate-400">
-                          {statusLabel}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    {cd.labelId !== null && cd.labelId > 0 ? (
-                      <p className="mt-auto text-xs uppercase tracking-[0.22em] text-slate-500">
-                        Etiqueta #{cd.labelId}
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-semibold leading-tight text-white">
+                      {cd.title}
+                    </h3>
+                    <p className="text-sm leading-6 text-slate-300">
+                      {cd.groupName || "Grupo sin asignar"}
+                    </p>
+                    {statusLabel ? (
+                      <p className="text-sm leading-6 text-slate-400">
+                        {statusLabel}
                       </p>
                     ) : null}
                   </div>
+
+                  {cd.labelId !== null && cd.labelId > 0 ? (
+                    <p className="mt-auto text-xs uppercase tracking-[0.22em] text-slate-500">
+                      Etiqueta #{cd.labelId}
+                    </p>
+                  ) : null}
                 </article>
               );
             })}

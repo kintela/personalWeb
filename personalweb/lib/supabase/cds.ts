@@ -53,7 +53,6 @@ export type CdListResult = {
   groupValue: string;
   yearValue: string;
   spotifyValue: string;
-  signedValue: string;
   groupOptions: string[];
   yearOptions: string[];
 };
@@ -63,7 +62,6 @@ type GetCdListOptions = {
   groupValue?: string | null;
   yearValue?: string | null;
   spotifyValue?: string | null;
-  signedValue?: string | null;
 };
 
 function getSupabaseUrl() {
@@ -214,6 +212,37 @@ function buildCdSearchHaystack(cd: CdDatabaseRow) {
     .toLocaleLowerCase("es-ES");
 }
 
+function compareCdRows(left: CdDatabaseRow, right: CdDatabaseRow) {
+  const leftGroupName = getCdGroupName(left.grupo);
+  const rightGroupName = getCdGroupName(right.grupo);
+
+  if (leftGroupName && rightGroupName) {
+    const byGroup = leftGroupName.localeCompare(rightGroupName, "es", {
+      sensitivity: "base",
+    });
+
+    if (byGroup !== 0) {
+      return byGroup;
+    }
+  } else if (leftGroupName) {
+    return -1;
+  } else if (rightGroupName) {
+    return 1;
+  }
+
+  const byTitle = left.titulo.trim().localeCompare(right.titulo.trim(), "es", {
+    sensitivity: "base",
+  });
+
+  if (byTitle !== 0) {
+    return byTitle;
+  }
+
+  return String(left.id).localeCompare(String(right.id), "es", {
+    numeric: true,
+  });
+}
+
 function mapCd(row: CdDatabaseRow): CdAsset {
   return {
     id: String(row.id),
@@ -239,7 +268,6 @@ export async function getCdList(
   const requestedSpotifyValue = normalizeCdBooleanFilterValue(
     options.spotifyValue,
   );
-  const requestedSignedValue = normalizeCdBooleanFilterValue(options.signedValue);
 
   if (!supabase) {
     return {
@@ -252,7 +280,6 @@ export async function getCdList(
       groupValue: requestedGroupValue,
       yearValue: requestedYearValue,
       spotifyValue: requestedSpotifyValue,
-      signedValue: requestedSignedValue,
       groupOptions: [],
       yearOptions: [],
     };
@@ -273,7 +300,6 @@ export async function getCdList(
       groupValue: requestedGroupValue,
       yearValue: requestedYearValue,
       spotifyValue: requestedSpotifyValue,
-      signedValue: requestedSignedValue,
       groupOptions: [],
       yearOptions: [],
     };
@@ -310,32 +336,24 @@ export async function getCdList(
     const matchesSpotify =
       !requestedSpotifyValue ||
       getCdBooleanFilterValue(cd.is_in_spotify) === requestedSpotifyValue;
-    const matchesSigned =
-      !requestedSignedValue ||
-      getCdBooleanFilterValue(cd.firmado) === requestedSignedValue;
     const matchesSearch =
       !normalizedFilterValue ||
       buildCdSearchHaystack(cd).includes(normalizedFilterValue);
 
-    return (
-      matchesGroup &&
-      matchesYear &&
-      matchesSpotify &&
-      matchesSigned &&
-      matchesSearch
-    );
+    return matchesGroup && matchesYear && matchesSpotify && matchesSearch;
   });
 
+  const sortedRows = [...filteredRows].sort(compareCdRows);
+
   return {
-    cds: filteredRows.map(mapCd),
+    cds: sortedRows.map(mapCd),
     configured: true,
     error: null,
-    totalCount: filteredRows.length,
+    totalCount: sortedRows.length,
     filterValue: requestedFilterValue,
     groupValue: normalizedGroupValue,
     yearValue: normalizedYearValue,
     spotifyValue: requestedSpotifyValue,
-    signedValue: requestedSignedValue,
     groupOptions,
     yearOptions,
   };
