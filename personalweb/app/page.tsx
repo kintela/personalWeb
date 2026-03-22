@@ -2,6 +2,7 @@ import { CdsViewer } from "@/components/cds-viewer";
 import { BooksViewer } from "@/components/books-viewer";
 import { ConcertsViewer } from "@/components/concerts-viewer";
 import { PhotoViewer } from "@/components/photo-viewer";
+import { VinilosViewer } from "@/components/vinilos-viewer";
 import { VideosViewer } from "@/components/videos-viewer";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
 import {
@@ -12,6 +13,7 @@ import { getCdList } from "@/lib/supabase/cds";
 import { getBookList } from "@/lib/supabase/books";
 import { getConcertList } from "@/lib/supabase/concerts";
 import { getPhotoGallery } from "@/lib/supabase/photos";
+import { getViniloList } from "@/lib/supabase/vinilos";
 import { getVideoList } from "@/lib/supabase/videos";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +35,11 @@ const SECTION_SHORTCUTS = [
     href: "#cds",
     label: "CDs",
     eyebrow: "Discoteca",
+  },
+  {
+    href: "#vinilos",
+    label: "Vinilos",
+    eyebrow: "Portadas",
   },
   {
     href: "#libros",
@@ -89,7 +96,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const videoFilterValue = getSingleValue(searchParams.videoFilter).trim();
   const videoCategoryValue = getSingleValue(searchParams.videoCategory).trim();
   const videoPlatformValue = getSingleValue(searchParams.videoPlatform).trim();
-  const [gallery, concerts, cds, books, videos, isUploaderUnlocked] =
+  const [gallery, concerts, cds, vinilos, books, videos, isUploaderUnlocked] =
     await Promise.all([
       getPhotoGallery({
         page: parsePage(searchParams.page),
@@ -109,6 +116,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
         yearValue: cdYearValue,
         spotifyValue: cdSpotifyValue,
       }),
+      getViniloList(),
       getBookList({
         filterValue: bookFilterValue,
         categoryValue: bookCategoryValue,
@@ -144,7 +152,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
           aria-label="Accesos rápidos"
           className="sticky top-4 z-20 rounded-[2rem] border border-white/10 bg-slate-950/55 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.2)] backdrop-blur"
         >
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {SECTION_SHORTCUTS.map((item) => (
               <a
                 key={item.href}
@@ -211,6 +219,15 @@ export default async function Home(props: { searchParams: SearchParams }) {
             spotifyValue={cds.spotifyValue}
             groupOptions={cds.groupOptions}
             yearOptions={cds.yearOptions}
+          />
+        </div>
+
+        <div id="vinilos" className="scroll-mt-32">
+          <VinilosViewer
+            vinilos={vinilos.vinilos}
+            configured={vinilos.configured}
+            error={vinilos.error}
+            totalCount={vinilos.totalCount}
           />
         </div>
 
