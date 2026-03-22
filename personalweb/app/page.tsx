@@ -1,3 +1,4 @@
+import { CdsViewer } from "@/components/cds-viewer";
 import { BooksViewer } from "@/components/books-viewer";
 import { ConcertsViewer } from "@/components/concerts-viewer";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -7,6 +8,7 @@ import {
   normalizePhotoFilterValue,
   normalizePhotoPeopleGroup,
 } from "@/lib/photo-filters";
+import { getCdList } from "@/lib/supabase/cds";
 import { getBookList } from "@/lib/supabase/books";
 import { getConcertList } from "@/lib/supabase/concerts";
 import { getPhotoGallery } from "@/lib/supabase/photos";
@@ -26,6 +28,11 @@ const SECTION_SHORTCUTS = [
     href: "#conciertos",
     label: "Conciertos",
     eyebrow: "Directo",
+  },
+  {
+    href: "#cds",
+    label: "CDs",
+    eyebrow: "Discoteca",
   },
   {
     href: "#libros",
@@ -70,6 +77,11 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const concertYearValue = getSingleValue(searchParams.concertYear).trim();
   const concertCityValue = getSingleValue(searchParams.concertCity).trim();
   const concertGroupValue = getSingleValue(searchParams.concertGroup).trim();
+  const cdFilterValue = getSingleValue(searchParams.cdFilter).trim();
+  const cdGroupValue = getSingleValue(searchParams.cdGroup).trim();
+  const cdYearValue = getSingleValue(searchParams.cdYear).trim();
+  const cdSpotifyValue = getSingleValue(searchParams.cdSpotify).trim();
+  const cdSignedValue = getSingleValue(searchParams.cdSigned).trim();
   const bookFilterValue = getSingleValue(searchParams.bookFilter).trim();
   const bookCategoryValue = getSingleValue(searchParams.bookCategory).trim();
   const bookProtagonistValue = getSingleValue(
@@ -78,7 +90,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const videoFilterValue = getSingleValue(searchParams.videoFilter).trim();
   const videoCategoryValue = getSingleValue(searchParams.videoCategory).trim();
   const videoPlatformValue = getSingleValue(searchParams.videoPlatform).trim();
-  const [gallery, concerts, books, videos, isUploaderUnlocked] =
+  const [gallery, concerts, cds, books, videos, isUploaderUnlocked] =
     await Promise.all([
       getPhotoGallery({
         page: parsePage(searchParams.page),
@@ -91,6 +103,13 @@ export default async function Home(props: { searchParams: SearchParams }) {
         yearValue: concertYearValue,
         cityValue: concertCityValue,
         groupValue: concertGroupValue,
+      }),
+      getCdList({
+        filterValue: cdFilterValue,
+        groupValue: cdGroupValue,
+        yearValue: cdYearValue,
+        spotifyValue: cdSpotifyValue,
+        signedValue: cdSignedValue,
       }),
       getBookList({
         filterValue: bookFilterValue,
@@ -127,7 +146,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
           aria-label="Accesos rápidos"
           className="sticky top-4 z-20 rounded-[2rem] border border-white/10 bg-slate-950/55 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.2)] backdrop-blur"
         >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {SECTION_SHORTCUTS.map((item) => (
               <a
                 key={item.href}
@@ -179,6 +198,22 @@ export default async function Home(props: { searchParams: SearchParams }) {
             yearOptions={concerts.yearOptions}
             cityOptions={concerts.cityOptions}
             groupOptions={concerts.groupOptions}
+          />
+        </div>
+
+        <div id="cds" className="scroll-mt-32">
+          <CdsViewer
+            cds={cds.cds}
+            configured={cds.configured}
+            error={cds.error}
+            totalCount={cds.totalCount}
+            filterValue={cds.filterValue}
+            groupValue={cds.groupValue}
+            yearValue={cds.yearValue}
+            spotifyValue={cds.spotifyValue}
+            signedValue={cds.signedValue}
+            groupOptions={cds.groupOptions}
+            yearOptions={cds.yearOptions}
           />
         </div>
 
