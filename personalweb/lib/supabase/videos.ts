@@ -10,6 +10,7 @@ export const HISTORY_VIDEO_CATEGORIES = [
   "guerra_civil",
   "ii_guerra_mundial",
 ] as const;
+export const GUITAR_VIDEO_CATEGORY = "Guitarra" as const;
 
 type VideoDatabaseRow = {
   id: number | string;
@@ -47,6 +48,13 @@ export type VideoListResult = {
 };
 
 export type HistoryVideoListResult = {
+  videos: VideoAsset[];
+  configured: boolean;
+  error: string | null;
+  totalCount: number;
+};
+
+export type GuitarVideoListResult = {
   videos: VideoAsset[];
   configured: boolean;
   error: string | null;
@@ -327,13 +335,26 @@ export async function getVideoList(
 ): Promise<VideoListResult> {
   return getScopedVideoList({
     ...options,
-    excludedCategories: HISTORY_VIDEO_CATEGORIES,
+    excludedCategories: [...HISTORY_VIDEO_CATEGORIES, GUITAR_VIDEO_CATEGORY],
   });
 }
 
 export async function getHistoryVideoList(): Promise<HistoryVideoListResult> {
   const result = await getScopedVideoList({
     allowedCategories: HISTORY_VIDEO_CATEGORIES,
+  });
+
+  return {
+    videos: result.videos,
+    configured: result.configured,
+    error: result.error,
+    totalCount: result.totalCount,
+  };
+}
+
+export async function getGuitarVideoList(): Promise<GuitarVideoListResult> {
+  const result = await getScopedVideoList({
+    allowedCategories: [GUITAR_VIDEO_CATEGORY],
   });
 
   return {

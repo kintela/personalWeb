@@ -1,6 +1,7 @@
 import { CdsViewer } from "@/components/cds-viewer";
 import { BooksViewer } from "@/components/books-viewer";
 import { ConcertsViewer } from "@/components/concerts-viewer";
+import { GuitarViewer } from "@/components/guitar-viewer";
 import { HistoryViewer } from "@/components/history-viewer";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { VinilosViewer } from "@/components/vinilos-viewer";
@@ -15,7 +16,11 @@ import { getBookList } from "@/lib/supabase/books";
 import { getConcertList } from "@/lib/supabase/concerts";
 import { getPhotoGallery } from "@/lib/supabase/photos";
 import { getViniloList } from "@/lib/supabase/vinilos";
-import { getHistoryVideoList, getVideoList } from "@/lib/supabase/videos";
+import {
+  getGuitarVideoList,
+  getHistoryVideoList,
+  getVideoList,
+} from "@/lib/supabase/videos";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +56,11 @@ const SECTION_SHORTCUTS = [
     href: "#historia",
     label: "Historia",
     eyebrow: "Archivo",
+  },
+  {
+    href: "#guitarra",
+    label: "Guitarra",
+    eyebrow: "Cuerdas",
   },
   {
     href: "#videos",
@@ -109,6 +119,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
     vinilos,
     books,
     historyVideos,
+    guitarVideos,
     videos,
     isUploaderUnlocked,
   ] = await Promise.all([
@@ -137,6 +148,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
         protagonistValue: bookProtagonistValue,
       }),
       getHistoryVideoList(),
+      getGuitarVideoList(),
       getVideoList({
         filterValue: videoFilterValue,
         categoryValue: videoCategoryValue,
@@ -167,7 +179,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
           aria-label="Accesos rápidos"
           className="sticky top-4 z-20 rounded-[2rem] border border-white/10 bg-slate-950/55 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.2)] backdrop-blur"
         >
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8">
             {SECTION_SHORTCUTS.map((item) => (
               <a
                 key={item.href}
@@ -266,6 +278,15 @@ export default async function Home(props: { searchParams: SearchParams }) {
             configured={historyVideos.configured}
             error={historyVideos.error}
             totalCount={historyVideos.totalCount}
+          />
+        </div>
+
+        <div id="guitarra" className="scroll-mt-32">
+          <GuitarViewer
+            videos={guitarVideos.videos}
+            configured={guitarVideos.configured}
+            error={guitarVideos.error}
+            totalCount={guitarVideos.totalCount}
           />
         </div>
 
