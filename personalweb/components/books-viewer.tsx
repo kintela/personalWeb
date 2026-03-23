@@ -265,7 +265,7 @@ export function BooksViewer({
               return (
                 <article
                   key={book.id}
-                  className="group flex h-full gap-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                  className="group grid h-full grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-4 gap-y-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                 >
                   <div className="w-24 shrink-0 self-start overflow-hidden rounded-[1.2rem] border border-white/10 bg-slate-900/85 p-1.5 sm:w-28">
                     {book.coverSrc ? (
@@ -285,59 +285,57 @@ export function BooksViewer({
                     )}
                   </div>
 
-                  <div className="flex min-w-0 flex-1 flex-col gap-4">
-                    <div className="space-y-2">
-                      {book.category ? (
-                        <p className="text-[0.7rem] font-medium uppercase tracking-[0.22em] text-cyan-200">
-                          {book.category}
-                        </p>
-                      ) : null}
-
-                      <h3 className="text-xl font-semibold leading-tight text-white">
-                        {book.title}
-                      </h3>
-
-                      {meta ? (
-                        <p className="text-sm leading-6 text-slate-300">{meta}</p>
-                      ) : null}
-
-                      {details ? (
-                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                          {details}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    {book.synopsis ? (
-                      <p
-                        className="text-sm leading-7 text-slate-300"
-                        style={{
-                          display: "-webkit-box",
-                          WebkitBoxOrient: "vertical",
-                          WebkitLineClamp: 4,
-                          overflow: "hidden",
-                        }}
-                      >
-                        {book.synopsis}
+                  <div className="min-w-0 space-y-2">
+                    {book.category ? (
+                      <p className="text-[0.7rem] font-medium uppercase tracking-[0.22em] text-cyan-200">
+                        {book.category}
                       </p>
                     ) : null}
 
-                    <div className="mt-auto flex items-center justify-between gap-3 pt-1">
-                      <span className="min-w-0 truncate text-xs uppercase tracking-[0.18em] text-slate-500">
-                        {book.publisher ?? "Sin editorial"}
-                      </span>
+                    <h3 className="text-xl font-semibold leading-tight text-white">
+                      {book.title}
+                    </h3>
 
-                      {book.link ? (
-                        <a
-                          href={book.link}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="shrink-0 rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
-                        >
-                          Ver ficha
-                        </a>
-                      ) : null}
-                    </div>
+                    {meta ? (
+                      <p className="text-sm leading-6 text-slate-300">{meta}</p>
+                    ) : null}
+
+                    {details ? (
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                        {details}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {book.synopsis ? (
+                    <p
+                      className="col-span-full min-w-0 text-sm leading-7 text-slate-300"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitBoxOrient: "vertical",
+                        WebkitLineClamp: 4,
+                        overflow: "hidden",
+                      }}
+                    >
+                      {book.synopsis}
+                    </p>
+                  ) : null}
+
+                  <div className="col-span-full flex items-center justify-between gap-3 pt-1">
+                    <span className="min-w-0 truncate text-xs uppercase tracking-[0.18em] text-slate-500">
+                      {book.publisher ?? "Sin editorial"}
+                    </span>
+
+                    {book.link ? (
+                      <a
+                        href={book.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
+                      >
+                        Ver ficha
+                      </a>
+                    ) : null}
                   </div>
                 </article>
               );
