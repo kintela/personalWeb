@@ -267,7 +267,7 @@ export function BooksViewer({
                   key={book.id}
                   className="group flex h-full gap-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                 >
-                  <div className="relative w-24 shrink-0 overflow-hidden rounded-[1.2rem] border border-white/10 bg-slate-900 sm:w-28">
+                  <div className="w-24 shrink-0 self-start overflow-hidden rounded-[1.2rem] border border-white/10 bg-slate-900/85 p-1.5 sm:w-28">
                     {book.coverSrc ? (
                       <Image
                         src={book.coverSrc}
@@ -275,11 +275,11 @@ export function BooksViewer({
                         width={280}
                         height={400}
                         unoptimized
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                        className="h-auto w-full rounded-[0.9rem] object-contain transition duration-500 group-hover:scale-[1.03]"
                         sizes="112px"
                       />
                     ) : (
-                      <div className="flex h-full min-h-40 items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-3 text-center text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
+                      <div className="flex min-h-40 items-center justify-center rounded-[0.9rem] bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-3 text-center text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
                         Sin carátula
                       </div>
                     )}
