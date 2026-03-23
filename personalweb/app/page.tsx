@@ -1,6 +1,7 @@
 import { CdsViewer } from "@/components/cds-viewer";
 import { BooksViewer } from "@/components/books-viewer";
 import { ConcertsViewer } from "@/components/concerts-viewer";
+import { HistoryViewer } from "@/components/history-viewer";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { VinilosViewer } from "@/components/vinilos-viewer";
 import { VideosViewer } from "@/components/videos-viewer";
@@ -14,7 +15,7 @@ import { getBookList } from "@/lib/supabase/books";
 import { getConcertList } from "@/lib/supabase/concerts";
 import { getPhotoGallery } from "@/lib/supabase/photos";
 import { getViniloList } from "@/lib/supabase/vinilos";
-import { getVideoList } from "@/lib/supabase/videos";
+import { getHistoryVideoList, getVideoList } from "@/lib/supabase/videos";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,11 @@ const SECTION_SHORTCUTS = [
     href: "#libros",
     label: "Libros",
     eyebrow: "Lecturas",
+  },
+  {
+    href: "#historia",
+    label: "Historia",
+    eyebrow: "Archivo",
   },
   {
     href: "#videos",
@@ -96,8 +102,16 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const videoFilterValue = getSingleValue(searchParams.videoFilter).trim();
   const videoCategoryValue = getSingleValue(searchParams.videoCategory).trim();
   const videoPlatformValue = getSingleValue(searchParams.videoPlatform).trim();
-  const [gallery, concerts, cds, vinilos, books, videos, isUploaderUnlocked] =
-    await Promise.all([
+  const [
+    gallery,
+    concerts,
+    cds,
+    vinilos,
+    books,
+    historyVideos,
+    videos,
+    isUploaderUnlocked,
+  ] = await Promise.all([
       getPhotoGallery({
         page: parsePage(searchParams.page),
         filterField: "all",
@@ -122,6 +136,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
         categoryValue: bookCategoryValue,
         protagonistValue: bookProtagonistValue,
       }),
+      getHistoryVideoList(),
       getVideoList({
         filterValue: videoFilterValue,
         categoryValue: videoCategoryValue,
@@ -152,7 +167,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
           aria-label="Accesos rápidos"
           className="sticky top-4 z-20 rounded-[2rem] border border-white/10 bg-slate-950/55 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.2)] backdrop-blur"
         >
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
             {SECTION_SHORTCUTS.map((item) => (
               <a
                 key={item.href}
@@ -242,6 +257,15 @@ export default async function Home(props: { searchParams: SearchParams }) {
             protagonistValue={books.protagonistValue}
             categoryOptions={books.categoryOptions}
             protagonistOptions={books.protagonistOptions}
+          />
+        </div>
+
+        <div id="historia" className="scroll-mt-32">
+          <HistoryViewer
+            videos={historyVideos.videos}
+            configured={historyVideos.configured}
+            error={historyVideos.error}
+            totalCount={historyVideos.totalCount}
           />
         </div>
 

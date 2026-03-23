@@ -6,6 +6,10 @@ const VIDEOS_SELECT_COLUMNS =
   "id, imagen, enlace, texto, categoria, plataforma, info, created_at, updated_at";
 const VIDEO_IMAGE_BUCKET = "caratulas";
 const VIDEO_IMAGE_FOLDER = "pelis";
+export const HISTORY_VIDEO_CATEGORIES = [
+  "guerra_civil",
+  "ii_guerra_mundial",
+] as const;
 
 type VideoDatabaseRow = {
   id: number | string;
@@ -42,10 +46,19 @@ export type VideoListResult = {
   platformOptions: string[];
 };
 
+export type HistoryVideoListResult = {
+  videos: VideoAsset[];
+  configured: boolean;
+  error: string | null;
+  totalCount: number;
+};
+
 type GetVideoListOptions = {
   filterValue?: string | null;
   categoryValue?: string | null;
   platformValue?: string | null;
+  allowedCategories?: readonly string[] | null;
+  excludedCategories?: readonly string[] | null;
 };
 
 function normalizeVideoPlatformValue(value: string | null | undefined) {
@@ -133,6 +146,12 @@ function normalizeVideoFilterValue(value: string | null | undefined) {
   return value?.trim() ?? "";
 }
 
+function normalizeVideoCategoryList(values: readonly string[] | null | undefined) {
+  return values
+    ?.map((value) => value.trim())
+    .filter((value) => value.length > 0) ?? [];
+}
+
 export function getVideoImagePublicUrl(imagePath: string | null) {
   const normalizedPath = imagePath?.trim();
   const supabaseUrl = getSupabaseUrl()?.trim();
@@ -190,13 +209,17 @@ function mapVideo(video: VideoDatabaseRow): VideoAsset {
   };
 }
 
-export async function getVideoList(
+async function getScopedVideoList(
   options: GetVideoListOptions = {},
 ): Promise<VideoListResult> {
   const supabase = createSupabaseServerClient();
   const requestedFilterValue = normalizeVideoFilterValue(options.filterValue);
   const requestedCategoryValue = normalizeVideoFilterValue(options.categoryValue);
   const requestedPlatformValue = normalizeVideoFilterValue(options.platformValue);
+  const allowedCategories = normalizeVideoCategoryList(options.allowedCategories);
+  const excludedCategories = normalizeVideoCategoryList(
+    options.excludedCategories,
+  );
 
   if (!supabase) {
     return {
@@ -233,16 +256,29 @@ export async function getVideoList(
   }
 
   const rows = (data as VideoDatabaseRow[] | null) ?? [];
+  const scopedRows = rows.filter((row) => {
+    const category = row.categoria?.trim() ?? "";
+
+    if (allowedCategories.length > 0 && !allowedCategories.includes(category)) {
+      return false;
+    }
+
+    if (excludedCategories.length > 0 && excludedCategories.includes(category)) {
+      return false;
+    }
+
+    return true;
+  });
   const categoryOptions = [
     ...new Set(
-      rows
+      scopedRows
         .map((row) => row.categoria?.trim())
         .filter((value): value is string => Boolean(value)),
     ),
   ].sort((left, right) => left.localeCompare(right, "es"));
   const platformOptions = [
     ...new Set(
-      rows
+      scopedRows
         .map((row) => normalizeVideoPlatformValue(row.plataforma))
         .filter((value): value is string => Boolean(value)),
     ),
@@ -259,7 +295,7 @@ export async function getVideoList(
     ? (normalizedRequestedPlatformValue ?? "")
     : "";
   const normalizedFilterValue = requestedFilterValue.toLocaleLowerCase("es-ES");
-  const filteredRows = rows.filter((video) => {
+  const filteredRows = scopedRows.filter((video) => {
     const matchesCategory =
       !normalizedCategoryValue ||
       (video.categoria?.trim() ?? "") === normalizedCategoryValue;
@@ -283,5 +319,27 @@ export async function getVideoList(
     platformValue: normalizedPlatformValue,
     categoryOptions,
     platformOptions,
+  };
+}
+
+export async function getVideoList(
+  options: Omit<GetVideoListOptions, "excludedCategories" | "allowedCategories"> = {},
+): Promise<VideoListResult> {
+  return getScopedVideoList({
+    ...options,
+    excludedCategories: HISTORY_VIDEO_CATEGORIES,
+  });
+}
+
+export async function getHistoryVideoList(): Promise<HistoryVideoListResult> {
+  const result = await getScopedVideoList({
+    allowedCategories: HISTORY_VIDEO_CATEGORIES,
+  });
+
+  return {
+    videos: result.videos,
+    configured: result.configured,
+    error: result.error,
+    totalCount: result.totalCount,
   };
 }
