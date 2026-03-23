@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
+import { ShareCardButton } from "@/components/share-card-button";
 import type { VideoAsset } from "@/lib/supabase/videos";
 
 type HistoryViewerProps = {
@@ -119,25 +120,31 @@ export function HistoryViewer({
   error,
   totalCount,
 }: HistoryViewerProps) {
-  const [gridDensity, setGridDensity] = useState<HistoryGridDensity>(() => {
-    if (typeof window === "undefined") {
-      return "default";
-    }
+  const [gridDensity, setGridDensity] = useState<HistoryGridDensity>("default");
 
+  useEffect(() => {
     const savedValue = window.localStorage.getItem(
       HISTORY_VIEWER_GRID_STORAGE_KEY,
     ) as HistoryGridDensity | null;
-
-    if (
+    const nextGridDensity: HistoryGridDensity =
       savedValue === "compact" ||
       savedValue === "dense" ||
       savedValue === "default"
-    ) {
-      return savedValue;
+        ? savedValue
+        : "default";
+
+    if (nextGridDensity === "default") {
+      return;
     }
 
-    return "default";
-  });
+    const animationFrameId = window.requestAnimationFrame(() => {
+      setGridDensity(nextGridDensity);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(HISTORY_VIEWER_GRID_STORAGE_KEY, gridDensity);
@@ -277,12 +284,20 @@ export function HistoryViewer({
                   <div className={gridClassName}>
                     {section.videos.map((video) => {
                       const platformLabel = formatPlatformLabel(video.platform);
+                      const anchorId = `historia-video-${video.id}`;
 
                       return (
                         <article
                           key={video.id}
-                          className="group flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                          id={anchorId}
+                          className="group relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                         >
+                          <ShareCardButton
+                            anchorId={anchorId}
+                            sectionId="historia"
+                            className="absolute right-4 top-4 z-10"
+                          />
+
                           <a
                             href={video.link}
                             target="_blank"

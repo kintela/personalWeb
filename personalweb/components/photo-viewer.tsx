@@ -18,6 +18,7 @@ import {
   type PhotoPeopleGroup,
 } from "@/lib/photo-filters";
 import { PhotoUploadPanel } from "@/components/photo-upload-panel";
+import { ShareCardButton } from "@/components/share-card-button";
 import type { PhotoAsset } from "@/lib/supabase/photos";
 
 type PhotoViewerProps = {
@@ -559,57 +560,73 @@ export function PhotoViewer({
           <>
             {renderPagination()}
             <div className={gridClassName}>
-              {photos.map((photo, index) => (
-                <button
-                  type="button"
-                  key={photo.id}
-                  onClick={() => setSelectedIndex(index)}
-                  className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-950/65 text-left transition duration-300 hover:-translate-y-1 hover:border-cyan-300/50 hover:shadow-[0_18px_50px_rgba(17,24,39,0.42)] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
-                >
-                  <div className="relative aspect-[4/5] overflow-hidden">
-                    <Image
-                      src={photo.src}
-                      alt={photo.name}
-                      fill
-                      unoptimized
-                      sizes={imageSizes}
-                      className="object-cover transition duration-500 group-hover:scale-[1.03]"
+              {photos.map((photo, index) => {
+                const anchorId = `foto-${photo.id}`;
+
+                return (
+                  <article
+                    key={photo.id}
+                    id={anchorId}
+                    className="group relative scroll-mt-32 overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-950/65 transition duration-300 hover:-translate-y-1 hover:border-cyan-300/50 hover:shadow-[0_18px_50px_rgba(17,24,39,0.42)]"
+                  >
+                    <ShareCardButton
+                      anchorId={anchorId}
+                      sectionId="fotos"
+                      queryKeys={["page", "filterValue", "peopleGroup"]}
+                      className="absolute right-4 top-4 z-10"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/5 to-transparent" />
-                    <div className="absolute right-4 top-4 rounded-full border border-white/15 bg-black/35 px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-white/80">
-                      {String(firstPosition + index).padStart(2, "0")}
-                    </div>
-                  </div>
-                <div className="space-y-1 px-5 py-4">
-                  <p className="truncate text-sm font-medium text-white">
-                    {photo.title}
-                  </p>
-                  <p className="truncate text-xs text-slate-400">
-                    {photo.name}
-                  </p>
-                  {photo.groupName ? (
-                    <p className="truncate text-xs text-cyan-200/90">
-                      {photo.groupName}
-                    </p>
-                  ) : null}
-                  {photo.people.length > 0 ? (
-                    <p className="line-clamp-2 text-xs leading-6 text-slate-300">
-                      {buildPhotoPeopleLabel(photo)}
-                    </p>
-                  ) : null}
-                  {photo.description ? (
-                    <p className="line-clamp-2 text-xs leading-6 text-slate-300">
-                      {photo.description}
-                    </p>
-                  ) : null}
-                  {buildPhotoMeta(photo) ? (
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                      {buildPhotoMeta(photo)}
-                    </p>
-                  ) : null}
-                </div>
-              </button>
-            ))}
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIndex(index)}
+                      className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-inset"
+                    >
+                      <div className="relative aspect-[4/5] overflow-hidden">
+                        <Image
+                          src={photo.src}
+                          alt={photo.name}
+                          fill
+                          unoptimized
+                          sizes={imageSizes}
+                          className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/5 to-transparent" />
+                        <div className="absolute left-4 top-4 rounded-full border border-white/15 bg-black/35 px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-white/80">
+                          {String(firstPosition + index).padStart(2, "0")}
+                        </div>
+                      </div>
+                      <div className="space-y-1 px-5 py-4">
+                        <p className="truncate text-sm font-medium text-white">
+                          {photo.title}
+                        </p>
+                        <p className="truncate text-xs text-slate-400">
+                          {photo.name}
+                        </p>
+                        {photo.groupName ? (
+                          <p className="truncate text-xs text-cyan-200/90">
+                            {photo.groupName}
+                          </p>
+                        ) : null}
+                        {photo.people.length > 0 ? (
+                          <p className="line-clamp-2 text-xs leading-6 text-slate-300">
+                            {buildPhotoPeopleLabel(photo)}
+                          </p>
+                        ) : null}
+                        {photo.description ? (
+                          <p className="line-clamp-2 text-xs leading-6 text-slate-300">
+                            {photo.description}
+                          </p>
+                        ) : null}
+                        {buildPhotoMeta(photo) ? (
+                          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                            {buildPhotoMeta(photo)}
+                          </p>
+                        ) : null}
+                      </div>
+                    </button>
+                  </article>
+                );
+              })}
             </div>
             {renderPagination()}
           </>

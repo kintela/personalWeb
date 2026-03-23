@@ -4,6 +4,7 @@ import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
+import { ShareCardButton } from "@/components/share-card-button";
 import type { BookAsset } from "@/lib/supabase/books";
 
 type BooksViewerProps = {
@@ -261,12 +262,21 @@ export function BooksViewer({
             {books.map((book) => {
               const meta = buildBookMeta(book);
               const details = buildBookDetails(book);
+              const anchorId = `libro-${book.id}`;
 
               return (
                 <article
                   key={book.id}
-                  className="group grid h-full grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-4 gap-y-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                  id={anchorId}
+                  className="group relative grid h-full scroll-mt-32 grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-4 gap-y-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                 >
+                  <ShareCardButton
+                    anchorId={anchorId}
+                    sectionId="libros"
+                    queryKeys={["bookFilter", "bookCategory", "bookProtagonist"]}
+                    className="absolute right-4 top-4 z-10"
+                  />
+
                   <div className="w-24 shrink-0 self-start overflow-hidden rounded-[1.2rem] border border-white/10 bg-slate-900/85 p-1.5 sm:w-28">
                     {book.coverSrc ? (
                       <Image
@@ -285,7 +295,7 @@ export function BooksViewer({
                     )}
                   </div>
 
-                  <div className="min-w-0 space-y-2">
+                  <div className="min-w-0 space-y-2 pr-12">
                     {book.category ? (
                       <p className="text-[0.7rem] font-medium uppercase tracking-[0.22em] text-cyan-200">
                         {book.category}

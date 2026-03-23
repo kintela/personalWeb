@@ -1,6 +1,7 @@
 import { CdsViewer } from "@/components/cds-viewer";
 import { BooksViewer } from "@/components/books-viewer";
 import { ConcertsViewer } from "@/components/concerts-viewer";
+import { DeepLinkFocus } from "@/components/deep-link-focus";
 import { GuitarViewer } from "@/components/guitar-viewer";
 import { HistoryViewer } from "@/components/history-viewer";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -159,6 +160,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
 
   return (
     <main className="min-h-screen">
+      <DeepLinkFocus />
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-12 px-6 py-8 sm:px-10 lg:px-12 lg:py-10">
         <section className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/6 px-6 py-8 shadow-[0_32px_90px_rgba(15,23,42,0.25)] backdrop-blur md:px-10 md:py-10">
           <div className="space-y-6">

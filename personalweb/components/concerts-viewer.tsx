@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
+
+import { ShareCardButton } from "@/components/share-card-button";
 import type {
   ConcertAsset,
   ConcertPhotoAsset,
@@ -692,14 +694,28 @@ export function ConcertsViewer({
             {concerts.map((concert) => {
               const location = buildConcertLocation(concert);
               const concertName = concert.groupName ?? "Grupo sin vincular";
+              const anchorId = `concierto-${concert.id}`;
 
               return (
                 <article
                   key={concert.id}
-                  className="rounded-[1.5rem] border border-white/10 bg-slate-950/55 p-5 shadow-[0_18px_50px_rgba(17,24,39,0.28)]"
+                  id={anchorId}
+                  className="relative scroll-mt-32 rounded-[1.5rem] border border-white/10 bg-slate-950/55 p-5 shadow-[0_18px_50px_rgba(17,24,39,0.28)]"
                 >
+                  <ShareCardButton
+                    anchorId={anchorId}
+                    sectionId="conciertos"
+                    queryKeys={[
+                      "concertFilter",
+                      "concertYear",
+                      "concertCity",
+                      "concertGroup",
+                    ]}
+                    className="absolute right-4 top-4 z-10"
+                  />
+
                   <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="flex flex-col gap-3 pr-12 md:flex-row md:items-start md:justify-between">
                       <div className="space-y-2">
                         <p className="text-xs font-medium uppercase tracking-[0.28em] text-cyan-200/80">
                           {concert.dateLabel}

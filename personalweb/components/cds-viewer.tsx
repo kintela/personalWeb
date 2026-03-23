@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
+import { ShareCardButton } from "@/components/share-card-button";
 import type { CdAsset } from "@/lib/supabase/cds";
 
 type CdsViewerProps = {
@@ -304,13 +305,22 @@ export function CdsViewer({
           <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
             {cds.map((cd) => {
               const statusLabel = buildCdStatusLabel(cd);
+              const anchorId = `cd-${cd.id}`;
 
               return (
                 <article
                   key={cd.id}
-                  className="group flex h-full flex-col gap-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                  id={anchorId}
+                  className="group relative flex h-full scroll-mt-32 flex-col gap-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                 >
-                  <div className="flex flex-wrap gap-2">
+                  <ShareCardButton
+                    anchorId={anchorId}
+                    sectionId="cds"
+                    queryKeys={["cdFilter", "cdGroup", "cdYear", "cdSpotify"]}
+                    className="absolute right-4 top-4 z-10"
+                  />
+
+                  <div className="flex flex-wrap gap-2 pr-12">
                     {cd.groupName ? (
                       <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-cyan-100">
                         {cd.groupName}

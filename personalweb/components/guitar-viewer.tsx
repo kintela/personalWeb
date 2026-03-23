@@ -1,5 +1,6 @@
 import Image from "next/image";
 
+import { ShareCardButton } from "@/components/share-card-button";
 import type { VideoAsset } from "@/lib/supabase/videos";
 
 type GuitarViewerProps = {
@@ -92,12 +93,20 @@ export function GuitarViewer({
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {videos.map((video) => {
               const platformLabel = formatPlatformLabel(video.platform);
+              const anchorId = `guitarra-video-${video.id}`;
 
               return (
                 <article
                   key={video.id}
-                  className="group flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                  id={anchorId}
+                  className="group relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                 >
+                  <ShareCardButton
+                    anchorId={anchorId}
+                    sectionId="guitarra"
+                    className="absolute right-4 top-4 z-10"
+                  />
+
                   <a
                     href={video.link}
                     target="_blank"
