@@ -187,14 +187,15 @@ export default async function Home(props: { searchParams: SearchParams }) {
 
         <nav
           aria-label="Accesos rápidos"
-          className="sticky top-4 z-20 rounded-[2rem] border border-white/10 bg-slate-950/55 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.2)] backdrop-blur"
+          style={{ top: "max(0.75rem, env(safe-area-inset-top))" }}
+          className="sticky z-20 rounded-[1.6rem] border border-white/10 bg-slate-950/55 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.2)] backdrop-blur sm:rounded-[2rem]"
         >
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8">
+          <div className="flex gap-3 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] sm:grid sm:overflow-visible sm:pb-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8">
             {SECTION_SHORTCUTS.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
-                className="group flex items-center justify-between gap-4 rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-3 transition hover:border-cyan-300/45 hover:bg-cyan-300/10"
+                className="group flex min-w-[12.5rem] shrink-0 items-center justify-between gap-4 rounded-[1.25rem] border border-white/10 bg-white/6 px-4 py-3 transition hover:border-cyan-300/45 hover:bg-cyan-300/10 sm:min-w-0 sm:rounded-[1.4rem]"
               >
                 <span className="space-y-1">
                   <span className="block text-[0.68rem] uppercase tracking-[0.28em] text-cyan-300/80">
