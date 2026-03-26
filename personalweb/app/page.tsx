@@ -18,7 +18,11 @@ import { getConcertList } from "@/lib/supabase/concerts";
 import { getGuitarTopicList } from "@/lib/supabase/guitar-topics";
 import { getPhotoGallery } from "@/lib/supabase/photos";
 import { getViniloList } from "@/lib/supabase/vinilos";
-import { getHistoryVideoList, getVideoList } from "@/lib/supabase/videos";
+import {
+  getGuitarVideoList,
+  getHistoryVideoList,
+  getVideoList,
+} from "@/lib/supabase/videos";
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +123,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
     vinilos,
     books,
     historyVideos,
+    guitarVideos,
     guitarTopics,
     videos,
     isUploaderUnlocked,
@@ -148,6 +153,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
         protagonistValue: bookProtagonistValue,
       }),
       getHistoryVideoList(),
+      getGuitarVideoList(),
       getGuitarTopicList({
         groupValue: guitarGroupValue,
         topicValue: guitarThemeValue,
@@ -287,9 +293,11 @@ export default async function Home(props: { searchParams: SearchParams }) {
 
         <div id="guitarra" className="scroll-mt-32">
           <GuitarViewer
+            videos={guitarVideos.videos}
             topics={guitarTopics.topics}
-            configured={guitarTopics.configured}
-            error={guitarTopics.error}
+            configured={guitarVideos.configured && guitarTopics.configured}
+            error={guitarVideos.error ?? guitarTopics.error}
+            generalVideoCount={guitarVideos.totalCount}
             totalVideoCount={guitarTopics.totalVideoCount}
             totalTopicCount={guitarTopics.totalTopicCount}
             totalGroupCount={guitarTopics.totalGroupCount}
