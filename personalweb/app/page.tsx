@@ -5,6 +5,7 @@ import { DeepLinkFocus } from "@/components/deep-link-focus";
 import { GuitarViewer } from "@/components/guitar-viewer";
 import { HistoryViewer } from "@/components/history-viewer";
 import { PhotoViewer } from "@/components/photo-viewer";
+import { SpotifyViewer } from "@/components/spotify-viewer";
 import { VinilosViewer } from "@/components/vinilos-viewer";
 import { VideosViewer } from "@/components/videos-viewer";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
@@ -23,6 +24,7 @@ import {
   getHistoryVideoList,
   getVideoList,
 } from "@/lib/supabase/videos";
+import { getSpotifyPlaylistList } from "@/lib/spotify";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +65,11 @@ const SECTION_SHORTCUTS = [
     href: "#guitarra",
     label: "Guitarra",
     eyebrow: "Cuerdas",
+  },
+  {
+    href: "#spotify",
+    label: "Spotify",
+    eyebrow: "Playlists",
   },
   {
     href: "#videos",
@@ -125,6 +132,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
     historyVideos,
     guitarVideos,
     guitarTopics,
+    spotifyPlaylists,
     videos,
     isUploaderUnlocked,
   ] = await Promise.all([
@@ -158,6 +166,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
         groupValue: guitarGroupValue,
         topicValue: guitarThemeValue,
       }),
+      getSpotifyPlaylistList(),
       getVideoList({
         filterValue: videoFilterValue,
         categoryValue: videoCategoryValue,
@@ -190,7 +199,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
           style={{ top: "max(0.75rem, env(safe-area-inset-top))" }}
           className="sticky z-20 rounded-[1.6rem] border border-white/10 bg-slate-950/55 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.2)] backdrop-blur sm:rounded-[2rem]"
         >
-          <div className="flex gap-3 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] sm:grid sm:overflow-visible sm:pb-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8">
+          <div className="flex gap-3 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] sm:grid sm:overflow-visible sm:pb-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
             {SECTION_SHORTCUTS.map((item) => (
               <a
                 key={item.href}
@@ -306,6 +315,18 @@ export default async function Home(props: { searchParams: SearchParams }) {
             topicValue={guitarTopics.topicValue}
             groupOptions={guitarTopics.groupOptions}
             topicOptions={guitarTopics.topicOptions}
+          />
+        </div>
+
+        <div id="spotify" className="scroll-mt-32">
+          <SpotifyViewer
+            playlists={spotifyPlaylists.playlists}
+            configured={spotifyPlaylists.configured}
+            connected={spotifyPlaylists.connected}
+            error={spotifyPlaylists.error}
+            accountName={spotifyPlaylists.accountName}
+            loginHref={spotifyPlaylists.loginHref}
+            callbackPath={spotifyPlaylists.callbackPath}
           />
         </div>
 
