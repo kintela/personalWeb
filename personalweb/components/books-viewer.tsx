@@ -4,6 +4,10 @@ import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
+import {
+  GridDensityControls,
+  usePersistedGridDensity,
+} from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
 import type { BookAsset } from "@/lib/supabase/books";
 
@@ -18,6 +22,8 @@ type BooksViewerProps = {
   categoryOptions: string[];
   protagonistOptions: string[];
 };
+
+const BOOKS_VIEWER_GRID_STORAGE_KEY = "books-viewer-grid-density";
 
 function buildBookMeta(book: BookAsset) {
   return [book.author, book.protagonist && `Sobre ${book.protagonist}`]
@@ -53,9 +59,18 @@ export function BooksViewer({
   const [selectedCategory, setSelectedCategory] = useState(categoryValue);
   const [selectedProtagonist, setSelectedProtagonist] =
     useState(protagonistValue);
+  const [gridDensity, setGridDensity] = usePersistedGridDensity(
+    BOOKS_VIEWER_GRID_STORAGE_KEY,
+  );
   const hasActiveFilters = Boolean(
     filterValue || categoryValue || protagonistValue,
   );
+  const gridClassName =
+    gridDensity === "dense"
+      ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+      : gridDensity === "compact"
+        ? "grid gap-5 lg:grid-cols-2 xl:grid-cols-3"
+        : "grid gap-5 lg:grid-cols-2";
 
   useEffect(() => {
     setFilterInput(filterValue);
@@ -265,98 +280,109 @@ export function BooksViewer({
             No hay libros cargados todavía.
           </div>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-2">
-            {books.map((book) => {
-              const meta = buildBookMeta(book);
-              const details = buildBookDetails(book);
-              const anchorId = `libro-${book.id}`;
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <GridDensityControls
+                gridDensity={gridDensity}
+                setGridDensity={setGridDensity}
+                compactTitle="Activar vista compacta de libros"
+                denseTitle="Activar vista densa de libros"
+              />
+            </div>
 
-              return (
-                <article
-                  key={book.id}
-                  id={anchorId}
-                  className="group relative grid h-full scroll-mt-32 grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-4 gap-y-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
-                >
-                  <ShareCardButton
-                    anchorId={anchorId}
-                    sectionId="libros"
-                    queryKeys={["bookFilter", "bookCategory", "bookProtagonist"]}
-                    className="absolute right-4 top-4 z-10"
-                  />
+            <div className={gridClassName}>
+              {books.map((book) => {
+                const meta = buildBookMeta(book);
+                const details = buildBookDetails(book);
+                const anchorId = `libro-${book.id}`;
 
-                  <div className="w-24 shrink-0 self-start overflow-hidden rounded-[1.2rem] border border-white/10 bg-slate-900/85 p-1.5 sm:w-28">
-                    {book.coverSrc ? (
-                      <Image
-                        src={book.coverSrc}
-                        alt={`Carátula de ${book.title}`}
-                        width={280}
-                        height={400}
-                        unoptimized
-                        className="h-auto w-full rounded-[0.9rem] object-contain transition duration-500 group-hover:scale-[1.03]"
-                        sizes="112px"
-                      />
-                    ) : (
-                      <div className="flex min-h-40 items-center justify-center rounded-[0.9rem] bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-3 text-center text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
-                        Sin carátula
-                      </div>
-                    )}
-                  </div>
+                return (
+                  <article
+                    key={book.id}
+                    id={anchorId}
+                    className="group relative grid h-full scroll-mt-32 grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-4 gap-y-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                  >
+                    <ShareCardButton
+                      anchorId={anchorId}
+                      sectionId="libros"
+                      queryKeys={["bookFilter", "bookCategory", "bookProtagonist"]}
+                      className="absolute right-4 top-4 z-10"
+                    />
 
-                  <div className="min-w-0 space-y-2 pr-12">
-                    {book.category ? (
-                      <p className="text-[0.7rem] font-medium uppercase tracking-[0.22em] text-cyan-200">
-                        {book.category}
-                      </p>
-                    ) : null}
+                    <div className="w-24 shrink-0 self-start overflow-hidden rounded-[1.2rem] border border-white/10 bg-slate-900/85 p-1.5 sm:w-28">
+                      {book.coverSrc ? (
+                        <Image
+                          src={book.coverSrc}
+                          alt={`Carátula de ${book.title}`}
+                          width={280}
+                          height={400}
+                          unoptimized
+                          className="h-auto w-full rounded-[0.9rem] object-contain transition duration-500 group-hover:scale-[1.03]"
+                          sizes="112px"
+                        />
+                      ) : (
+                        <div className="flex min-h-40 items-center justify-center rounded-[0.9rem] bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-3 text-center text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
+                          Sin carátula
+                        </div>
+                      )}
+                    </div>
 
-                    <h3 className="text-xl font-semibold leading-tight text-white">
-                      {book.title}
-                    </h3>
+                    <div className="min-w-0 space-y-2 pr-12">
+                      {book.category ? (
+                        <p className="text-[0.7rem] font-medium uppercase tracking-[0.22em] text-cyan-200">
+                          {book.category}
+                        </p>
+                      ) : null}
 
-                    {meta ? (
-                      <p className="text-sm leading-6 text-slate-300">{meta}</p>
-                    ) : null}
+                      <h3 className="text-xl font-semibold leading-tight text-white">
+                        {book.title}
+                      </h3>
 
-                    {details ? (
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                        {details}
-                      </p>
-                    ) : null}
-                  </div>
+                      {meta ? (
+                        <p className="text-sm leading-6 text-slate-300">{meta}</p>
+                      ) : null}
 
-                  {book.synopsis ? (
-                    <p
-                      className="col-span-full min-w-0 text-sm leading-7 text-slate-300"
-                      style={{
-                        display: "-webkit-box",
-                        WebkitBoxOrient: "vertical",
-                        WebkitLineClamp: 4,
-                        overflow: "hidden",
-                      }}
-                    >
-                      {book.synopsis}
-                    </p>
-                  ) : null}
+                      {details ? (
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                          {details}
+                        </p>
+                      ) : null}
+                    </div>
 
-                  <div className="col-span-full flex items-center justify-between gap-3 pt-1">
-                    <span className="min-w-0 truncate text-xs uppercase tracking-[0.18em] text-slate-500">
-                      {book.publisher ?? "Sin editorial"}
-                    </span>
-
-                    {book.link ? (
-                      <a
-                        href={book.link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="shrink-0 rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
+                    {book.synopsis ? (
+                      <p
+                        className="col-span-full min-w-0 text-sm leading-7 text-slate-300"
+                        style={{
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                          WebkitLineClamp: 4,
+                          overflow: "hidden",
+                        }}
                       >
-                        Ver ficha
-                      </a>
+                        {book.synopsis}
+                      </p>
                     ) : null}
-                  </div>
-                </article>
-              );
-            })}
+
+                    <div className="col-span-full flex items-center justify-between gap-3 pt-1">
+                      <span className="min-w-0 truncate text-xs uppercase tracking-[0.18em] text-slate-500">
+                        {book.publisher ?? "Sin editorial"}
+                      </span>
+
+                      {book.link ? (
+                        <a
+                          href={book.link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="shrink-0 rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
+                        >
+                          Ver ficha
+                        </a>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

@@ -4,6 +4,10 @@ import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
+import {
+  GridDensityControls,
+  usePersistedGridDensity,
+} from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
 import type { VideoAsset } from "@/lib/supabase/videos";
 
@@ -18,6 +22,8 @@ type VideosViewerProps = {
   categoryOptions: string[];
   platformOptions: string[];
 };
+
+const VIDEOS_VIEWER_GRID_STORAGE_KEY = "videos-viewer-grid-density";
 
 function formatPlatformLabel(platform: string | null) {
   if (!platform) {
@@ -77,9 +83,18 @@ export function VideosViewer({
   const [filterInput, setFilterInput] = useState(filterValue);
   const [selectedCategory, setSelectedCategory] = useState(categoryValue);
   const [selectedPlatform, setSelectedPlatform] = useState(platformValue);
+  const [gridDensity, setGridDensity] = usePersistedGridDensity(
+    VIDEOS_VIEWER_GRID_STORAGE_KEY,
+  );
   const hasActiveFilters = Boolean(
     filterValue || categoryValue || platformValue,
   );
+  const gridClassName =
+    gridDensity === "dense"
+      ? "grid gap-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6"
+      : gridDensity === "compact"
+        ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+        : "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
 
   useEffect(() => {
     setFilterInput(filterValue);
@@ -287,102 +302,113 @@ export function VideosViewer({
             No hay vídeos cargados todavía.
           </div>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {videos.map((video) => {
-              const platformLabel = formatPlatformLabel(video.platform);
-              const anchorId = `video-${video.id}`;
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <GridDensityControls
+                gridDensity={gridDensity}
+                setGridDensity={setGridDensity}
+                compactTitle="Activar vista compacta de vídeos"
+                denseTitle="Activar vista densa de vídeos"
+              />
+            </div>
 
-              return (
-                <article
-                  key={video.id}
-                  id={anchorId}
-                  className="group relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
-                >
-                  <ShareCardButton
-                    anchorId={anchorId}
-                    sectionId="videos"
-                    queryKeys={[
-                      "videoFilter",
-                      "videoCategory",
-                      "videoPlatform",
-                    ]}
-                    className="absolute right-4 top-4 z-10"
-                  />
+            <div className={gridClassName}>
+              {videos.map((video) => {
+                const platformLabel = formatPlatformLabel(video.platform);
+                const anchorId = `video-${video.id}`;
 
-                  <a
-                    href={video.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block"
+                return (
+                  <article
+                    key={video.id}
+                    id={anchorId}
+                    className="group relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                   >
-                    <div className="relative aspect-[4/3] overflow-hidden bg-slate-900">
-                      {video.imageSrc ? (
-                        <Image
-                          src={video.imageSrc}
-                          alt={`Carátula de ${video.title}`}
-                          fill
-                          unoptimized
-                          className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 33vw, 25vw"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-8 text-center text-sm uppercase tracking-[0.3em] text-slate-400">
-                          Sin carátula
-                        </div>
-                      )}
-                    </div>
-                  </a>
+                    <ShareCardButton
+                      anchorId={anchorId}
+                      sectionId="videos"
+                      queryKeys={[
+                        "videoFilter",
+                        "videoCategory",
+                        "videoPlatform",
+                      ]}
+                      className="absolute right-4 top-4 z-10"
+                    />
 
-                  <div className="flex flex-1 flex-col gap-4 p-5">
-                    <div className="flex flex-wrap gap-2">
-                      {video.category ? (
-                        <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-cyan-100">
-                          {video.category}
-                        </span>
-                      ) : null}
-                      {platformLabel ? (
-                        <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
-                          {platformLabel}
-                        </span>
-                      ) : null}
-                    </div>
+                    <a
+                      href={video.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block"
+                    >
+                      <div className="relative aspect-[4/3] overflow-hidden bg-slate-900">
+                        {video.imageSrc ? (
+                          <Image
+                            src={video.imageSrc}
+                            alt={`Carátula de ${video.title}`}
+                            fill
+                            unoptimized
+                            className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 33vw, 25vw"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-8 text-center text-sm uppercase tracking-[0.3em] text-slate-400">
+                            Sin carátula
+                          </div>
+                        )}
+                      </div>
+                    </a>
 
-                    <div className="space-y-2">
-                      <h3 className="text-xl font-semibold leading-tight text-white">
-                        {video.title}
-                      </h3>
-                      {platformLabel ? (
-                        <p className="text-sm leading-6 text-slate-300">
-                          Disponible en {platformLabel}
-                        </p>
-                      ) : null}
-                    </div>
+                    <div className="flex flex-1 flex-col gap-4 p-5">
+                      <div className="flex flex-wrap gap-2">
+                        {video.category ? (
+                          <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-cyan-100">
+                            {video.category}
+                          </span>
+                        ) : null}
+                        {platformLabel ? (
+                          <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
+                            {platformLabel}
+                          </span>
+                        ) : null}
+                      </div>
 
-                    <div className="mt-auto flex flex-wrap gap-3 pt-1">
-                      <a
-                        href={video.link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
-                      >
-                        Ver vídeo
-                      </a>
+                      <div className="space-y-2">
+                        <h3 className="text-xl font-semibold leading-tight text-white">
+                          {video.title}
+                        </h3>
+                        {platformLabel ? (
+                          <p className="text-sm leading-6 text-slate-300">
+                            Disponible en {platformLabel}
+                          </p>
+                        ) : null}
+                      </div>
 
-                      {video.info ? (
+                      <div className="mt-auto flex flex-wrap gap-3 pt-1">
                         <a
-                          href={video.info}
+                          href={video.link}
                           target="_blank"
                           rel="noreferrer"
-                          className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/25 hover:text-white"
+                          className="rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
                         >
-                          Más info
+                          Ver vídeo
                         </a>
-                      ) : null}
+
+                        {video.info ? (
+                          <a
+                            href={video.info}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/25 hover:text-white"
+                          >
+                            Más info
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
+                  </article>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

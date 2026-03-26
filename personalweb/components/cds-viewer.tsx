@@ -3,6 +3,10 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
+import {
+  GridDensityControls,
+  usePersistedGridDensity,
+} from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
 import type { CdAsset } from "@/lib/supabase/cds";
 
@@ -18,6 +22,8 @@ type CdsViewerProps = {
   groupOptions: string[];
   yearOptions: string[];
 };
+
+const CDS_VIEWER_GRID_STORAGE_KEY = "cds-viewer-grid-density";
 
 function buildCdStatusLabel(cd: CdAsset) {
   return [
@@ -68,7 +74,16 @@ export function CdsViewer({
   const [selectedGroup, setSelectedGroup] = useState(groupValue);
   const [selectedYear, setSelectedYear] = useState(yearValue);
   const [selectedSpotify, setSelectedSpotify] = useState(spotifyValue);
+  const [gridDensity, setGridDensity] = usePersistedGridDensity(
+    CDS_VIEWER_GRID_STORAGE_KEY,
+  );
   const hasActiveFilters = Boolean(filterValue || groupValue || yearValue || spotifyValue);
+  const gridClassName =
+    gridDensity === "dense"
+      ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+      : gridDensity === "compact"
+        ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        : "grid gap-5 lg:grid-cols-2 xl:grid-cols-3";
 
   useEffect(() => {
     setFilterInput(filterValue);
@@ -309,64 +324,75 @@ export function CdsViewer({
             No hay CDs cargados todavía.
           </div>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-            {cds.map((cd) => {
-              const statusLabel = buildCdStatusLabel(cd);
-              const anchorId = `cd-${cd.id}`;
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <GridDensityControls
+                gridDensity={gridDensity}
+                setGridDensity={setGridDensity}
+                compactTitle="Activar vista compacta de CDs"
+                denseTitle="Activar vista densa de CDs"
+              />
+            </div>
 
-              return (
-                <article
-                  key={cd.id}
-                  id={anchorId}
-                  className="group relative flex h-full scroll-mt-32 flex-col gap-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
-                >
-                  <ShareCardButton
-                    anchorId={anchorId}
-                    sectionId="cds"
-                    queryKeys={["cdFilter", "cdGroup", "cdYear", "cdSpotify"]}
-                    className="absolute right-4 top-4 z-10"
-                  />
+            <div className={gridClassName}>
+              {cds.map((cd) => {
+                const statusLabel = buildCdStatusLabel(cd);
+                const anchorId = `cd-${cd.id}`;
 
-                  <div className="flex flex-wrap gap-2 pr-12">
-                    {cd.groupName ? (
-                      <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-cyan-100">
-                        {cd.groupName}
-                      </span>
-                    ) : null}
-                    {Number.isInteger(cd.year) ? (
-                      <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
-                        {cd.year}
-                      </span>
-                    ) : null}
-                    {cd.signed === true ? (
-                      <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-emerald-100">
-                        Firmado
-                      </span>
-                    ) : null}
-                  </div>
+                return (
+                  <article
+                    key={cd.id}
+                    id={anchorId}
+                    className="group relative flex h-full scroll-mt-32 flex-col gap-4 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                  >
+                    <ShareCardButton
+                      anchorId={anchorId}
+                      sectionId="cds"
+                      queryKeys={["cdFilter", "cdGroup", "cdYear", "cdSpotify"]}
+                      className="absolute right-4 top-4 z-10"
+                    />
 
-                  <div className="space-y-2">
-                    <h3 className="text-xl font-semibold leading-tight text-white">
-                      {cd.title}
-                    </h3>
-                    <p className="text-sm leading-6 text-slate-300">
-                      {cd.groupName || "Grupo sin asignar"}
-                    </p>
-                    {statusLabel ? (
-                      <p className="text-sm leading-6 text-slate-400">
-                        {statusLabel}
+                    <div className="flex flex-wrap gap-2 pr-12">
+                      {cd.groupName ? (
+                        <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-cyan-100">
+                          {cd.groupName}
+                        </span>
+                      ) : null}
+                      {Number.isInteger(cd.year) ? (
+                        <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
+                          {cd.year}
+                        </span>
+                      ) : null}
+                      {cd.signed === true ? (
+                        <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-emerald-100">
+                          Firmado
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-semibold leading-tight text-white">
+                        {cd.title}
+                      </h3>
+                      <p className="text-sm leading-6 text-slate-300">
+                        {cd.groupName || "Grupo sin asignar"}
+                      </p>
+                      {statusLabel ? (
+                        <p className="text-sm leading-6 text-slate-400">
+                          {statusLabel}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {cd.labelId !== null && cd.labelId > 0 ? (
+                      <p className="mt-auto text-xs uppercase tracking-[0.22em] text-slate-500">
+                        Etiqueta #{cd.labelId}
                       </p>
                     ) : null}
-                  </div>
-
-                  {cd.labelId !== null && cd.labelId > 0 ? (
-                    <p className="mt-auto text-xs uppercase tracking-[0.22em] text-slate-500">
-                      Etiqueta #{cd.labelId}
-                    </p>
-                  ) : null}
-                </article>
-              );
-            })}
+                  </article>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

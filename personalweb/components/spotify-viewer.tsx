@@ -2,6 +2,10 @@
 
 import Image from "next/image";
 
+import {
+  GridDensityControls,
+  usePersistedGridDensity,
+} from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
 import type { SpotifyPlaylistAsset } from "@/lib/spotify-types";
 
@@ -19,6 +23,8 @@ function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
 }
 
+const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
+
 export function SpotifyViewer({
   playlists,
   configured,
@@ -28,6 +34,16 @@ export function SpotifyViewer({
   loginHref,
   callbackPath,
 }: SpotifyViewerProps) {
+  const [gridDensity, setGridDensity] = usePersistedGridDensity(
+    SPOTIFY_VIEWER_GRID_STORAGE_KEY,
+  );
+  const gridClassName =
+    gridDensity === "dense"
+      ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+      : gridDensity === "compact"
+        ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        : "grid gap-5 xl:grid-cols-2 2xl:grid-cols-3";
+
   return (
     <section className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/6 px-6 py-8 shadow-[0_32px_90px_rgba(15,23,42,0.25)] backdrop-blur md:px-10 md:py-10">
       <div className="space-y-8">
@@ -131,7 +147,16 @@ export function SpotifyViewer({
               </div>
             ) : null}
 
-            <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-3">
+            <div className="flex justify-end">
+              <GridDensityControls
+                gridDensity={gridDensity}
+                setGridDensity={setGridDensity}
+                compactTitle="Activar vista compacta de playlists"
+                denseTitle="Activar vista densa de playlists"
+              />
+            </div>
+
+            <div className={gridClassName}>
               {playlists.map((playlist) => {
                 const anchorId = `spotify-playlist-${playlist.id}`;
 
@@ -164,16 +189,11 @@ export function SpotifyViewer({
                       )}
                     </div>
 
-                      <div className="flex flex-1 flex-col gap-4 p-5">
+                    <div className="flex flex-1 flex-col gap-4 p-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap gap-2">
-                          <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-emerald-100">
-                            {playlist.visibilityLabel}
-                          </span>
-                          <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
-                            {playlist.trackCount} temas
-                          </span>
-                        </div>
+                        <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
+                          {playlist.trackCount} temas
+                        </span>
 
                         <a
                           href={playlist.externalUrl}
@@ -189,15 +209,12 @@ export function SpotifyViewer({
                         <h3 className="text-2xl font-semibold leading-tight text-white">
                           {playlist.name}
                         </h3>
-                        <p className="text-sm leading-7 text-slate-300">
-                          {playlist.description ??
-                            "Sin descripción visible en Spotify."}
-                        </p>
+                        {playlist.description ? (
+                          <p className="text-sm leading-7 text-slate-300">
+                            {playlist.description}
+                          </p>
+                        ) : null}
                       </div>
-
-                      <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-                        {playlist.ownerName}
-                      </p>
 
                       <div className="mt-auto pt-1" />
                     </div>
