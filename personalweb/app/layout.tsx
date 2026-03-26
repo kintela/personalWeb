@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Personal Web",
-  description: "Web personal con visor de fotos conectado a Supabase.",
+  description: "Aqui se encuentra mucho de lo que me apasiona",
 };
 
 export default function RootLayout({
