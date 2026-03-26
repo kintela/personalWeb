@@ -149,11 +149,7 @@ export function GuitarViewer({
     const currentTopicStillValid = nextTopicOptions.some(
       (option) => option.id === selectedTopic,
     );
-    const nextTopicValue = currentTopicStillValid
-      ? selectedTopic
-      : nextTopicOptions.length === 1
-        ? (nextTopicOptions[0]?.id ?? "")
-        : "";
+    const nextTopicValue = currentTopicStillValid ? selectedTopic : "";
 
     setSelectedGroup(nextGroupValue);
     setSelectedTopic(nextTopicValue);
@@ -170,6 +166,14 @@ export function GuitarViewer({
     applySelection({
       nextGroupValue: selectedGroup,
       nextTopicValue,
+    });
+  }
+
+  function handleClearTopic() {
+    setSelectedTopic("");
+    applySelection({
+      nextGroupValue: selectedGroup,
+      nextTopicValue: "",
     });
   }
 
@@ -376,30 +380,41 @@ export function GuitarViewer({
                         </select>
                       </label>
 
-                      <label className="space-y-2">
+                      <div className="space-y-2">
                         <span className="text-xs font-medium uppercase tracking-[0.32em] text-slate-300">
                           Tema
                         </span>
-                        <select
-                          value={selectedTopic}
-                          onChange={handleTopicChange}
-                          disabled={
-                            !selectedGroup || filteredTopicOptions.length === 0
-                          }
-                          className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-sm text-white outline-none transition focus:border-cyan-300/70 disabled:cursor-not-allowed disabled:border-white/8 disabled:text-slate-500"
-                        >
-                          <option value="">
-                            {!selectedGroup
-                              ? "Primero elige un grupo"
-                              : "Selecciona un tema"}
-                          </option>
-                          {filteredTopicOptions.map((option) => (
-                            <option key={option.id} value={option.id}>
-                              {option.name}
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                          <select
+                            value={selectedTopic}
+                            onChange={handleTopicChange}
+                            disabled={
+                              !selectedGroup || filteredTopicOptions.length === 0
+                            }
+                            className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-sm text-white outline-none transition focus:border-cyan-300/70 disabled:cursor-not-allowed disabled:border-white/8 disabled:text-slate-500"
+                          >
+                            <option value="">
+                              {!selectedGroup
+                                ? "Primero elige un grupo"
+                                : "Selecciona un tema"}
                             </option>
-                          ))}
-                        </select>
-                      </label>
+                            {filteredTopicOptions.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.name}
+                              </option>
+                            ))}
+                          </select>
+
+                          <button
+                            type="button"
+                            onClick={handleClearTopic}
+                            disabled={!selectedTopic}
+                            className="rounded-2xl border border-white/12 bg-black/25 px-5 py-4 text-sm font-medium text-slate-100 transition hover:border-cyan-300/50 hover:text-white disabled:cursor-not-allowed disabled:border-white/8 disabled:text-slate-500"
+                          >
+                            Limpiar tema
+                          </button>
+                        </div>
+                      </div>
 
                       <div className="rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4 text-sm text-slate-300">
                         {activeTopic ? (

@@ -363,10 +363,6 @@ export async function getGuitarTopicList(
     topicValue = "";
   }
 
-  if (!topicValue && availableTopicOptions.length === 1) {
-    topicValue = availableTopicOptions[0]?.id ?? "";
-  }
-
   return {
     topics,
     configured: true,
