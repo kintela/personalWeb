@@ -4,6 +4,7 @@ import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
 import { startTransition, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { ShareCardButton } from "@/components/share-card-button";
 import type {
@@ -26,6 +27,14 @@ type GuitarViewerProps = {
   topicValue: string;
   groupOptions: GuitarTopicGroupOption[];
   topicOptions: GuitarTopicOption[];
+};
+
+type SelectedGuitarVideo = {
+  title: string;
+  subtitle: string;
+  externalUrl: string;
+  embedUrl: string;
+  platform: "youtube" | "instagram" | "vimeo";
 };
 
 function getTopicCountLabel(count: number) {
@@ -77,6 +86,287 @@ function formatPlatformLabel(platform: string | null) {
   }
 }
 
+function getYouTubeEmbedUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (hostname === "youtu.be") {
+      const videoId = url.pathname.split("/").filter(Boolean)[0];
+
+      if (!videoId) {
+        return null;
+      }
+
+      const embedUrl = new URL(`https://www.youtube.com/embed/${videoId}`);
+
+      for (const key of ["start", "list", "si"]) {
+        const value = url.searchParams.get(key);
+
+        if (value) {
+          embedUrl.searchParams.set(key, value);
+        }
+      }
+
+      return embedUrl.toString();
+    }
+
+    if (hostname === "youtube.com" || hostname.endsWith(".youtube.com")) {
+      if (url.pathname.startsWith("/embed/")) {
+        return url.toString();
+      }
+
+      if (url.pathname === "/playlist") {
+        const listId = url.searchParams.get("list");
+
+        if (!listId) {
+          return null;
+        }
+
+        const embedUrl = new URL("https://www.youtube.com/embed/videoseries");
+        embedUrl.searchParams.set("list", listId);
+
+        return embedUrl.toString();
+      }
+
+      const videoId = url.searchParams.get("v");
+
+      if (!videoId) {
+        const listId = url.searchParams.get("list");
+
+        if (!listId) {
+          return null;
+        }
+
+        const embedUrl = new URL("https://www.youtube.com/embed/videoseries");
+        embedUrl.searchParams.set("list", listId);
+
+        return embedUrl.toString();
+      }
+
+      const embedUrl = new URL(`https://www.youtube.com/embed/${videoId}`);
+
+      for (const key of ["start", "list", "si"]) {
+        const value = url.searchParams.get(key);
+
+        if (value) {
+          embedUrl.searchParams.set(key, value);
+        }
+      }
+
+      return embedUrl.toString();
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getYouTubeExternalUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+    let videoId: string | null = null;
+
+    if (hostname === "youtu.be") {
+      videoId = url.pathname.split("/").filter(Boolean)[0] ?? null;
+    } else if (hostname === "youtube.com" || hostname.endsWith(".youtube.com")) {
+      if (url.pathname === "/playlist") {
+        const listId = url.searchParams.get("list");
+
+        if (!listId) {
+          return rawUrl;
+        }
+
+        const externalUrl = new URL("https://www.youtube.com/playlist");
+        externalUrl.searchParams.set("list", listId);
+
+        return externalUrl.toString();
+      }
+
+      if (url.pathname.startsWith("/embed/")) {
+        videoId = url.pathname.split("/").filter(Boolean)[1] ?? null;
+      } else {
+        videoId = url.searchParams.get("v");
+      }
+    }
+
+    if (!videoId) {
+      return rawUrl;
+    }
+
+    const externalUrl = new URL("https://www.youtube.com/watch");
+    externalUrl.searchParams.set("v", videoId);
+
+    for (const key of ["start", "list", "si"]) {
+      const value = url.searchParams.get(key);
+
+      if (value) {
+        externalUrl.searchParams.set(key, value);
+      }
+    }
+
+    return externalUrl.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+function getInstagramEmbedUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (hostname !== "instagram.com" && !hostname.endsWith(".instagram.com")) {
+      return null;
+    }
+
+    const segments = url.pathname.split("/").filter(Boolean);
+    const contentType = segments[0];
+    const contentId = segments[1];
+    const normalizedContentType =
+      contentType === "reels" ? "reel" : contentType;
+
+    if (
+      !normalizedContentType ||
+      !contentId ||
+      !["p", "reel", "tv"].includes(normalizedContentType)
+    ) {
+      return null;
+    }
+
+    return `https://www.instagram.com/${normalizedContentType}/${contentId}/embed`;
+  } catch {
+    return null;
+  }
+}
+
+function getInstagramExternalUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (hostname !== "instagram.com" && !hostname.endsWith(".instagram.com")) {
+      return rawUrl;
+    }
+
+    const segments = url.pathname.split("/").filter(Boolean);
+    const contentType = segments[0];
+    const contentId = segments[1];
+    const normalizedContentType =
+      contentType === "reels" ? "reel" : contentType;
+
+    if (
+      !normalizedContentType ||
+      !contentId ||
+      !["p", "reel", "tv"].includes(normalizedContentType)
+    ) {
+      return rawUrl;
+    }
+
+    return `https://www.instagram.com/${normalizedContentType}/${contentId}/`;
+  } catch {
+    return rawUrl;
+  }
+}
+
+function getVimeoEmbedUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (hostname !== "vimeo.com" && hostname !== "player.vimeo.com") {
+      return null;
+    }
+
+    if (hostname === "player.vimeo.com" && url.pathname.startsWith("/video/")) {
+      return url.toString();
+    }
+
+    const videoId = url.pathname.split("/").filter(Boolean)[0];
+
+    if (!videoId || !/^\d+$/.test(videoId)) {
+      return null;
+    }
+
+    const embedUrl = new URL(`https://player.vimeo.com/video/${videoId}`);
+
+    for (const [key, value] of url.searchParams.entries()) {
+      embedUrl.searchParams.set(key, value);
+    }
+
+    return embedUrl.toString();
+  } catch {
+    return null;
+  }
+}
+
+function getVimeoExternalUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (hostname === "player.vimeo.com" && url.pathname.startsWith("/video/")) {
+      const videoId = url.pathname.split("/").filter(Boolean)[1];
+
+      if (!videoId) {
+        return rawUrl;
+      }
+
+      return `https://vimeo.com/${videoId}`;
+    }
+
+    return rawUrl;
+  } catch {
+    return rawUrl;
+  }
+}
+
+function getGuitarVideoDescriptor(
+  rawUrl: string,
+  title: string,
+  subtitle: string,
+): SelectedGuitarVideo | null {
+  const youTubeEmbedUrl = getYouTubeEmbedUrl(rawUrl);
+
+  if (youTubeEmbedUrl) {
+    return {
+      title,
+      subtitle,
+      externalUrl: getYouTubeExternalUrl(rawUrl),
+      embedUrl: youTubeEmbedUrl,
+      platform: "youtube",
+    };
+  }
+
+  const instagramEmbedUrl = getInstagramEmbedUrl(rawUrl);
+
+  if (instagramEmbedUrl) {
+    return {
+      title,
+      subtitle,
+      externalUrl: getInstagramExternalUrl(rawUrl),
+      embedUrl: instagramEmbedUrl,
+      platform: "instagram",
+    };
+  }
+
+  const vimeoEmbedUrl = getVimeoEmbedUrl(rawUrl);
+
+  if (vimeoEmbedUrl) {
+    return {
+      title,
+      subtitle,
+      externalUrl: getVimeoExternalUrl(rawUrl),
+      embedUrl: vimeoEmbedUrl,
+      platform: "vimeo",
+    };
+  }
+
+  return null;
+}
+
 export function GuitarViewer({
   videos,
   topics,
@@ -94,8 +384,16 @@ export function GuitarViewer({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [isClient, setIsClient] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<SelectedGuitarVideo | null>(
+    null,
+  );
   const [selectedGroup, setSelectedGroup] = useState(groupValue);
   const [selectedTopic, setSelectedTopic] = useState(topicValue);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     setSelectedGroup(groupValue);
@@ -109,6 +407,7 @@ export function GuitarViewer({
     ? topicOptions.filter((option) => option.groupId === selectedGroup)
     : [];
   const activeTopic = topics.find((topic) => topic.id === selectedTopic) ?? null;
+  const closeVideoViewer = () => setSelectedVideo(null);
 
   function applySelection({
     nextGroupValue,
@@ -176,6 +475,38 @@ export function GuitarViewer({
       nextTopicValue: "",
     });
   }
+
+  function openVideoViewer(rawUrl: string, title: string, subtitle: string) {
+    const descriptor = getGuitarVideoDescriptor(rawUrl, title, subtitle);
+
+    if (!descriptor) {
+      window.open(rawUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    setSelectedVideo(descriptor);
+  }
+
+  useEffect(() => {
+    if (selectedVideo === null) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeVideoViewer();
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [selectedVideo]);
 
   return (
     <section className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/6 px-6 py-8 shadow-[0_32px_90px_rgba(15,23,42,0.25)] backdrop-blur md:px-10 md:py-10">
@@ -269,11 +600,18 @@ export function GuitarViewer({
                           className="absolute right-4 top-4 z-10"
                         />
 
-                        <a
-                          href={video.link}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block"
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openVideoViewer(
+                              video.link,
+                              video.title,
+                              platformLabel
+                                ? `${platformLabel} · vídeo general`
+                                : "Vídeo general",
+                            )
+                          }
+                          className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-inset"
                         >
                           <div className="relative aspect-[4/3] overflow-hidden bg-slate-900">
                             {video.imageSrc ? (
@@ -291,7 +629,7 @@ export function GuitarViewer({
                               </div>
                             )}
                           </div>
-                        </a>
+                        </button>
 
                         <div className="flex flex-1 flex-col gap-4 p-5">
                           <div className="flex flex-wrap gap-2">
@@ -314,14 +652,21 @@ export function GuitarViewer({
                           </div>
 
                           <div className="mt-auto flex flex-wrap gap-3 pt-1">
-                            <a
-                              href={video.link}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openVideoViewer(
+                                  video.link,
+                                  video.title,
+                                  platformLabel
+                                    ? `${platformLabel} · vídeo general`
+                                    : "Vídeo general",
+                                )
+                              }
                               className="rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
                             >
                               Ver vídeo
-                            </a>
+                            </button>
 
                             {video.info ? (
                               <a
@@ -480,11 +825,18 @@ export function GuitarViewer({
                               className="absolute right-4 top-4 z-10"
                             />
 
-                            <a
-                              href={video.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block"
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openVideoViewer(
+                                  video.link,
+                                  video.topicName,
+                                  video.platform
+                                    ? `${video.title} · ${video.platform}`
+                                    : video.title,
+                                )
+                              }
+                              className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-inset"
                             >
                               <div className="relative flex aspect-[4/3] items-end overflow-hidden border-b border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.28),transparent_55%),linear-gradient(180deg,rgba(14,116,144,0.22),rgba(2,6,23,0.98))] p-5">
                                 <div className="relative space-y-3">
@@ -501,7 +853,7 @@ export function GuitarViewer({
                                   </div>
                                 </div>
                               </div>
-                            </a>
+                            </button>
 
                             <div className="flex flex-1 flex-col gap-4 p-5">
                               <div className="flex flex-wrap gap-2">
@@ -526,14 +878,21 @@ export function GuitarViewer({
                               </div>
 
                               <div className="mt-auto flex flex-wrap gap-3 pt-1">
-                                <a
-                                  href={video.link}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openVideoViewer(
+                                      video.link,
+                                      video.topicName,
+                                      video.platform
+                                        ? `${video.title} · ${video.platform}`
+                                        : video.title,
+                                    )
+                                  }
                                   className="rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
                                 >
                                   Ver vídeo
-                                </a>
+                                </button>
                               </div>
                             </div>
                           </article>
@@ -551,6 +910,83 @@ export function GuitarViewer({
           </>
         )}
       </div>
+
+      {isClient && selectedVideo
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[100] bg-slate-950/92 backdrop-blur-sm"
+              role="dialog"
+              aria-modal="true"
+            >
+              <button
+                type="button"
+                aria-label="Cerrar visor de video"
+                className="absolute inset-0 cursor-default"
+                onClick={closeVideoViewer}
+              />
+
+              <div className="relative z-10 h-full overflow-y-auto px-4 py-6">
+                <div className="mx-auto flex min-h-full w-full max-w-6xl items-start justify-center">
+                  <div className="flex w-full flex-col gap-4">
+                    <div className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-white">
+                          {selectedVideo.title}
+                        </p>
+                        <p className="truncate text-xs uppercase tracking-[0.24em] text-slate-400">
+                          {selectedVideo.subtitle} ·{" "}
+                          {selectedVideo.platform === "youtube"
+                            ? "YouTube"
+                            : selectedVideo.platform === "instagram"
+                              ? "Instagram"
+                              : "Vimeo"}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={selectedVideo.externalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
+                        >
+                          Abrir fuera
+                        </a>
+                        <button
+                          type="button"
+                          onClick={closeVideoViewer}
+                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+                      <div
+                        className={
+                          selectedVideo.platform === "instagram"
+                            ? "mx-auto h-[min(75vh,760px)] min-h-[540px] w-full max-w-[420px]"
+                            : "w-full aspect-video h-auto max-h-[calc(100vh-13rem)] min-h-[320px]"
+                        }
+                      >
+                        <iframe
+                          key={selectedVideo.embedUrl}
+                          src={selectedVideo.embedUrl}
+                          title={selectedVideo.title}
+                          className="h-full w-full border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </section>
   );
 }

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { ShareCardButton } from "@/components/share-card-button";
 import type {
@@ -186,12 +187,18 @@ function getInstagramEmbedUrl(rawUrl: string) {
     const segments = url.pathname.split("/").filter(Boolean);
     const contentType = segments[0];
     const contentId = segments[1];
+    const normalizedContentType =
+      contentType === "reels" ? "reel" : contentType;
 
-    if (!contentType || !contentId || !["p", "reel", "tv"].includes(contentType)) {
+    if (
+      !normalizedContentType ||
+      !contentId ||
+      !["p", "reel", "tv"].includes(normalizedContentType)
+    ) {
       return null;
     }
 
-    return `https://www.instagram.com/${contentType}/${contentId}/embed`;
+    return `https://www.instagram.com/${normalizedContentType}/${contentId}/embed`;
   } catch {
     return null;
   }
@@ -209,12 +216,18 @@ function getInstagramExternalUrl(rawUrl: string) {
     const segments = url.pathname.split("/").filter(Boolean);
     const contentType = segments[0];
     const contentId = segments[1];
+    const normalizedContentType =
+      contentType === "reels" ? "reel" : contentType;
 
-    if (!contentType || !contentId || !["p", "reel", "tv"].includes(contentType)) {
+    if (
+      !normalizedContentType ||
+      !contentId ||
+      !["p", "reel", "tv"].includes(normalizedContentType)
+    ) {
       return rawUrl;
     }
 
-    return `https://www.instagram.com/${contentType}/${contentId}/`;
+    return `https://www.instagram.com/${normalizedContentType}/${contentId}/`;
   } catch {
     return rawUrl;
   }
@@ -268,6 +281,7 @@ export function ConcertsViewer({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isClient, setIsClient] = useState(false);
   const [gridDensity, setGridDensity] = useState<ConcertGridDensity>(() => {
     if (typeof window === "undefined") {
       return "default";
@@ -311,6 +325,10 @@ export function ConcertsViewer({
 
   const closeVideoViewer = () => setSelectedVideo(null);
   const closePhotoViewer = () => setSelectedPhotoViewer(null);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const applyFilters = (
     nextFilterValue: string,
@@ -919,71 +937,80 @@ export function ConcertsViewer({
         ) : null}
       </div>
 
-      {selectedVideo ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/92 px-4 py-8 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <button
-            type="button"
-            aria-label="Cerrar visor de video"
-            className="absolute inset-0 cursor-default"
-            onClick={closeVideoViewer}
-          />
+      {isClient && selectedVideo
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[100] bg-slate-950/92 backdrop-blur-sm"
+              role="dialog"
+              aria-modal="true"
+            >
+              <button
+                type="button"
+                aria-label="Cerrar visor de video"
+                className="absolute inset-0 cursor-default"
+                onClick={closeVideoViewer}
+              />
 
-          <div className="relative z-10 flex w-full max-w-6xl flex-col gap-4">
-            <div className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 md:flex-row md:items-center md:justify-between">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-white">
-                  {selectedVideo.concertName}
-                </p>
-                <p className="truncate text-xs uppercase tracking-[0.24em] text-slate-400">
-                  {selectedVideo.label} ·{" "}
-                  {selectedVideo.platform === "youtube" ? "YouTube" : "Instagram"}
-                </p>
-              </div>
+              <div className="relative z-10 h-full overflow-y-auto px-4 py-6">
+                <div className="mx-auto flex min-h-full w-full max-w-6xl items-start justify-center">
+                  <div className="flex w-full flex-col gap-4">
+                    <div className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-white">
+                          {selectedVideo.concertName}
+                        </p>
+                        <p className="truncate text-xs uppercase tracking-[0.24em] text-slate-400">
+                          {selectedVideo.label} ·{" "}
+                          {selectedVideo.platform === "youtube"
+                            ? "YouTube"
+                            : "Instagram"}
+                        </p>
+                      </div>
 
-              <div className="flex items-center gap-3">
-                <a
-                  href={selectedVideo.externalUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
-                >
-                  Abrir fuera
-                </a>
-                <button
-                  type="button"
-                  onClick={closeVideoViewer}
-                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={selectedVideo.externalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/50 hover:text-white"
+                        >
+                          Abrir fuera
+                        </a>
+                        <button
+                          type="button"
+                          onClick={closeVideoViewer}
+                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                    </div>
 
-            <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-              <div
-                className={
-                  selectedVideo.platform === "instagram"
-                    ? "mx-auto aspect-[9/16] min-h-[70vh] w-full max-w-[420px]"
-                    : "aspect-video min-h-[60vh] w-full"
-                }
-              >
-                <iframe
-                  key={selectedVideo.embedUrl}
-                  src={selectedVideo.embedUrl}
-                  title={`${selectedVideo.concertName} ${selectedVideo.label}`}
-                  className="h-full w-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                />
+                    <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+                      <div
+                        className={
+                          selectedVideo.platform === "instagram"
+                            ? "mx-auto h-[min(75vh,760px)] min-h-[540px] w-full max-w-[420px]"
+                            : "w-full aspect-video h-auto max-h-[calc(100vh-13rem)] min-h-[320px]"
+                        }
+                      >
+                        <iframe
+                          key={selectedVideo.embedUrl}
+                          src={selectedVideo.embedUrl}
+                          title={`${selectedVideo.concertName} ${selectedVideo.label}`}
+                          className="h-full w-full border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
 
       {selectedPhotoViewer && selectedConcertPhoto ? (
         <div
