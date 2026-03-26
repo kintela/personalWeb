@@ -527,6 +527,17 @@ export function ConcertsViewer({
               <GridDensityIcon active={gridDensity === "dense"} columns={6} />
             </button>
 
+            <ShareCardButton
+              anchorId="conciertos"
+              queryKeys={[
+                "concertFilter",
+                "concertYear",
+                "concertCity",
+                "concertGroup",
+              ]}
+              className="shrink-0"
+            />
+
             <div className="flex items-center gap-3 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-slate-200">
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
               <span>{totalCount} conciertos cargados</span>

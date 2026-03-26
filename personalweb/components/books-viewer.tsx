@@ -148,9 +148,16 @@ export function BooksViewer({
             </div>
           </div>
 
-          <div className="inline-flex w-fit items-center gap-3 rounded-full border border-white/10 bg-slate-950/55 px-5 py-3 text-sm text-slate-200">
-            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
-            <span>{totalCount} libros cargados</span>
+          <div className="flex items-center gap-3 self-start lg:self-auto">
+            <ShareCardButton
+              anchorId="libros"
+              queryKeys={["bookFilter", "bookCategory", "bookProtagonist"]}
+              className="shrink-0"
+            />
+            <div className="inline-flex w-fit items-center gap-3 rounded-full border border-white/10 bg-slate-950/55 px-5 py-3 text-sm text-slate-200">
+              <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
+              <span>{totalCount} libros cargados</span>
+            </div>
           </div>
         </div>
 
