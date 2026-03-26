@@ -26,6 +26,19 @@ function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
 }
 
+function PlayIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className="h-4 w-4 translate-x-[1px]"
+    >
+      <path d="M8 6.5v11l9-5.5-9-5.5Z" />
+    </svg>
+  );
+}
+
 const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
 
 export function SpotifyViewer({
@@ -305,9 +318,11 @@ export function SpotifyViewer({
                           href={playlist.externalUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="rounded-full border border-emerald-300/35 bg-emerald-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-300/65 hover:bg-emerald-300/18 hover:text-white"
+                          aria-label={`Escuchar ${playlist.name} en Spotify`}
+                          title={`Escuchar ${playlist.name} en Spotify`}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-300/12 text-emerald-100 transition hover:border-emerald-300/65 hover:bg-emerald-300/18 hover:text-white"
                         >
-                          Escuchar
+                          <PlayIcon />
                         </a>
                       </div>
 
