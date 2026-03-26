@@ -31,9 +31,11 @@ function GridDensityIcon({
 }
 
 export function usePersistedGridDensity(storageKey: string) {
-  const [gridDensity, setGridDensity] = useState<GridDensity>("default");
+  const [gridDensity, setGridDensity] = useState<GridDensity>(() => {
+    if (typeof window === "undefined") {
+      return "default";
+    }
 
-  useEffect(() => {
     const savedValue = window.localStorage.getItem(storageKey) as
       | GridDensity
       | null;
@@ -43,9 +45,11 @@ export function usePersistedGridDensity(storageKey: string) {
       savedValue === "dense" ||
       savedValue === "default"
     ) {
-      setGridDensity(savedValue);
+      return savedValue;
     }
-  }, [storageKey]);
+
+    return "default";
+  });
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, gridDensity);

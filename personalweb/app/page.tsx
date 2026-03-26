@@ -120,6 +120,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
   ).trim();
   const guitarGroupValue = getSingleValue(searchParams.guitarGroup).trim();
   const guitarThemeValue = getSingleValue(searchParams.guitarTheme).trim();
+  const spotifyFilterValue = getSingleValue(searchParams.spotifyFilter).trim();
   const videoFilterValue = getSingleValue(searchParams.videoFilter).trim();
   const videoCategoryValue = getSingleValue(searchParams.videoCategory).trim();
   const videoPlatformValue = getSingleValue(searchParams.videoPlatform).trim();
@@ -327,6 +328,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
             accountName={spotifyPlaylists.accountName}
             loginHref={spotifyPlaylists.loginHref}
             callbackPath={spotifyPlaylists.callbackPath}
+            filterValue={spotifyFilterValue}
           />
         </div>
 

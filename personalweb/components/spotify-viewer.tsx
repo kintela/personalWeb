@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { startTransition, useEffect, useEffectEvent, useState } from "react";
 
 import {
   GridDensityControls,
@@ -17,6 +19,7 @@ type SpotifyViewerProps = {
   accountName: string | null;
   loginHref: string;
   callbackPath: string;
+  filterValue: string;
 };
 
 function getPlaylistCountLabel(count: number) {
@@ -33,16 +36,73 @@ export function SpotifyViewer({
   accountName,
   loginHref,
   callbackPath,
+  filterValue,
 }: SpotifyViewerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
     SPOTIFY_VIEWER_GRID_STORAGE_KEY,
   );
+  const [filterInput, setFilterInput] = useState(filterValue);
   const gridClassName =
     gridDensity === "dense"
       ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
       : gridDensity === "compact"
         ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         : "grid gap-5 xl:grid-cols-2 2xl:grid-cols-3";
+  const normalizedFilterValue = filterInput.trim().toLocaleLowerCase("es-ES");
+  const filteredPlaylists = normalizedFilterValue
+    ? playlists.filter((playlist) => {
+        const haystack = [playlist.name, playlist.description]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("es-ES");
+
+        return haystack.includes(normalizedFilterValue);
+      })
+    : playlists;
+
+  const applyFilter = useEffectEvent((nextFilterValue: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    const normalizedValue = nextFilterValue.trim();
+
+    if (normalizedValue) {
+      params.set("spotifyFilter", normalizedValue);
+    } else {
+      params.delete("spotifyFilter");
+    }
+
+    startTransition(() => {
+      router.replace(
+        params.toString() ? `${pathname}?${params.toString()}` : pathname,
+        { scroll: false },
+      );
+    });
+  });
+
+  useEffect(() => {
+    setFilterInput(filterValue);
+  }, [filterValue]);
+
+  useEffect(() => {
+    const currentValue = filterValue.trim();
+    const nextValue = filterInput.trim();
+
+    if (currentValue === nextValue) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      applyFilter(filterInput);
+    }, 180);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [filterInput, filterValue]);
+
+  function handleReset() {
+    setFilterInput("");
+  }
 
   return (
     <section className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/6 px-6 py-8 shadow-[0_32px_90px_rgba(15,23,42,0.25)] backdrop-blur md:px-10 md:py-10">
@@ -60,12 +120,16 @@ export function SpotifyViewer({
           </div>
 
           <div className="flex items-center gap-3 self-start lg:self-auto">
-            <ShareCardButton anchorId="spotify" className="shrink-0" />
+            <ShareCardButton
+              anchorId="spotify"
+              queryKeys={["spotifyFilter"]}
+              className="shrink-0"
+            />
             <div className="inline-flex w-fit items-center gap-3 rounded-full border border-white/10 bg-slate-950/55 px-5 py-3 text-sm text-slate-200">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
               <span>
                 {configured && connected
-                  ? `${getPlaylistCountLabel(playlists.length)}${accountName ? ` de ${accountName}` : ""}`
+                  ? `${getPlaylistCountLabel(filteredPlaylists.length)}${accountName ? ` de ${accountName}` : ""}`
                   : "Integración lista para conectar"}
               </span>
             </div>
@@ -147,7 +211,43 @@ export function SpotifyViewer({
               </div>
             ) : null}
 
-            <div className="flex justify-end">
+            <div className="rounded-[2rem] border border-white/10 bg-slate-950/35 p-5">
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-[0.38em] text-slate-300">
+                    Filtro
+                  </p>
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+                    <input
+                      type="search"
+                      value={filterInput}
+                      onChange={(event) => setFilterInput(event.target.value)}
+                      placeholder="Buscar por nombre o descripción..."
+                      className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/70"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="rounded-2xl border border-white/12 bg-black/20 px-6 py-4 text-base text-slate-100 transition hover:border-white/25 hover:text-white"
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                </div>
+
+                {filterInput.trim() ? (
+                  <p className="text-sm text-slate-300">
+                    {filteredPlaylists.length} playlists encontradas para{" "}
+                    <span className="font-semibold text-white">
+                      {filterInput.trim()}
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
               <GridDensityControls
                 gridDensity={gridDensity}
                 setGridDensity={setGridDensity}
@@ -156,8 +256,13 @@ export function SpotifyViewer({
               />
             </div>
 
-            <div className={gridClassName}>
-              {playlists.map((playlist) => {
+            {filteredPlaylists.length === 0 ? (
+              <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/35 px-5 py-10 text-sm text-slate-300">
+                No hay playlists que coincidan con ese filtro.
+              </div>
+            ) : (
+              <div className={gridClassName}>
+                {filteredPlaylists.map((playlist) => {
                 const anchorId = `spotify-playlist-${playlist.id}`;
 
                 return (
@@ -169,6 +274,7 @@ export function SpotifyViewer({
                     <ShareCardButton
                       anchorId={anchorId}
                       sectionId="spotify"
+                      queryKeys={["spotifyFilter"]}
                       className="absolute right-4 top-4 z-10"
                     />
 
@@ -220,8 +326,9 @@ export function SpotifyViewer({
                     </div>
                   </article>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            )}
           </>
         )}
       </div>

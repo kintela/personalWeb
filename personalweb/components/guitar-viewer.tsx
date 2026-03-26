@@ -6,6 +6,10 @@ import type { ChangeEvent } from "react";
 import { startTransition, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+import {
+  GridDensityControls,
+  usePersistedGridDensity,
+} from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
 import type {
   GuitarTopicAsset,
@@ -36,6 +40,8 @@ type SelectedGuitarVideo = {
   embedUrl: string;
   platform: "youtube" | "instagram" | "vimeo";
 };
+
+const GUITAR_VIEWER_GRID_STORAGE_KEY = "guitar-viewer-grid-density";
 
 function getTopicCountLabel(count: number) {
   return `${count} tema${count === 1 ? "" : "s"}`;
@@ -390,6 +396,9 @@ export function GuitarViewer({
   );
   const [selectedGroup, setSelectedGroup] = useState(groupValue);
   const [selectedTopic, setSelectedTopic] = useState(topicValue);
+  const [gridDensity, setGridDensity] = usePersistedGridDensity(
+    GUITAR_VIEWER_GRID_STORAGE_KEY,
+  );
 
   useEffect(() => {
     setIsClient(true);
@@ -408,6 +417,12 @@ export function GuitarViewer({
     : [];
   const activeTopic = topics.find((topic) => topic.id === selectedTopic) ?? null;
   const activeTopicAnchorId = activeTopic ? `guitarra-tema-${activeTopic.id}` : "";
+  const gridClassName =
+    gridDensity === "dense"
+      ? "grid gap-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6"
+      : gridDensity === "compact"
+        ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+        : "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
   const closeVideoViewer = () => setSelectedVideo(null);
 
   function applySelection({
@@ -528,7 +543,7 @@ export function GuitarViewer({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 self-start lg:self-auto">
+          <div className="flex flex-wrap items-center gap-3 self-start lg:self-auto lg:justify-end">
             <ShareCardButton
               anchorId="guitarra"
               queryKeys={["guitarGroup", "guitarTheme"]}
@@ -542,6 +557,12 @@ export function GuitarViewer({
                 {getVideoCountLabel(totalVideoCount)} en temas
               </span>
             </div>
+            <GridDensityControls
+              gridDensity={gridDensity}
+              setGridDensity={setGridDensity}
+              compactTitle="Activar vista compacta de guitarra"
+              denseTitle="Activar vista densa de guitarra"
+            />
           </div>
         </div>
 
@@ -583,7 +604,7 @@ export function GuitarViewer({
                   </span>
                 </div>
 
-                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className={gridClassName}>
                   {videos.map((video) => {
                     const platformLabel = formatPlatformLabel(video.platform);
                     const anchorId = `guitarra-video-${video.id}`;
@@ -821,7 +842,7 @@ export function GuitarViewer({
                       Este tema todavía no tiene vídeos asociados.
                     </div>
                   ) : (
-                    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    <div className={gridClassName}>
                       {activeTopic.videos.map((video) => {
                         const anchorId = `guitarra-tema-video-${video.id}`;
 
