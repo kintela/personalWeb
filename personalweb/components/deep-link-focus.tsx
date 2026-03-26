@@ -22,6 +22,7 @@ const TARGET_SECTION_PREFIXES = [
   { prefix: "libro-", sectionId: "libros" },
   { prefix: "historia-video-", sectionId: "historia" },
   { prefix: "guitarra-video-", sectionId: "guitarra" },
+  { prefix: "guitarra-tema-", sectionId: "guitarra" },
   { prefix: "guitarra-tema-video-", sectionId: "guitarra" },
   { prefix: "video-", sectionId: "videos" },
 ] as const;

@@ -407,6 +407,7 @@ export function GuitarViewer({
     ? topicOptions.filter((option) => option.groupId === selectedGroup)
     : [];
   const activeTopic = topics.find((topic) => topic.id === selectedTopic) ?? null;
+  const activeTopicAnchorId = activeTopic ? `guitarra-tema-${activeTopic.id}` : "";
   const closeVideoViewer = () => setSelectedVideo(null);
 
   function applySelection({
@@ -761,16 +762,28 @@ export function GuitarViewer({
                         </div>
                       </div>
 
-                      <div className="rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4 text-sm text-slate-300">
+                      <div
+                        id={activeTopicAnchorId || undefined}
+                        className="rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4 text-sm text-slate-300 scroll-mt-32"
+                      >
                         {activeTopic ? (
                           <div className="space-y-3">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-cyan-100">
-                                {activeTopic.groupName}
-                              </span>
-                              <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
-                                {getVideoCountLabel(activeTopic.videos.length)}
-                              </span>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-cyan-100">
+                                  {activeTopic.groupName}
+                                </span>
+                                <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
+                                  {getVideoCountLabel(activeTopic.videos.length)}
+                                </span>
+                              </div>
+
+                              <ShareCardButton
+                                anchorId={activeTopicAnchorId}
+                                sectionId="guitarra"
+                                queryKeys={["guitarGroup", "guitarTheme"]}
+                                className="shrink-0"
+                              />
                             </div>
                             <div className="space-y-2">
                               <h3 className="text-xl font-semibold text-white">
