@@ -34,7 +34,7 @@ const SECTION_SHORTCUTS = [
   {
     href: "#fotos",
     label: "Fotos",
-    eyebrow: "Photo Viewer",
+    eyebrow: "PhotoTeka",
   },
   {
     href: "#conciertos",
