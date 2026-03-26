@@ -15,13 +15,10 @@ import {
 import { getCdList } from "@/lib/supabase/cds";
 import { getBookList } from "@/lib/supabase/books";
 import { getConcertList } from "@/lib/supabase/concerts";
+import { getGuitarTopicList } from "@/lib/supabase/guitar-topics";
 import { getPhotoGallery } from "@/lib/supabase/photos";
 import { getViniloList } from "@/lib/supabase/vinilos";
-import {
-  getGuitarVideoList,
-  getHistoryVideoList,
-  getVideoList,
-} from "@/lib/supabase/videos";
+import { getHistoryVideoList, getVideoList } from "@/lib/supabase/videos";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +107,8 @@ export default async function Home(props: { searchParams: SearchParams }) {
   const bookProtagonistValue = getSingleValue(
     searchParams.bookProtagonist,
   ).trim();
+  const guitarGroupValue = getSingleValue(searchParams.guitarGroup).trim();
+  const guitarThemeValue = getSingleValue(searchParams.guitarTheme).trim();
   const videoFilterValue = getSingleValue(searchParams.videoFilter).trim();
   const videoCategoryValue = getSingleValue(searchParams.videoCategory).trim();
   const videoPlatformValue = getSingleValue(searchParams.videoPlatform).trim();
@@ -120,7 +119,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
     vinilos,
     books,
     historyVideos,
-    guitarVideos,
+    guitarTopics,
     videos,
     isUploaderUnlocked,
   ] = await Promise.all([
@@ -149,7 +148,10 @@ export default async function Home(props: { searchParams: SearchParams }) {
         protagonistValue: bookProtagonistValue,
       }),
       getHistoryVideoList(),
-      getGuitarVideoList(),
+      getGuitarTopicList({
+        groupValue: guitarGroupValue,
+        topicValue: guitarThemeValue,
+      }),
       getVideoList({
         filterValue: videoFilterValue,
         categoryValue: videoCategoryValue,
@@ -285,10 +287,16 @@ export default async function Home(props: { searchParams: SearchParams }) {
 
         <div id="guitarra" className="scroll-mt-32">
           <GuitarViewer
-            videos={guitarVideos.videos}
-            configured={guitarVideos.configured}
-            error={guitarVideos.error}
-            totalCount={guitarVideos.totalCount}
+            topics={guitarTopics.topics}
+            configured={guitarTopics.configured}
+            error={guitarTopics.error}
+            totalVideoCount={guitarTopics.totalVideoCount}
+            totalTopicCount={guitarTopics.totalTopicCount}
+            totalGroupCount={guitarTopics.totalGroupCount}
+            groupValue={guitarTopics.groupValue}
+            topicValue={guitarTopics.topicValue}
+            groupOptions={guitarTopics.groupOptions}
+            topicOptions={guitarTopics.topicOptions}
           />
         </div>
 
