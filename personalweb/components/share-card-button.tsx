@@ -88,8 +88,7 @@ export function ShareCardButton({
     }
 
     const query = params.toString();
-    const shareTarget = sectionId ?? anchorId;
-    const shareUrl = `${window.location.origin}${pathname}${query ? `?${query}` : ""}#${shareTarget}`;
+    const shareUrl = `${window.location.origin}${pathname}${query ? `?${query}` : ""}#${encodeURIComponent(anchorId)}`;
 
     try {
       await navigator.clipboard.writeText(shareUrl);

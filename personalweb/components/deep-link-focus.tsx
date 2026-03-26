@@ -60,15 +60,27 @@ export function DeepLinkFocus() {
   useEffect(() => {
     let animationFrameId = 0;
     let clearHighlightTimeoutId = 0;
+    const settleTimeoutIds: number[] = [];
     let attempts = 0;
     let highlightedElement: HTMLElement | null = null;
+    let didScheduleSettling = false;
 
     const hashTarget = getHashTarget();
     const targetId = focusTargetId ?? hashTarget;
-    const sectionId = getSectionIdFromTarget(hashTarget ?? focusTargetId);
+    const sectionId = getSectionIdFromTarget(focusTargetId ?? hashTarget);
 
     if (!targetId) {
       return;
+    }
+
+    if (focusTargetId && hashTarget !== focusTargetId) {
+      const nextHash = `#${encodeURIComponent(focusTargetId)}`;
+
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${window.location.search}${nextHash}`,
+      );
     }
 
     const highlightTarget = (element: HTMLElement) => {
@@ -90,17 +102,43 @@ export function DeepLinkFocus() {
       }, 2200);
     };
 
-    const scrollToTarget = () => {
-      attempts += 1;
+    const scheduleSettling = () => {
+      if (didScheduleSettling) {
+        return;
+      }
+
+      didScheduleSettling = true;
+
+      for (const delay of [160, 420, 900, 1600]) {
+        settleTimeoutIds.push(
+          window.setTimeout(() => {
+            const targetElement = document.getElementById(targetId);
+
+            if (!targetElement) {
+              return;
+            }
+
+            targetElement.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+            highlightTarget(targetElement);
+          }, delay),
+        );
+      }
+    };
+
+    const scrollToTarget = (behavior: ScrollBehavior) => {
       const targetElement = document.getElementById(targetId);
 
       if (targetElement) {
         targetElement.scrollIntoView({
-          behavior: attempts === 1 ? "auto" : "smooth",
-          block: "center",
+          behavior,
+          block: "start",
         });
         highlightTarget(targetElement);
-        return;
+        scheduleSettling();
+        return true;
       }
 
       if (attempts === 1 && sectionId) {
@@ -110,16 +148,43 @@ export function DeepLinkFocus() {
         });
       }
 
-      if (attempts < 48) {
-        animationFrameId = window.requestAnimationFrame(scrollToTarget);
+      return false;
+    };
+
+    const retryScroll = () => {
+      attempts += 1;
+
+      if (scrollToTarget(attempts === 1 ? "auto" : "smooth")) {
+        return;
+      }
+
+      if (attempts < 120) {
+        animationFrameId = window.requestAnimationFrame(retryScroll);
       }
     };
 
-    animationFrameId = window.requestAnimationFrame(scrollToTarget);
+    const handlePageShow = () => {
+      settleTimeoutIds.push(
+        window.setTimeout(() => {
+          scrollToTarget("smooth");
+        }, 120),
+      );
+    };
+
+    animationFrameId = window.requestAnimationFrame(retryScroll);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("load", handlePageShow);
 
     return () => {
       window.cancelAnimationFrame(animationFrameId);
       window.clearTimeout(clearHighlightTimeoutId);
+
+      for (const timeoutId of settleTimeoutIds) {
+        window.clearTimeout(timeoutId);
+      }
+
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("load", handlePageShow);
 
       if (highlightedElement) {
         highlightedElement.style.boxShadow = "";
