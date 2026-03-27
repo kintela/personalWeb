@@ -9,6 +9,8 @@ const YOUTUBE_EMBED_BASE_URL = "https://www.youtube.com/embed";
 type SearchSongVideoInput = {
   trackName: string;
   artistsLabel: string;
+  albumName?: string | null;
+  albumReleaseYear?: string | null;
 };
 
 type YouTubeSearchResponse = {
@@ -73,22 +75,55 @@ type SearchCandidate = {
   viewCount: number;
 };
 
-const NEGATIVE_TITLE_HINTS = [
-  "cover",
-  "karaoke",
-  "reaction",
-  "tutorial",
-  "lesson",
-  "guitar lesson",
-  "drum cover",
-  "bass cover",
-  "live",
-  "slowed",
-  "sped up",
-  "8d audio",
-];
+const POSITIVE_TITLE_HINT_WEIGHTS = [
+  ["official music video", 72],
+  ["official video", 60],
+  ["official audio", 44],
+  ["music video", 26],
+  ["audio", 8],
+  ["official", 20],
+  ["hd", 4],
+  ["4k", 4],
+] as const;
 
-const POSITIVE_TITLE_HINTS = ["official", "music video", "topic", "audio"];
+const NEGATIVE_TITLE_HINT_WEIGHTS = [
+  ["playthrough", -130],
+  ["drum playthrough", -180],
+  ["guitar playthrough", -180],
+  ["bass playthrough", -180],
+  ["drum cover", -130],
+  ["guitar cover", -130],
+  ["bass cover", -130],
+  ["piano cover", -130],
+  ["instrumental", -55],
+  ["drum", -28],
+  ["guitar", -18],
+  ["bass", -18],
+  ["topic", -90],
+  ["remaster", -60],
+  ["remastered", -60],
+  ["mix", -55],
+  ["radio edit", -55],
+  ["edit", -32],
+  ["live", -30],
+  ["cover", -36],
+  ["karaoke", -42],
+  ["reaction", -38],
+  ["tutorial", -44],
+  ["lesson", -44],
+  ["lyrics", -26],
+  ["lyric video", -26],
+  ["slowed", -42],
+  ["sped up", -42],
+  ["8d audio", -42],
+] as const;
+
+const POSITIVE_CHANNEL_HINT_WEIGHTS = [
+  ["vevo", 80],
+  ["official", 16],
+] as const;
+
+const NEGATIVE_CHANNEL_HINT_WEIGHTS = [["topic", -120]] as const;
 
 function normalizeEnvValue(value: string | undefined | null) {
   return value?.trim() ?? "";
@@ -130,7 +165,7 @@ function getSearchQuery({ trackName, artistsLabel }: SearchSongVideoInput) {
   const cleanedTrackName = cleanTrackNameForSearch(trackName);
   const cleanedArtistsLabel = compactWhitespace(artistsLabel.replaceAll("·", " "));
 
-  return compactWhitespace(`${cleanedArtistsLabel} ${cleanedTrackName}`);
+  return compactWhitespace(`${cleanedArtistsLabel} "${cleanedTrackName}"`);
 }
 
 function getThumbnailUrl(candidate: {
@@ -183,15 +218,37 @@ function getVideoScore(
 ) {
   const normalizedTitle = normalizeForComparison(candidate.title);
   const normalizedChannel = normalizeForComparison(candidate.channelTitle);
+  const normalizedDescription = normalizeForComparison(candidate.description ?? "");
   const cleanedTrackName = cleanTrackNameForSearch(input.trackName);
   const normalizedTrackName = normalizeForComparison(cleanedTrackName);
   const normalizedArtists = normalizeForComparison(input.artistsLabel);
+  const normalizedAlbumName = normalizeForComparison(input.albumName ?? "");
+  const normalizedAlbumReleaseYear = normalizeForComparison(
+    input.albumReleaseYear ?? "",
+  );
   const trackTokens = tokenize(cleanedTrackName);
   const artistTokens = tokenize(input.artistsLabel);
+  const titleTrackMatches = trackTokens.filter((token) =>
+    normalizedTitle.includes(token),
+  );
+  const descriptionTrackMatches = trackTokens.filter((token) =>
+    normalizedDescription.includes(token),
+  );
+  const titleTrackCoverage = trackTokens.length
+    ? titleTrackMatches.length / trackTokens.length
+    : 0;
+  const descriptionTrackCoverage = trackTokens.length
+    ? descriptionTrackMatches.length / trackTokens.length
+    : 0;
   let score = 0;
 
   if (normalizedTrackName && normalizedTitle.includes(normalizedTrackName)) {
-    score += 120;
+    score += 220;
+  } else if (
+    normalizedTrackName &&
+    normalizedDescription.includes(normalizedTrackName)
+  ) {
+    score += 48;
   }
 
   if (normalizedArtists && normalizedTitle.includes(normalizedArtists)) {
@@ -202,22 +259,74 @@ function getVideoScore(
     score += 35;
   }
 
-  score += trackTokens.filter((token) => normalizedTitle.includes(token)).length * 12;
+  if (normalizedArtists && normalizedChannel === normalizedArtists) {
+    score += 140;
+  }
+
+  score += titleTrackMatches.length * 20;
+  score += descriptionTrackMatches.length * 4;
   score += artistTokens.filter((token) => normalizedTitle.includes(token)).length * 9;
 
   if (artistTokens.some((token) => normalizedChannel.includes(token))) {
     score += 18;
   }
 
-  for (const hint of POSITIVE_TITLE_HINTS) {
+  if (titleTrackCoverage === 1) {
+    score += 120;
+  } else if (titleTrackCoverage >= 0.75) {
+    score += 40;
+  } else if (titleTrackCoverage === 0 && descriptionTrackCoverage === 0) {
+    score -= 220;
+  } else if (titleTrackCoverage < 0.5) {
+    score -= 90;
+  }
+
+  if (
+    normalizedArtists &&
+    normalizedTrackName &&
+    normalizedTitle.includes(normalizedArtists) &&
+    normalizedTitle.includes(normalizedTrackName)
+  ) {
+    score += 40;
+  }
+
+  if (
+    normalizedAlbumName &&
+    (normalizedTitle.includes(normalizedAlbumName) ||
+      normalizedDescription.includes(normalizedAlbumName))
+  ) {
+    score += 10;
+  }
+
+  if (
+    normalizedAlbumReleaseYear &&
+    (normalizedTitle.includes(normalizedAlbumReleaseYear) ||
+      normalizedDescription.includes(normalizedAlbumReleaseYear))
+  ) {
+    score += 8;
+  }
+
+  for (const [hint, weight] of POSITIVE_TITLE_HINT_WEIGHTS) {
     if (normalizedTitle.includes(hint)) {
-      score += 8;
+      score += weight;
     }
   }
 
-  for (const hint of NEGATIVE_TITLE_HINTS) {
+  for (const [hint, weight] of NEGATIVE_TITLE_HINT_WEIGHTS) {
     if (normalizedTitle.includes(hint)) {
-      score -= 24;
+      score += weight;
+    }
+  }
+
+  for (const [hint, weight] of POSITIVE_CHANNEL_HINT_WEIGHTS) {
+    if (normalizedChannel.includes(hint)) {
+      score += weight;
+    }
+  }
+
+  for (const [hint, weight] of NEGATIVE_CHANNEL_HINT_WEIGHTS) {
+    if (normalizedChannel.includes(hint)) {
+      score += weight;
     }
   }
 
@@ -267,8 +376,8 @@ export async function searchYouTubeSongVideo(
       part: "snippet",
       type: "video",
       q: searchQuery,
-      maxResults: "10",
-      order: "viewCount",
+      maxResults: "15",
+      order: "relevance",
       videoEmbeddable: "true",
     }),
   );

@@ -143,6 +143,8 @@ export function YouTubeEmbeddedPlayer({
             playsinline: 1,
             rel: 0,
             modestbranding: 1,
+            cc_load_policy: 1,
+            cc_lang_pref: "es",
             origin: window.location.origin,
           },
           events: {

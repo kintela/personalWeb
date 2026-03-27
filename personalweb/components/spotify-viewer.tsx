@@ -383,6 +383,8 @@ export function SpotifyViewer({
         const query = new URLSearchParams({
           track: selectedTrack.name,
           artists: selectedTrack.artistsLabel,
+          album: selectedTrack.albumName ?? "",
+          year: selectedTrack.albumReleaseDate?.slice(0, 4) ?? "",
         });
         const response = await fetch(`/api/youtube/match?${query.toString()}`, {
           method: "GET",

@@ -7,6 +7,8 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const trackName = requestUrl.searchParams.get("track")?.trim() ?? "";
   const artistsLabel = requestUrl.searchParams.get("artists")?.trim() ?? "";
+  const albumName = requestUrl.searchParams.get("album")?.trim() ?? "";
+  const albumReleaseYear = requestUrl.searchParams.get("year")?.trim() ?? "";
 
   if (!trackName || !artistsLabel) {
     return NextResponse.json(
@@ -19,6 +21,8 @@ export async function GET(request: Request) {
     const video = await searchYouTubeSongVideo({
       trackName,
       artistsLabel,
+      albumName: albumName || null,
+      albumReleaseYear: albumReleaseYear || null,
     });
 
     return NextResponse.json({ video });
