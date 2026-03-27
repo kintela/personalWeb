@@ -133,6 +133,7 @@ export function SpotifyViewer({
   const [trackCache, setTrackCache] = useState<
     Record<string, SpotifyPlaylistTrackAsset[]>
   >({});
+  const [trackFilterInput, setTrackFilterInput] = useState("");
   const [selectedTrackId, setSelectedTrackId] = useState("");
   const [trackStatus, setTrackStatus] = useState<SpotifyTrackStatus>("idle");
   const [trackError, setTrackError] = useState<string | null>(null);
@@ -171,11 +172,29 @@ export function SpotifyViewer({
         return haystack.includes(normalizedFilterValue);
       })
     : playlists;
+  const normalizedTrackFilterValue = trackFilterInput
+    .trim()
+    .toLocaleLowerCase("es-ES");
+  const filteredPlaylistTracks = normalizedTrackFilterValue
+    ? playlistTracks.filter((track) => {
+        const haystack = [
+          track.name,
+          track.artistsLabel,
+          track.albumName,
+          track.albumReleaseDate ? track.albumReleaseDate.slice(0, 4) : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("es-ES");
+
+        return haystack.includes(normalizedTrackFilterValue);
+      })
+    : playlistTracks;
   const selectedPlaylist =
     playlists.find((playlist) => playlist.id === selectedPlaylistId) ?? null;
   const selectedTrack =
-    playlistTracks.find((track) => track.id === selectedTrackId) ??
-    playlistTracks[0] ??
+    filteredPlaylistTracks.find((track) => track.id === selectedTrackId) ??
+    filteredPlaylistTracks[0] ??
     null;
 
   const applyFilter = useEffectEvent((nextFilterValue: string) => {
@@ -317,7 +336,7 @@ export function SpotifyViewer({
   }, [selectedPlaylist, trackCache]);
 
   useEffect(() => {
-    if (playlistTracks.length === 0) {
+    if (filteredPlaylistTracks.length === 0) {
       setSelectedTrackId("");
       return;
     }
@@ -325,14 +344,14 @@ export function SpotifyViewer({
     setSelectedTrackId((currentTrackId) => {
       if (
         currentTrackId &&
-        playlistTracks.some((track) => track.id === currentTrackId)
+        filteredPlaylistTracks.some((track) => track.id === currentTrackId)
       ) {
         return currentTrackId;
       }
 
-      return playlistTracks[0]?.id ?? "";
+      return filteredPlaylistTracks[0]?.id ?? "";
     });
-  }, [playlistTracks]);
+  }, [filteredPlaylistTracks]);
 
   useEffect(() => {
     if (!selectedTrack) {
@@ -413,15 +432,16 @@ export function SpotifyViewer({
 
   function handleOpenPlaylistViewer(playlistId: string) {
     setSelectedPlaylistId(playlistId);
+    setTrackFilterInput("");
   }
 
   function handleAdvanceToNextTrack() {
     setSelectedTrackId((currentTrackId) => {
-      if (!currentTrackId || playlistTracks.length === 0) {
+      if (!currentTrackId || filteredPlaylistTracks.length === 0) {
         return currentTrackId;
       }
 
-      const currentTrackIndex = playlistTracks.findIndex(
+      const currentTrackIndex = filteredPlaylistTracks.findIndex(
         (track) => track.id === currentTrackId,
       );
 
@@ -429,7 +449,7 @@ export function SpotifyViewer({
         return currentTrackId;
       }
 
-      const nextTrack = playlistTracks[currentTrackIndex + 1];
+      const nextTrack = filteredPlaylistTracks[currentTrackIndex + 1];
 
       return nextTrack?.id ?? currentTrackId;
     });
@@ -438,6 +458,7 @@ export function SpotifyViewer({
   function handleClosePlaylistViewer() {
     setSelectedPlaylistId(null);
     setPlaylistTracks([]);
+    setTrackFilterInput("");
     setSelectedTrackId("");
     setTrackStatus("idle");
     setTrackError(null);
@@ -790,8 +811,25 @@ export function SpotifyViewer({
                             Canciones
                           </p>
                           <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
-                            {getTrackCountLabel(playlistTracks.length || selectedPlaylist.trackCount)}
+                            {getTrackCountLabel(
+                              filteredPlaylistTracks.length ||
+                                (normalizedTrackFilterValue
+                                  ? 0
+                                  : selectedPlaylist.trackCount),
+                            )}
                           </span>
+                        </div>
+
+                        <div className="border-b border-white/10 px-3 py-3">
+                          <input
+                            type="search"
+                            value={trackFilterInput}
+                            onChange={(event) =>
+                              setTrackFilterInput(event.target.value)
+                            }
+                            placeholder="Filtrar por tema, grupo, disco o año..."
+                            className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/70"
+                          />
                         </div>
 
                         <div className="max-h-[70vh] overflow-y-auto p-3">
@@ -808,9 +846,13 @@ export function SpotifyViewer({
                               Esta playlist no devuelve canciones utilizables
                               desde la API de Spotify.
                             </div>
+                          ) : filteredPlaylistTracks.length === 0 ? (
+                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
+                              No hay canciones que coincidan con ese filtro.
+                            </div>
                           ) : (
                             <div className="space-y-2">
-                              {playlistTracks.map((track) => {
+                              {filteredPlaylistTracks.map((track) => {
                                 const isSelected = selectedTrack?.id === track.id;
 
                                 return (
@@ -837,8 +879,14 @@ export function SpotifyViewer({
                                         {track.name}
                                       </p>
                                       {track.albumName ? (
-                                        <p className="mt-1 truncate text-sm text-cyan-100/80">
+                                        <p
+                                          className="mt-1 truncate text-sm text-cyan-100/80"
+                                          title={`${track.albumName}${track.albumReleaseDate ? ` · ${track.albumReleaseDate.slice(0, 4)}` : ""}`}
+                                        >
                                           {track.albumName}
+                                          {track.albumReleaseDate
+                                            ? ` · ${track.albumReleaseDate.slice(0, 4)}`
+                                            : ""}
                                         </p>
                                       ) : null}
                                     </div>

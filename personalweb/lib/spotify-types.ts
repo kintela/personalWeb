@@ -17,6 +17,7 @@ export type SpotifyPlaylistTrackAsset = {
   name: string;
   artistsLabel: string;
   albumName: string | null;
+  albumReleaseDate: string | null;
   durationLabel: string;
 };
 

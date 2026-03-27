@@ -69,6 +69,7 @@ type SpotifyTrackResponse = {
   is_local: boolean;
   album?: {
     name?: string;
+    release_date?: string;
   };
   artists?: Array<{
     name: string;
@@ -324,6 +325,60 @@ function formatDurationLabel(durationMs: number | null) {
   return `${minutes}:${seconds}`;
 }
 
+function normalizeAlbumReleaseDate(value: string | undefined) {
+  const trimmedValue = value?.trim();
+
+  if (!trimmedValue) {
+    return null;
+  }
+
+  if (/^\d{4}$/.test(trimmedValue)) {
+    return `${trimmedValue}-00-00`;
+  }
+
+  if (/^\d{4}-\d{2}$/.test(trimmedValue)) {
+    return `${trimmedValue}-00`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedValue)) {
+    return trimmedValue;
+  }
+
+  return null;
+}
+
+function compareSpotifyTracks(
+  left: SpotifyPlaylistTrackAsset,
+  right: SpotifyPlaylistTrackAsset,
+) {
+  const leftDate = left.albumReleaseDate ?? "9999-99-99";
+  const rightDate = right.albumReleaseDate ?? "9999-99-99";
+
+  if (leftDate !== rightDate) {
+    return leftDate.localeCompare(rightDate, "es", { sensitivity: "base" });
+  }
+
+  const byName = left.name.localeCompare(right.name, "es", {
+    sensitivity: "base",
+  });
+
+  if (byName !== 0) {
+    return byName;
+  }
+
+  const byAlbum = (left.albumName ?? "").localeCompare(right.albumName ?? "", "es", {
+    sensitivity: "base",
+  });
+
+  if (byAlbum !== 0) {
+    return byAlbum;
+  }
+
+  return left.artistsLabel.localeCompare(right.artistsLabel, "es", {
+    sensitivity: "base",
+  });
+}
+
 function mapSpotifyPlaylistTrack(
   item: SpotifyPlaylistTrackItemResponse,
   position: number,
@@ -346,6 +401,7 @@ function mapSpotifyPlaylistTrack(
       .filter(Boolean)
       .join(" · ") || "Spotify";
   const albumName = track.album?.name?.trim() || null;
+  const albumReleaseDate = normalizeAlbumReleaseDate(track.album?.release_date);
   const fallbackId = `${position}-${name.toLocaleLowerCase("es-ES").replace(/\s+/g, "-")}`;
 
   return {
@@ -354,6 +410,7 @@ function mapSpotifyPlaylistTrack(
     name,
     artistsLabel,
     albumName,
+    albumReleaseDate,
     durationLabel: formatDurationLabel(track.duration_ms),
   } satisfies SpotifyPlaylistTrackAsset;
 }
@@ -463,7 +520,7 @@ export async function getSpotifyPlaylistTracks(playlistId: string) {
   const tracks: SpotifyPlaylistTrackAsset[] = [];
   const encodedPlaylistId = encodeURIComponent(normalizedPlaylistId);
   let nextUrl: string | null =
-    `${SPOTIFY_API_BASE_URL}/playlists/${encodedPlaylistId}/tracks?limit=100&fields=items(track(id,name,album(name),artists(name),duration_ms,is_local)),next`;
+    `${SPOTIFY_API_BASE_URL}/playlists/${encodedPlaylistId}/tracks?limit=100&fields=items(track(id,name,album(name,release_date),artists(name),duration_ms,is_local)),next`;
   let pageCount = 0;
   let position = 1;
 
@@ -489,5 +546,10 @@ export async function getSpotifyPlaylistTracks(playlistId: string) {
     pageCount += 1;
   }
 
-  return tracks;
+  return [...tracks]
+    .sort(compareSpotifyTracks)
+    .map((track, index) => ({
+      ...track,
+      position: index + 1,
+    }));
 }
