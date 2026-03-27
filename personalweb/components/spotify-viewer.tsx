@@ -783,18 +783,12 @@ export function SpotifyViewer({
                       </div>
                     </div>
 
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
                       <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
                         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
-                              Canciones
-                            </p>
-                            <p className="mt-2 text-sm text-slate-300">
-                              Selecciona una y dejaré preparado el hueco del
-                              vídeo.
-                            </p>
-                          </div>
+                          <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
+                            Canciones
+                          </p>
                           <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
                             {getTrackCountLabel(playlistTracks.length || selectedPlaylist.trackCount)}
                           </span>
@@ -831,15 +825,22 @@ export function SpotifyViewer({
                                     }`}
                                   >
                                     <div className="min-w-0">
-                                      <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
-                                        Pista {track.position}
-                                      </p>
+                                      <div className="flex items-center gap-2 text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
+                                        <span className="shrink-0">
+                                          Pista {track.position}
+                                        </span>
+                                        <span className="truncate text-slate-300">
+                                          {track.artistsLabel}
+                                        </span>
+                                      </div>
                                       <p className="mt-2 truncate text-base font-semibold text-white">
                                         {track.name}
                                       </p>
-                                      <p className="mt-1 truncate text-sm text-slate-300">
-                                        {track.artistsLabel}
-                                      </p>
+                                      {track.albumName ? (
+                                        <p className="mt-1 truncate text-sm text-cyan-100/80">
+                                          {track.albumName}
+                                        </p>
+                                      ) : null}
                                     </div>
                                     <span className="shrink-0 rounded-full border border-white/12 bg-black/20 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
                                       {track.durationLabel}

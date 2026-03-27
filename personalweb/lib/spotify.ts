@@ -67,6 +67,9 @@ type SpotifyTrackResponse = {
   name: string;
   duration_ms: number | null;
   is_local: boolean;
+  album?: {
+    name?: string;
+  };
   artists?: Array<{
     name: string;
   }>;
@@ -342,6 +345,7 @@ function mapSpotifyPlaylistTrack(
       ?.map((artist) => artist.name.trim())
       .filter(Boolean)
       .join(" · ") || "Spotify";
+  const albumName = track.album?.name?.trim() || null;
   const fallbackId = `${position}-${name.toLocaleLowerCase("es-ES").replace(/\s+/g, "-")}`;
 
   return {
@@ -349,6 +353,7 @@ function mapSpotifyPlaylistTrack(
     position,
     name,
     artistsLabel,
+    albumName,
     durationLabel: formatDurationLabel(track.duration_ms),
   } satisfies SpotifyPlaylistTrackAsset;
 }
@@ -458,7 +463,7 @@ export async function getSpotifyPlaylistTracks(playlistId: string) {
   const tracks: SpotifyPlaylistTrackAsset[] = [];
   const encodedPlaylistId = encodeURIComponent(normalizedPlaylistId);
   let nextUrl: string | null =
-    `${SPOTIFY_API_BASE_URL}/playlists/${encodedPlaylistId}/tracks?limit=100&fields=items(track(id,name,artists(name),duration_ms,is_local)),next`;
+    `${SPOTIFY_API_BASE_URL}/playlists/${encodedPlaylistId}/tracks?limit=100&fields=items(track(id,name,album(name),artists(name),duration_ms,is_local)),next`;
   let pageCount = 0;
   let position = 1;
 
