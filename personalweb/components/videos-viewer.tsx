@@ -9,6 +9,7 @@ import {
   usePersistedGridDensity,
 } from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
+import { VideoInfoHover } from "@/components/video-info-hover";
 import type { VideoAsset } from "@/lib/supabase/videos";
 
 type VideosViewerProps = {
@@ -321,7 +322,7 @@ export function VideosViewer({
                   <article
                     key={video.id}
                     id={anchorId}
-                    className="group relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                    className="relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                   >
                     <ShareCardButton
                       anchorId={anchorId}
@@ -340,7 +341,7 @@ export function VideosViewer({
                       rel="noreferrer"
                       className="block"
                     >
-                      <div className="relative aspect-[4/3] overflow-hidden bg-slate-900">
+                      <div className="group relative aspect-[4/3] overflow-hidden bg-slate-900">
                         {video.imageSrc ? (
                           <Image
                             src={video.imageSrc}
@@ -355,6 +356,7 @@ export function VideosViewer({
                             Sin carátula
                           </div>
                         )}
+                        <VideoInfoHover info={video.info} />
                       </div>
                     </a>
 
@@ -376,11 +378,6 @@ export function VideosViewer({
                         <h3 className="text-xl font-semibold leading-tight text-white">
                           {video.title}
                         </h3>
-                        {platformLabel ? (
-                          <p className="text-sm leading-6 text-slate-300">
-                            Disponible en {platformLabel}
-                          </p>
-                        ) : null}
                       </div>
 
                       <div className="mt-auto flex flex-wrap gap-3 pt-1">
@@ -392,17 +389,6 @@ export function VideosViewer({
                         >
                           Ver vídeo
                         </a>
-
-                        {video.info ? (
-                          <a
-                            href={video.info}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/25 hover:text-white"
-                          >
-                            Más info
-                          </a>
-                        ) : null}
                       </div>
                     </div>
                   </article>

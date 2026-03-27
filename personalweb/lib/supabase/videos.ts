@@ -160,7 +160,10 @@ function normalizeVideoCategoryList(values: readonly string[] | null | undefined
     .filter((value) => value.length > 0) ?? [];
 }
 
-export function getVideoImagePublicUrl(imagePath: string | null) {
+export function getVideoImagePublicUrl(
+  imagePath: string | null,
+  cacheVersion?: string | null,
+) {
   const normalizedPath = imagePath?.trim();
   const supabaseUrl = getSupabaseUrl()?.trim();
 
@@ -182,8 +185,14 @@ export function getVideoImagePublicUrl(imagePath: string | null) {
     ? pathWithoutBucket
     : `${VIDEO_IMAGE_FOLDER}/${pathWithoutBucket}`;
   const encodedPath = objectPath.split("/").map(encodeURIComponent).join("/");
+  const publicUrl = `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(VIDEO_IMAGE_BUCKET)}/${encodedPath}`;
+  const normalizedCacheVersion = cacheVersion?.trim();
 
-  return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(VIDEO_IMAGE_BUCKET)}/${encodedPath}`;
+  if (!normalizedCacheVersion) {
+    return publicUrl;
+  }
+
+  return `${publicUrl}?v=${encodeURIComponent(normalizedCacheVersion)}`;
 }
 
 function buildVideoSearchHaystack(video: VideoDatabaseRow) {
@@ -208,7 +217,10 @@ function mapVideo(video: VideoDatabaseRow): VideoAsset {
   return {
     id: String(video.id),
     image: video.imagen?.trim() || null,
-    imageSrc: getVideoImagePublicUrl(video.imagen),
+    imageSrc: getVideoImagePublicUrl(
+      video.imagen,
+      video.updated_at ?? video.created_at,
+    ),
     link: video.enlace.trim(),
     title: video.texto.trim(),
     category: video.categoria?.trim() || null,
