@@ -2,14 +2,23 @@
 
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { startTransition, useEffect, useEffectEvent, useState } from "react";
+import {
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 
 import {
   GridDensityControls,
   usePersistedGridDensity,
 } from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
-import type { SpotifyPlaylistAsset } from "@/lib/spotify-types";
+import type {
+  SpotifyPlaylistAsset,
+  SpotifyPlaylistTrackAsset,
+} from "@/lib/spotify-types";
 
 type SpotifyViewerProps = {
   playlists: SpotifyPlaylistAsset[];
@@ -22,8 +31,21 @@ type SpotifyViewerProps = {
   filterValue: string;
 };
 
+type SpotifyPlaylistTracksPayload = {
+  tracks?: SpotifyPlaylistTrackAsset[];
+  error?: string;
+};
+
+type SpotifyTrackStatus = "idle" | "loading" | "ready" | "error";
+
+const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
+
 function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
+}
+
+function getTrackCountLabel(count: number) {
+  return `${count} tema${count === 1 ? "" : "s"}`;
 }
 
 function PlayIcon() {
@@ -39,7 +61,43 @@ function PlayIcon() {
   );
 }
 
-const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
+function PlaylistIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M4 7h10" />
+      <path d="M4 12h10" />
+      <path d="M4 17h7" />
+      <path d="m16 14 4 3-4 3v-6Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function VideoPlaceholderIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-10 w-10"
+    >
+      <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" />
+      <path d="m10 9.25 5 2.75-5 2.75v-5.5Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
 
 export function SpotifyViewer({
   playlists,
@@ -58,6 +116,19 @@ export function SpotifyViewer({
     SPOTIFY_VIEWER_GRID_STORAGE_KEY,
   );
   const [filterInput, setFilterInput] = useState(filterValue);
+  const [isClient, setIsClient] = useState(false);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(
+    null,
+  );
+  const [playlistTracks, setPlaylistTracks] = useState<SpotifyPlaylistTrackAsset[]>(
+    [],
+  );
+  const [trackCache, setTrackCache] = useState<
+    Record<string, SpotifyPlaylistTrackAsset[]>
+  >({});
+  const [selectedTrackId, setSelectedTrackId] = useState("");
+  const [trackStatus, setTrackStatus] = useState<SpotifyTrackStatus>("idle");
+  const [trackError, setTrackError] = useState<string | null>(null);
   const gridClassName =
     gridDensity === "dense"
       ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
@@ -86,6 +157,12 @@ export function SpotifyViewer({
         return haystack.includes(normalizedFilterValue);
       })
     : playlists;
+  const selectedPlaylist =
+    playlists.find((playlist) => playlist.id === selectedPlaylistId) ?? null;
+  const selectedTrack =
+    playlistTracks.find((track) => track.id === selectedTrackId) ??
+    playlistTracks[0] ??
+    null;
 
   const applyFilter = useEffectEvent((nextFilterValue: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -106,6 +183,10 @@ export function SpotifyViewer({
   });
 
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
     setFilterInput(filterValue);
   }, [filterValue]);
 
@@ -124,12 +205,139 @@ export function SpotifyViewer({
     return () => window.clearTimeout(timeoutId);
   }, [filterInput, filterValue]);
 
+  useEffect(() => {
+    if (!selectedPlaylist) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedPlaylist]);
+
+  useEffect(() => {
+    if (!selectedPlaylist) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        handleClosePlaylistViewer();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedPlaylist]);
+
+  useEffect(() => {
+    if (!selectedPlaylist) {
+      return;
+    }
+
+    const hasCachedTracks = Object.prototype.hasOwnProperty.call(
+      trackCache,
+      selectedPlaylist.id,
+    );
+
+    if (hasCachedTracks) {
+      setPlaylistTracks(trackCache[selectedPlaylist.id] ?? []);
+      setTrackStatus("ready");
+      setTrackError(null);
+      return;
+    }
+
+    const abortController = new AbortController();
+    setPlaylistTracks([]);
+    setSelectedTrackId("");
+    setTrackStatus("loading");
+    setTrackError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/spotify/playlists/${encodeURIComponent(selectedPlaylist.id)}/tracks`,
+          {
+            method: "GET",
+            signal: abortController.signal,
+            cache: "no-store",
+          },
+        );
+        const payload =
+          (await response.json()) as SpotifyPlaylistTracksPayload;
+
+        if (!response.ok) {
+          throw new Error(
+            payload.error ||
+              "No he podido leer las canciones de esta playlist.",
+          );
+        }
+
+        const nextTracks = Array.isArray(payload.tracks) ? payload.tracks : [];
+
+        setTrackCache((currentCache) => ({
+          ...currentCache,
+          [selectedPlaylist.id]: nextTracks,
+        }));
+        setPlaylistTracks(nextTracks);
+        setTrackStatus("ready");
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setTrackError(
+          error instanceof Error
+            ? error.message
+            : "No he podido leer las canciones de esta playlist.",
+        );
+        setTrackStatus("error");
+      }
+    })();
+
+    return () => abortController.abort();
+  }, [selectedPlaylist, trackCache]);
+
+  useEffect(() => {
+    if (playlistTracks.length === 0) {
+      setSelectedTrackId("");
+      return;
+    }
+
+    setSelectedTrackId((currentTrackId) => {
+      if (
+        currentTrackId &&
+        playlistTracks.some((track) => track.id === currentTrackId)
+      ) {
+        return currentTrackId;
+      }
+
+      return playlistTracks[0]?.id ?? "";
+    });
+  }, [playlistTracks]);
+
   function handleReset() {
     setFilterInput("");
   }
 
   function handleTopPlaylistClick(name: string) {
     setFilterInput(name);
+  }
+
+  function handleOpenPlaylistViewer(playlistId: string) {
+    setSelectedPlaylistId(playlistId);
+  }
+
+  function handleClosePlaylistViewer() {
+    setSelectedPlaylistId(null);
+    setPlaylistTracks([]);
+    setSelectedTrackId("");
+    setTrackStatus("idle");
+    setTrackError(null);
   }
 
   return (
@@ -338,77 +546,274 @@ export function SpotifyViewer({
             ) : (
               <div className={gridClassName}>
                 {filteredPlaylists.map((playlist) => {
-                const anchorId = `spotify-playlist-${playlist.id}`;
+                  const anchorId = `spotify-playlist-${playlist.id}`;
 
-                return (
-                  <article
-                    key={playlist.id}
-                    id={anchorId}
-                    className="group relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
-                  >
-                    <ShareCardButton
-                      anchorId={anchorId}
-                      sectionId="spotify"
-                      queryKeys={["spotifyFilter"]}
-                      className="absolute right-4 top-4 z-10"
-                    />
+                  return (
+                    <article
+                      key={playlist.id}
+                      id={anchorId}
+                      className="group relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                    >
+                      <ShareCardButton
+                        anchorId={anchorId}
+                        sectionId="spotify"
+                        queryKeys={["spotifyFilter"]}
+                        className="absolute right-4 top-4 z-10"
+                      />
 
-                    <div className="relative aspect-[16/9] overflow-hidden bg-slate-900">
-                      {playlist.imageUrl ? (
-                        <Image
-                          src={playlist.imageUrl}
-                          alt={`Portada de ${playlist.name}`}
-                          fill
-                          unoptimized
-                          className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                          sizes="(max-width: 1280px) 100vw, (max-width: 1536px) 50vw, 33vw"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.22),transparent_52%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-8 text-center text-sm uppercase tracking-[0.3em] text-slate-400">
-                          Spotify
+                      <div className="relative aspect-[16/9] overflow-hidden bg-slate-900">
+                        {playlist.imageUrl ? (
+                          <Image
+                            src={playlist.imageUrl}
+                            alt={`Portada de ${playlist.name}`}
+                            fill
+                            unoptimized
+                            className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                            sizes="(max-width: 1280px) 100vw, (max-width: 1536px) 50vw, 33vw"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.22),transparent_52%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-8 text-center text-sm uppercase tracking-[0.3em] text-slate-400">
+                            Spotify
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-1 flex-col gap-4 p-5">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
+                            {playlist.trackCount} temas
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPlaylistViewer(playlist.id)}
+                              aria-label={`Abrir canciones de ${playlist.name}`}
+                              title={`Abrir canciones de ${playlist.name}`}
+                              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/6 text-slate-100 transition hover:border-cyan-300/55 hover:bg-cyan-300/12 hover:text-white"
+                            >
+                              <PlaylistIcon />
+                            </button>
+                            <a
+                              href={playlist.externalUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`Escuchar ${playlist.name} en Spotify`}
+                              title={`Escuchar ${playlist.name} en Spotify`}
+                              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-300/12 text-emerald-100 transition hover:border-emerald-300/65 hover:bg-emerald-300/18 hover:text-white"
+                            >
+                              <PlayIcon />
+                            </a>
+                          </div>
                         </div>
-                      )}
-                    </div>
 
-                    <div className="flex flex-1 flex-col gap-4 p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
-                          {playlist.trackCount} temas
-                        </span>
+                        <div className="space-y-2">
+                          <h3 className="text-2xl font-semibold leading-tight text-white">
+                            {playlist.name}
+                          </h3>
+                          {playlist.description ? (
+                            <p className="text-sm leading-7 text-slate-300">
+                              {playlist.description}
+                            </p>
+                          ) : null}
+                        </div>
 
-                        <a
-                          href={playlist.externalUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label={`Escuchar ${playlist.name} en Spotify`}
-                          title={`Escuchar ${playlist.name} en Spotify`}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-300/12 text-emerald-100 transition hover:border-emerald-300/65 hover:bg-emerald-300/18 hover:text-white"
-                        >
-                          <PlayIcon />
-                        </a>
+                        <div className="mt-auto pt-1" />
                       </div>
-
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-semibold leading-tight text-white">
-                          {playlist.name}
-                        </h3>
-                        {playlist.description ? (
-                          <p className="text-sm leading-7 text-slate-300">
-                            {playlist.description}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-auto pt-1" />
-                    </div>
-                  </article>
-                );
+                    </article>
+                  );
                 })}
               </div>
             )}
           </>
         )}
       </div>
+
+      {isClient && selectedPlaylist
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[100] bg-slate-950/92 backdrop-blur-sm"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Canciones de ${selectedPlaylist.name}`}
+            >
+              <button
+                type="button"
+                aria-label="Cerrar visor de playlist"
+                className="absolute inset-0 cursor-default"
+                onClick={handleClosePlaylistViewer}
+              />
+
+              <div className="relative z-10 h-full overflow-y-auto px-4 py-6">
+                <div className="mx-auto flex min-h-full w-full max-w-7xl items-start justify-center">
+                  <div className="flex w-full flex-col gap-4">
+                    <div className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-white">
+                          {selectedPlaylist.name}
+                        </p>
+                        <p className="truncate text-xs uppercase tracking-[0.24em] text-slate-400">
+                          {selectedPlaylist.trackCount} temas
+                          {selectedTrack ? ` · ${selectedTrack.name}` : ""}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={selectedPlaylist.externalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-emerald-300/45 hover:text-white"
+                        >
+                          Abrir en Spotify
+                        </a>
+                        <button
+                          type="button"
+                          onClick={handleClosePlaylistViewer}
+                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
+                      <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
+                        <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
+                              Canciones
+                            </p>
+                            <p className="mt-2 text-sm text-slate-300">
+                              Selecciona una y dejaré preparado el hueco del
+                              vídeo.
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
+                            {getTrackCountLabel(playlistTracks.length || selectedPlaylist.trackCount)}
+                          </span>
+                        </div>
+
+                        <div className="max-h-[70vh] overflow-y-auto p-3">
+                          {trackStatus === "loading" ? (
+                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
+                              Cargando canciones de Spotify...
+                            </div>
+                          ) : trackStatus === "error" ? (
+                            <div className="rounded-[1.35rem] border border-rose-400/25 bg-rose-400/10 px-4 py-6 text-sm leading-7 text-rose-100">
+                              {trackError || "No he podido leer las canciones de esta playlist."}
+                            </div>
+                          ) : playlistTracks.length === 0 ? (
+                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
+                              Esta playlist no devuelve canciones utilizables
+                              desde la API de Spotify.
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {playlistTracks.map((track) => {
+                                const isSelected = selectedTrack?.id === track.id;
+
+                                return (
+                                  <button
+                                    key={track.id}
+                                    type="button"
+                                    onClick={() => setSelectedTrackId(track.id)}
+                                    className={`flex w-full items-start justify-between gap-3 rounded-[1.35rem] border px-4 py-4 text-left transition ${
+                                      isSelected
+                                        ? "border-cyan-300/55 bg-cyan-300/12"
+                                        : "border-white/10 bg-white/6 hover:border-cyan-300/35 hover:bg-cyan-300/8"
+                                    }`}
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
+                                        Pista {track.position}
+                                      </p>
+                                      <p className="mt-2 truncate text-base font-semibold text-white">
+                                        {track.name}
+                                      </p>
+                                      <p className="mt-1 truncate text-sm text-slate-300">
+                                        {track.artistsLabel}
+                                      </p>
+                                    </div>
+                                    <span className="shrink-0 rounded-full border border-white/12 bg-black/20 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
+                                      {track.durationLabel}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
+                        <div className="border-b border-white/10 px-5 py-4">
+                          <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
+                            Visor
+                          </p>
+                          <p className="mt-2 text-sm text-slate-300">
+                            {selectedTrack
+                              ? `${selectedTrack.name} · ${selectedTrack.artistsLabel}`
+                              : "Selecciona una canción para preparar el visor del vídeo."}
+                          </p>
+                        </div>
+
+                        <div className="flex min-h-[28rem] flex-col gap-6 p-6">
+                          <div className="grid gap-4 sm:grid-cols-3">
+                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-4">
+                              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
+                                Canción
+                              </p>
+                              <p className="mt-3 text-base font-semibold text-white">
+                                {selectedTrack?.name || "Sin seleccionar"}
+                              </p>
+                            </div>
+                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-4">
+                              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
+                                Artista
+                              </p>
+                              <p className="mt-3 text-base font-semibold text-white">
+                                {selectedTrack?.artistsLabel || "Pendiente"}
+                              </p>
+                            </div>
+                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-4">
+                              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
+                                Estado
+                              </p>
+                              <p className="mt-3 text-base font-semibold text-white">
+                                Layout listo
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-1 items-center justify-center rounded-[1.75rem] border border-dashed border-cyan-300/30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_52%),rgba(2,6,23,0.72)] p-6">
+                            <div className="mx-auto max-w-xl text-center">
+                              <div className="flex justify-center text-cyan-200">
+                                <VideoPlaceholderIcon />
+                              </div>
+                              <p className="mt-5 text-sm font-medium uppercase tracking-[0.28em] text-cyan-300/80">
+                                Hueco preparado
+                              </p>
+                              <h3 className="mt-3 text-2xl font-semibold text-white">
+                                Aquí irá el visor del vídeo
+                              </h3>
+                              <p className="mt-4 text-sm leading-7 text-slate-300">
+                                En el siguiente paso conectaremos YouTube para
+                                buscar el vídeo que mejor encaje con la canción
+                                seleccionada y reproducirlo desde este panel.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </section>
   );
 }

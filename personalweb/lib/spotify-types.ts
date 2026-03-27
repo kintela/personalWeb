@@ -11,6 +11,14 @@ export type SpotifyPlaylistAsset = {
   collaborative: boolean;
 };
 
+export type SpotifyPlaylistTrackAsset = {
+  id: string;
+  position: number;
+  name: string;
+  artistsLabel: string;
+  durationLabel: string;
+};
+
 export type SpotifyPlaylistListResult = {
   playlists: SpotifyPlaylistAsset[];
   configured: boolean;

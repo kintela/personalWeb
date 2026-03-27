@@ -4,6 +4,7 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import type {
   SpotifyPlaylistAsset,
   SpotifyPlaylistListResult,
+  SpotifyPlaylistTrackAsset,
 } from "@/lib/spotify-types";
 
 const SPOTIFY_ACCOUNTS_BASE_URL = "https://accounts.spotify.com";
@@ -58,6 +59,25 @@ type SpotifyPlaylistResponse = {
 
 type SpotifyPlaylistPageResponse = {
   items: SpotifyPlaylistResponse[];
+  next: string | null;
+};
+
+type SpotifyTrackResponse = {
+  id: string | null;
+  name: string;
+  duration_ms: number | null;
+  is_local: boolean;
+  artists?: Array<{
+    name: string;
+  }>;
+};
+
+type SpotifyPlaylistTrackItemResponse = {
+  track: SpotifyTrackResponse | null;
+};
+
+type SpotifyPlaylistTrackPageResponse = {
+  items: SpotifyPlaylistTrackItemResponse[];
   next: string | null;
 };
 
@@ -289,6 +309,50 @@ function mapSpotifyPlaylist(playlist: SpotifyPlaylistResponse) {
   } satisfies SpotifyPlaylistAsset;
 }
 
+function formatDurationLabel(durationMs: number | null) {
+  if (!durationMs || durationMs < 0) {
+    return "--:--";
+  }
+
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+
+  return `${minutes}:${seconds}`;
+}
+
+function mapSpotifyPlaylistTrack(
+  item: SpotifyPlaylistTrackItemResponse,
+  position: number,
+) {
+  const track = item.track;
+
+  if (!track || track.is_local) {
+    return null;
+  }
+
+  const name = track.name.trim();
+
+  if (!name) {
+    return null;
+  }
+
+  const artistsLabel =
+    track.artists
+      ?.map((artist) => artist.name.trim())
+      .filter(Boolean)
+      .join(" · ") || "Spotify";
+  const fallbackId = `${position}-${name.toLocaleLowerCase("es-ES").replace(/\s+/g, "-")}`;
+
+  return {
+    id: track.id?.trim() || fallbackId,
+    position,
+    name,
+    artistsLabel,
+    durationLabel: formatDurationLabel(track.duration_ms),
+  } satisfies SpotifyPlaylistTrackAsset;
+}
+
 export async function getSpotifyPlaylistList(): Promise<SpotifyPlaylistListResult> {
   if (!isSpotifyConfigured()) {
     return {
@@ -369,4 +433,56 @@ export async function getSpotifyPlaylistList(): Promise<SpotifyPlaylistListResul
       callbackPath: getSpotifyCallbackPath(),
     };
   }
+}
+
+export async function getSpotifyPlaylistTracks(playlistId: string) {
+  if (!isSpotifyConfigured()) {
+    throw new Error(
+      "Faltan variables de entorno de Spotify. Revisa SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET y SPOTIFY_REDIRECT_URI.",
+    );
+  }
+
+  if (!isSpotifyConnected()) {
+    throw new Error(
+      "Falta SPOTIFY_REFRESH_TOKEN. Autoriza la app una vez para obtenerlo.",
+    );
+  }
+
+  const normalizedPlaylistId = playlistId.trim();
+
+  if (!normalizedPlaylistId) {
+    throw new Error("Falta el identificador de la playlist de Spotify.");
+  }
+
+  const accessToken = await getSpotifyAccessToken();
+  const tracks: SpotifyPlaylistTrackAsset[] = [];
+  const encodedPlaylistId = encodeURIComponent(normalizedPlaylistId);
+  let nextUrl: string | null =
+    `${SPOTIFY_API_BASE_URL}/playlists/${encodedPlaylistId}/tracks?limit=100&fields=items(track(id,name,artists(name),duration_ms,is_local)),next`;
+  let pageCount = 0;
+  let position = 1;
+
+  while (nextUrl && pageCount < 10) {
+    const trackPage: SpotifyPlaylistTrackPageResponse =
+      await fetchSpotifyJson<SpotifyPlaylistTrackPageResponse>(
+        nextUrl,
+        accessToken,
+      );
+
+    for (const item of trackPage.items) {
+      const track = mapSpotifyPlaylistTrack(item, position);
+
+      if (!track) {
+        continue;
+      }
+
+      tracks.push(track);
+      position += 1;
+    }
+
+    nextUrl = trackPage.next;
+    pageCount += 1;
+  }
+
+  return tracks;
 }
