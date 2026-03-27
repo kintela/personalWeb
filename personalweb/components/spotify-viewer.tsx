@@ -181,17 +181,6 @@ export function SpotifyViewer({
       : gridDensity === "compact"
         ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         : "grid gap-5 xl:grid-cols-2 2xl:grid-cols-3";
-  const topPlaylists = [...playlists]
-    .sort((left, right) => {
-      if (right.trackCount !== left.trackCount) {
-        return right.trackCount - left.trackCount;
-      }
-
-      return left.name.localeCompare(right.name, "es", {
-        sensitivity: "base",
-      });
-    })
-    .slice(0, 10);
   const normalizedFilterValue = filterInput.trim().toLocaleLowerCase("es-ES");
   const filteredPlaylists = normalizedFilterValue
     ? playlists.filter((playlist) => {
@@ -615,10 +604,6 @@ export function SpotifyViewer({
     setFilterInput("");
   }
 
-  function handleTopPlaylistClick(name: string) {
-    setFilterInput(name);
-  }
-
   function handleOpenPlaylistViewer(playlistId: string) {
     setSelectedPlaylistId(playlistId);
     setTrackFilterInput("");
@@ -813,53 +798,6 @@ export function SpotifyViewer({
                     </span>
                   </p>
                 ) : null}
-              </div>
-            </div>
-
-            <div className="rounded-[2rem] border border-white/10 bg-slate-950/35 p-5">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-[0.38em] text-slate-300">
-                    Top 10
-                  </p>
-                  <p className="text-sm leading-7 text-slate-300">
-                    Las playlists con más canciones. Pulsa una para filtrar por
-                    su nombre.
-                  </p>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                  {topPlaylists.map((playlist, index) => {
-                    const isActive =
-                      filterInput.trim().toLocaleLowerCase("es-ES") ===
-                      playlist.name.trim().toLocaleLowerCase("es-ES");
-
-                    return (
-                      <button
-                        key={playlist.id}
-                        type="button"
-                        onClick={() => handleTopPlaylistClick(playlist.name)}
-                        className={`rounded-[1.4rem] border px-4 py-4 text-left transition ${
-                          isActive
-                            ? "border-cyan-300/55 bg-cyan-300/12"
-                            : "border-white/10 bg-black/20 hover:border-cyan-300/35 hover:bg-cyan-300/8"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <span className="text-[0.68rem] uppercase tracking-[0.3em] text-cyan-300/80">
-                            #{index + 1}
-                          </span>
-                          <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
-                            {playlist.trackCount} temas
-                          </span>
-                        </div>
-                        <p className="mt-3 text-base font-semibold leading-tight text-white">
-                          {playlist.name}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             </div>
 
