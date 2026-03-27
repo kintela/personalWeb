@@ -14,8 +14,30 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.kintela.es"),
   title: "Personal Web",
-  description: "Aqui se encuentra mucho de lo que me apasiona",
+  description: "Aquí se encuentra mucho de lo que me apasiona.",
+  openGraph: {
+    type: "website",
+    url: "https://www.kintela.es",
+    siteName: "kintela.es",
+    title: "Personal Web",
+    description: "Aquí se encuentra mucho de lo que me apasiona.",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Vista previa de kintela.es con un diseño oscuro y el texto Personal Web.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Personal Web",
+    description: "Aquí se encuentra mucho de lo que me apasiona.",
+    images: ["/opengraph-image"],
+  },
 };
 
 export default function RootLayout({
