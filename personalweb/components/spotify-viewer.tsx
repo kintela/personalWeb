@@ -55,6 +55,33 @@ function getTrackCountLabel(count: number) {
   return `${count} tema${count === 1 ? "" : "s"}`;
 }
 
+function shuffleTrackOrder(
+  tracks: SpotifyPlaylistTrackAsset[],
+  selectedTrackId?: string,
+) {
+  const remainingTrackIds = tracks.map((track) => track.id);
+  const nextTrackIds: string[] = [];
+
+  if (selectedTrackId) {
+    const selectedTrackIndex = remainingTrackIds.indexOf(selectedTrackId);
+
+    if (selectedTrackIndex >= 0) {
+      nextTrackIds.push(selectedTrackId);
+      remainingTrackIds.splice(selectedTrackIndex, 1);
+    }
+  }
+
+  for (let index = remainingTrackIds.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    const currentValue = remainingTrackIds[index];
+
+    remainingTrackIds[index] = remainingTrackIds[randomIndex] ?? currentValue;
+    remainingTrackIds[randomIndex] = currentValue;
+  }
+
+  return [...nextTrackIds, ...remainingTrackIds];
+}
+
 function PlayIcon() {
   return (
     <svg
@@ -134,6 +161,8 @@ export function SpotifyViewer({
     Record<string, SpotifyPlaylistTrackAsset[]>
   >({});
   const [trackFilterInput, setTrackFilterInput] = useState("");
+  const [isTrackShuffleEnabled, setIsTrackShuffleEnabled] = useState(false);
+  const [shuffledTrackIds, setShuffledTrackIds] = useState<string[]>([]);
   const [selectedTrackId, setSelectedTrackId] = useState("");
   const [trackStatus, setTrackStatus] = useState<SpotifyTrackStatus>("idle");
   const [trackError, setTrackError] = useState<string | null>(null);
@@ -190,12 +219,41 @@ export function SpotifyViewer({
         return haystack.includes(normalizedTrackFilterValue);
       })
     : playlistTracks;
+  const playbackOrderedTracks = (() => {
+    if (!isTrackShuffleEnabled || shuffledTrackIds.length === 0) {
+      return filteredPlaylistTracks;
+    }
+
+    const orderedTracks = shuffledTrackIds
+      .map((trackId) =>
+        filteredPlaylistTracks.find((track) => track.id === trackId) ?? null,
+      )
+      .filter((track): track is SpotifyPlaylistTrackAsset => track !== null);
+
+    if (orderedTracks.length === filteredPlaylistTracks.length) {
+      return orderedTracks;
+    }
+
+    const orderedTrackIdSet = new Set(orderedTracks.map((track) => track.id));
+    const missingTracks = filteredPlaylistTracks.filter(
+      (track) => !orderedTrackIdSet.has(track.id),
+    );
+
+    return [...orderedTracks, ...missingTracks];
+  })();
   const selectedPlaylist =
     playlists.find((playlist) => playlist.id === selectedPlaylistId) ?? null;
   const selectedTrack =
-    filteredPlaylistTracks.find((track) => track.id === selectedTrackId) ??
-    filteredPlaylistTracks[0] ??
+    playbackOrderedTracks.find((track) => track.id === selectedTrackId) ??
+    playbackOrderedTracks[0] ??
     null;
+  const selectedTrackIndex = selectedTrack
+    ? playbackOrderedTracks.findIndex((track) => track.id === selectedTrack.id)
+    : -1;
+  const hasPreviousTrack = selectedTrackIndex > 0;
+  const hasNextTrack =
+    selectedTrackIndex >= 0 &&
+    selectedTrackIndex < playbackOrderedTracks.length - 1;
 
   const applyFilter = useEffectEvent((nextFilterValue: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -336,7 +394,39 @@ export function SpotifyViewer({
   }, [selectedPlaylist, trackCache]);
 
   useEffect(() => {
-    if (filteredPlaylistTracks.length === 0) {
+    if (!isTrackShuffleEnabled) {
+      setShuffledTrackIds([]);
+      return;
+    }
+
+    setShuffledTrackIds((currentTrackIds) => {
+      const visibleTrackIdSet = new Set(
+        filteredPlaylistTracks.map((track) => track.id),
+      );
+      const nextTrackIds = currentTrackIds.filter((trackId) =>
+        visibleTrackIdSet.has(trackId),
+      );
+      const missingTrackIds = filteredPlaylistTracks
+        .map((track) => track.id)
+        .filter((trackId) => !nextTrackIds.includes(trackId));
+
+      if (nextTrackIds.length === filteredPlaylistTracks.length) {
+        return nextTrackIds;
+      }
+
+      return [
+        ...nextTrackIds,
+        ...shuffleTrackOrder(
+          filteredPlaylistTracks.filter((track) =>
+            missingTrackIds.includes(track.id),
+          ),
+        ),
+      ];
+    });
+  }, [filteredPlaylistTracks, isTrackShuffleEnabled]);
+
+  useEffect(() => {
+    if (playbackOrderedTracks.length === 0) {
       setSelectedTrackId("");
       return;
     }
@@ -344,14 +434,14 @@ export function SpotifyViewer({
     setSelectedTrackId((currentTrackId) => {
       if (
         currentTrackId &&
-        filteredPlaylistTracks.some((track) => track.id === currentTrackId)
+        playbackOrderedTracks.some((track) => track.id === currentTrackId)
       ) {
         return currentTrackId;
       }
 
-      return filteredPlaylistTracks[0]?.id ?? "";
+      return playbackOrderedTracks[0]?.id ?? "";
     });
-  }, [filteredPlaylistTracks]);
+  }, [playbackOrderedTracks]);
 
   useEffect(() => {
     if (!selectedTrack) {
@@ -435,15 +525,17 @@ export function SpotifyViewer({
   function handleOpenPlaylistViewer(playlistId: string) {
     setSelectedPlaylistId(playlistId);
     setTrackFilterInput("");
+    setIsTrackShuffleEnabled(false);
+    setShuffledTrackIds([]);
   }
 
-  function handleAdvanceToNextTrack() {
+  function handleStepTrack(direction: "previous" | "next") {
     setSelectedTrackId((currentTrackId) => {
-      if (!currentTrackId || filteredPlaylistTracks.length === 0) {
+      if (!currentTrackId || playbackOrderedTracks.length === 0) {
         return currentTrackId;
       }
 
-      const currentTrackIndex = filteredPlaylistTracks.findIndex(
+      const currentTrackIndex = playbackOrderedTracks.findIndex(
         (track) => track.id === currentTrackId,
       );
 
@@ -451,9 +543,36 @@ export function SpotifyViewer({
         return currentTrackId;
       }
 
-      const nextTrack = filteredPlaylistTracks[currentTrackIndex + 1];
+      const nextTrack =
+        direction === "next"
+          ? playbackOrderedTracks[currentTrackIndex + 1]
+          : playbackOrderedTracks[currentTrackIndex - 1];
 
       return nextTrack?.id ?? currentTrackId;
+    });
+  }
+
+  function handleAdvanceToNextTrack() {
+    handleStepTrack("next");
+  }
+
+  function handleGoToPreviousTrack() {
+    handleStepTrack("previous");
+  }
+
+  function handleToggleTrackShuffle() {
+    setIsTrackShuffleEnabled((currentValue) => {
+      const nextValue = !currentValue;
+
+      if (nextValue) {
+        setShuffledTrackIds(
+          shuffleTrackOrder(filteredPlaylistTracks, selectedTrackId),
+        );
+      } else {
+        setShuffledTrackIds([]);
+      }
+
+      return nextValue;
     });
   }
 
@@ -461,6 +580,8 @@ export function SpotifyViewer({
     setSelectedPlaylistId(null);
     setPlaylistTracks([]);
     setTrackFilterInput("");
+    setIsTrackShuffleEnabled(false);
+    setShuffledTrackIds([]);
     setSelectedTrackId("");
     setTrackStatus("idle");
     setTrackError(null);
@@ -809,12 +930,25 @@ export function SpotifyViewer({
                     <div className="grid gap-4 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
                       <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
                         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-                          <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
-                            Canciones
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
+                              Canciones
+                            </p>
+                            <button
+                              type="button"
+                              onClick={handleToggleTrackShuffle}
+                              className={`rounded-full border px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] transition ${
+                                isTrackShuffleEnabled
+                                  ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
+                                  : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white"
+                              }`}
+                            >
+                              Aleatorio
+                            </button>
+                          </div>
                           <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
                             {getTrackCountLabel(
-                              filteredPlaylistTracks.length ||
+                              playbackOrderedTracks.length ||
                                 (normalizedTrackFilterValue
                                   ? 0
                                   : selectedPlaylist.trackCount),
@@ -848,13 +982,13 @@ export function SpotifyViewer({
                               Esta playlist no devuelve canciones utilizables
                               desde la API de Spotify.
                             </div>
-                          ) : filteredPlaylistTracks.length === 0 ? (
+                          ) : playbackOrderedTracks.length === 0 ? (
                             <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
                               No hay canciones que coincidan con ese filtro.
                             </div>
                           ) : (
                             <div className="space-y-2">
-                              {filteredPlaylistTracks.map((track) => {
+                              {playbackOrderedTracks.map((track) => {
                                 const isSelected = selectedTrack?.id === track.id;
 
                                 return (
@@ -904,15 +1038,36 @@ export function SpotifyViewer({
                       </div>
 
                       <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
-                        <div className="border-b border-white/10 px-5 py-4">
-                          <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
-                            Visor
-                          </p>
-                          <p className="mt-2 text-sm text-slate-300">
-                            {selectedTrack
-                              ? `${selectedTrack.name} · ${selectedTrack.artistsLabel}`
-                              : "Selecciona una canción para preparar el visor del vídeo."}
-                          </p>
+                        <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
+                              Visor
+                            </p>
+                            <p className="mt-2 text-sm text-slate-300">
+                              {selectedTrack
+                                ? `${selectedTrack.name} · ${selectedTrack.artistsLabel}`
+                                : "Selecciona una canción para preparar el visor del vídeo."}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleGoToPreviousTrack}
+                              disabled={!hasPreviousTrack}
+                              className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Anterior
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleAdvanceToNextTrack}
+                              disabled={!hasNextTrack}
+                              className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Siguiente
+                            </button>
+                          </div>
                         </div>
 
                         <div className="flex min-h-[28rem] flex-col gap-6 p-6">
