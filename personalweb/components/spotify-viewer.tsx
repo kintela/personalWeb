@@ -19,6 +19,7 @@ import type {
   SpotifyPlaylistAsset,
   SpotifyPlaylistTrackAsset,
 } from "@/lib/spotify-types";
+import type { YouTubeMatchedVideoAsset } from "@/lib/youtube-types";
 
 type SpotifyViewerProps = {
   playlists: SpotifyPlaylistAsset[];
@@ -33,6 +34,11 @@ type SpotifyViewerProps = {
 
 type SpotifyPlaylistTracksPayload = {
   tracks?: SpotifyPlaylistTrackAsset[];
+  error?: string;
+};
+
+type YouTubeMatchPayload = {
+  video?: YouTubeMatchedVideoAsset | null;
   error?: string;
 };
 
@@ -129,6 +135,13 @@ export function SpotifyViewer({
   const [selectedTrackId, setSelectedTrackId] = useState("");
   const [trackStatus, setTrackStatus] = useState<SpotifyTrackStatus>("idle");
   const [trackError, setTrackError] = useState<string | null>(null);
+  const [videoCache, setVideoCache] = useState<
+    Record<string, YouTubeMatchedVideoAsset | null>
+  >({});
+  const [selectedVideo, setSelectedVideo] =
+    useState<YouTubeMatchedVideoAsset | null>(null);
+  const [videoStatus, setVideoStatus] = useState<SpotifyTrackStatus>("idle");
+  const [videoError, setVideoError] = useState<string | null>(null);
   const gridClassName =
     gridDensity === "dense"
       ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
@@ -320,6 +333,75 @@ export function SpotifyViewer({
     });
   }, [playlistTracks]);
 
+  useEffect(() => {
+    if (!selectedTrack) {
+      setSelectedVideo(null);
+      setVideoStatus("idle");
+      setVideoError(null);
+      return;
+    }
+
+    const hasCachedVideo = Object.prototype.hasOwnProperty.call(
+      videoCache,
+      selectedTrack.id,
+    );
+
+    if (hasCachedVideo) {
+      setSelectedVideo(videoCache[selectedTrack.id] ?? null);
+      setVideoStatus("ready");
+      setVideoError(null);
+      return;
+    }
+
+    const abortController = new AbortController();
+    setSelectedVideo(null);
+    setVideoStatus("loading");
+    setVideoError(null);
+
+    void (async () => {
+      try {
+        const query = new URLSearchParams({
+          track: selectedTrack.name,
+          artists: selectedTrack.artistsLabel,
+        });
+        const response = await fetch(`/api/youtube/match?${query.toString()}`, {
+          method: "GET",
+          signal: abortController.signal,
+          cache: "no-store",
+        });
+        const payload = (await response.json()) as YouTubeMatchPayload;
+
+        if (!response.ok) {
+          throw new Error(
+            payload.error || "No he podido buscar el vídeo en YouTube.",
+          );
+        }
+
+        const nextVideo = payload.video ?? null;
+
+        setVideoCache((currentCache) => ({
+          ...currentCache,
+          [selectedTrack.id]: nextVideo,
+        }));
+        setSelectedVideo(nextVideo);
+        setVideoStatus("ready");
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setVideoError(
+          error instanceof Error
+            ? error.message
+            : "No he podido buscar el vídeo en YouTube.",
+        );
+        setVideoStatus("error");
+      }
+    })();
+
+    return () => abortController.abort();
+  }, [selectedTrack, videoCache]);
+
   function handleReset() {
     setFilterInput("");
   }
@@ -338,6 +420,9 @@ export function SpotifyViewer({
     setSelectedTrackId("");
     setTrackStatus("idle");
     setTrackError(null);
+    setSelectedVideo(null);
+    setVideoStatus("idle");
+    setVideoError(null);
   }
 
   return (
@@ -781,29 +866,102 @@ export function SpotifyViewer({
                                 Estado
                               </p>
                               <p className="mt-3 text-base font-semibold text-white">
-                                Layout listo
+                                {videoStatus === "loading"
+                                  ? "Buscando"
+                                  : videoStatus === "error"
+                                    ? "Error"
+                                    : selectedVideo
+                                      ? "Vídeo cargado"
+                                      : "Sin vídeo"}
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex flex-1 items-center justify-center rounded-[1.75rem] border border-dashed border-cyan-300/30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_52%),rgba(2,6,23,0.72)] p-6">
-                            <div className="mx-auto max-w-xl text-center">
-                              <div className="flex justify-center text-cyan-200">
-                                <VideoPlaceholderIcon />
+                          {videoStatus === "loading" ? (
+                            <div className="flex flex-1 items-center justify-center rounded-[1.75rem] border border-dashed border-cyan-300/30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_52%),rgba(2,6,23,0.72)] p-6">
+                              <div className="mx-auto max-w-xl text-center">
+                                <div className="flex justify-center text-cyan-200">
+                                  <VideoPlaceholderIcon />
+                                </div>
+                                <p className="mt-5 text-sm font-medium uppercase tracking-[0.28em] text-cyan-300/80">
+                                  Buscando en YouTube
+                                </p>
+                                <h3 className="mt-3 text-2xl font-semibold text-white">
+                                  Estoy localizando el mejor vídeo para esta canción
+                                </h3>
                               </div>
-                              <p className="mt-5 text-sm font-medium uppercase tracking-[0.28em] text-cyan-300/80">
-                                Hueco preparado
-                              </p>
-                              <h3 className="mt-3 text-2xl font-semibold text-white">
-                                Aquí irá el visor del vídeo
-                              </h3>
-                              <p className="mt-4 text-sm leading-7 text-slate-300">
-                                En el siguiente paso conectaremos YouTube para
-                                buscar el vídeo que mejor encaje con la canción
-                                seleccionada y reproducirlo desde este panel.
-                              </p>
                             </div>
-                          </div>
+                          ) : videoStatus === "error" ? (
+                            <div className="flex flex-1 items-center justify-center rounded-[1.75rem] border border-rose-400/25 bg-rose-400/10 p-6">
+                              <div className="mx-auto max-w-xl text-center">
+                                <p className="text-sm font-medium uppercase tracking-[0.28em] text-rose-200">
+                                  Error de YouTube
+                                </p>
+                                <p className="mt-4 text-sm leading-7 text-rose-100">
+                                  {videoError || "No he podido buscar el vídeo en YouTube."}
+                                </p>
+                              </div>
+                            </div>
+                          ) : selectedVideo ? (
+                            <div className="space-y-4">
+                              <div className="flex flex-col gap-4 rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="min-w-0">
+                                  <p className="truncate text-lg font-semibold text-white">
+                                    {selectedVideo.title}
+                                  </p>
+                                  <p className="mt-2 truncate text-xs uppercase tracking-[0.24em] text-slate-400">
+                                    {selectedVideo.channelTitle} · {selectedVideo.viewCountLabel} visualizaciones
+                                  </p>
+                                </div>
+
+                                <a
+                                  href={selectedVideo.externalUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="shrink-0 rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-red-300/45 hover:text-white"
+                                >
+                                  Abrir en YouTube
+                                </a>
+                              </div>
+
+                              <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/60 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
+                                <div className="aspect-video">
+                                  <iframe
+                                    key={selectedVideo.embedUrl}
+                                    src={selectedVideo.embedUrl}
+                                    title={selectedVideo.title}
+                                    className="h-full w-full border-0"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                    allowFullScreen
+                                  />
+                                </div>
+                              </div>
+
+                              {selectedVideo.description ? (
+                                <p className="text-sm leading-7 text-slate-300">
+                                  {selectedVideo.description}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div className="flex flex-1 items-center justify-center rounded-[1.75rem] border border-dashed border-cyan-300/30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_52%),rgba(2,6,23,0.72)] p-6">
+                              <div className="mx-auto max-w-xl text-center">
+                                <div className="flex justify-center text-cyan-200">
+                                  <VideoPlaceholderIcon />
+                                </div>
+                                <p className="mt-5 text-sm font-medium uppercase tracking-[0.28em] text-cyan-300/80">
+                                  Sin resultado sólido
+                                </p>
+                                <h3 className="mt-3 text-2xl font-semibold text-white">
+                                  No he encontrado un vídeo convincente
+                                </h3>
+                                <p className="mt-4 text-sm leading-7 text-slate-300">
+                                  Prueba con otra canción de la lista. Si hace
+                                  falta, luego afinamos el criterio de búsqueda.
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
