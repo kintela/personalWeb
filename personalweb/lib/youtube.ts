@@ -157,7 +157,6 @@ function formatViewCountLabel(viewCount: number) {
 function buildEmbedUrl(videoId: string) {
   const url = new URL(`${YOUTUBE_EMBED_BASE_URL}/${videoId}`);
   url.searchParams.set("autoplay", "1");
-  url.searchParams.set("mute", "1");
   url.searchParams.set("playsinline", "1");
   url.searchParams.set("rel", "0");
   url.searchParams.set("modestbranding", "1");
