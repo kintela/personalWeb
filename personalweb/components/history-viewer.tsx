@@ -72,24 +72,25 @@ function formatHistoryCategoryLabel(category: string) {
   }
 }
 
+function getHistorySubcategoryPriority(subcategory: string | null) {
+  const normalizedSubcategory = subcategory?.trim().toLocaleLowerCase("es-ES");
+
+  switch (normalizedSubcategory) {
+    case "documental":
+      return 0;
+    case "película":
+      return 1;
+    default:
+      return HISTORY_SUBCATEGORY_ORDER.length;
+  }
+}
+
 function sortHistoryVideosBySubcategory(videos: VideoAsset[]) {
   return [...videos].sort((left, right) => {
-    const leftPriority = HISTORY_SUBCATEGORY_ORDER.indexOf(
-      left.subcategory?.toLocaleLowerCase("es-ES") as
-        | (typeof HISTORY_SUBCATEGORY_ORDER)[number]
-        | undefined,
+    return (
+      getHistorySubcategoryPriority(left.subcategory) -
+      getHistorySubcategoryPriority(right.subcategory)
     );
-    const rightPriority = HISTORY_SUBCATEGORY_ORDER.indexOf(
-      right.subcategory?.toLocaleLowerCase("es-ES") as
-        | (typeof HISTORY_SUBCATEGORY_ORDER)[number]
-        | undefined,
-    );
-    const normalizedLeftPriority =
-      leftPriority === -1 ? HISTORY_SUBCATEGORY_ORDER.length : leftPriority;
-    const normalizedRightPriority =
-      rightPriority === -1 ? HISTORY_SUBCATEGORY_ORDER.length : rightPriority;
-
-    return normalizedLeftPriority - normalizedRightPriority;
   });
 }
 
