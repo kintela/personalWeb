@@ -3,7 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const VIDEOS_SELECT_COLUMNS =
-  "id, imagen, enlace, texto, categoria, plataforma, info, created_at, updated_at";
+  "id, imagen, enlace, texto, categoria, subcategoria, plataforma, info, created_at, updated_at";
 const VIDEO_IMAGE_BUCKET = "caratulas";
 const VIDEO_IMAGE_FOLDER = "pelis";
 export const HISTORY_VIDEO_CATEGORIES = [
@@ -18,6 +18,7 @@ type VideoDatabaseRow = {
   enlace: string;
   texto: string;
   categoria: string | null;
+  subcategoria: string | null;
   plataforma: string | null;
   info: string | null;
   created_at: string | null;
@@ -31,6 +32,7 @@ export type VideoAsset = {
   link: string;
   title: string;
   category: string | null;
+  subcategory: string | null;
   platform: string | null;
   info: string | null;
 };
@@ -202,6 +204,7 @@ function buildVideoSearchHaystack(video: VideoDatabaseRow) {
     video.enlace,
     video.texto,
     video.categoria,
+    video.subcategoria,
     video.plataforma,
     normalizeVideoPlatformValue(video.plataforma),
     video.info,
@@ -224,6 +227,7 @@ function mapVideo(video: VideoDatabaseRow): VideoAsset {
     link: video.enlace.trim(),
     title: video.texto.trim(),
     category: video.categoria?.trim() || null,
+    subcategory: video.subcategoria?.trim() || null,
     platform: normalizeVideoPlatformValue(video.plataforma),
     info: video.info?.trim() || null,
   };

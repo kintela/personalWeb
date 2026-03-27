@@ -16,6 +16,7 @@ type HistoryViewerProps = {
 
 const HISTORY_VIEWER_GRID_STORAGE_KEY = "history-viewer-grid-density";
 const HISTORY_CATEGORY_ORDER = ["guerra_civil", "ii_guerra_mundial"] as const;
+const HISTORY_SUBCATEGORY_ORDER = ["documental", "película"] as const;
 
 type HistoryGridDensity = "default" | "compact" | "dense";
 
@@ -71,6 +72,27 @@ function formatHistoryCategoryLabel(category: string) {
   }
 }
 
+function sortHistoryVideosBySubcategory(videos: VideoAsset[]) {
+  return [...videos].sort((left, right) => {
+    const leftPriority = HISTORY_SUBCATEGORY_ORDER.indexOf(
+      left.subcategory?.toLocaleLowerCase("es-ES") as
+        | (typeof HISTORY_SUBCATEGORY_ORDER)[number]
+        | undefined,
+    );
+    const rightPriority = HISTORY_SUBCATEGORY_ORDER.indexOf(
+      right.subcategory?.toLocaleLowerCase("es-ES") as
+        | (typeof HISTORY_SUBCATEGORY_ORDER)[number]
+        | undefined,
+    );
+    const normalizedLeftPriority =
+      leftPriority === -1 ? HISTORY_SUBCATEGORY_ORDER.length : leftPriority;
+    const normalizedRightPriority =
+      rightPriority === -1 ? HISTORY_SUBCATEGORY_ORDER.length : rightPriority;
+
+    return normalizedLeftPriority - normalizedRightPriority;
+  });
+}
+
 function GridDensityIcon({
   active,
   columns,
@@ -100,7 +122,9 @@ function buildGroupedHistoryVideos(videos: VideoAsset[]) {
   const sections = HISTORY_CATEGORY_ORDER.map((category) => ({
     category,
     label: formatHistoryCategoryLabel(category),
-    videos: videos.filter((video) => video.category === category),
+    videos: sortHistoryVideosBySubcategory(
+      videos.filter((video) => video.category === category),
+    ),
   })).filter((section) => section.videos.length > 0);
 
   const knownCategories = new Set(HISTORY_CATEGORY_ORDER);
@@ -109,7 +133,9 @@ function buildGroupedHistoryVideos(videos: VideoAsset[]) {
     .map((category) => ({
       category,
       label: formatHistoryCategoryLabel(category),
-      videos: videos.filter((video) => video.category === category),
+      videos: sortHistoryVideosBySubcategory(
+        videos.filter((video) => video.category === category),
+      ),
     }));
 
   return [...sections, ...extraCategories];
