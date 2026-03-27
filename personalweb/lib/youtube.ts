@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  readYouTubeMatchCache,
+  upsertYouTubeMatchCache,
+} from "@/lib/supabase/youtube-match-cache";
 import type { YouTubeMatchedVideoAsset } from "@/lib/youtube-types";
 
 const YOUTUBE_API_BASE_URL = "https://www.googleapis.com/youtube/v3";
@@ -151,6 +155,12 @@ function compactWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizeNullableValue(value: string | null | undefined) {
+  const normalizedValue = value?.trim();
+
+  return normalizedValue ? normalizedValue : null;
+}
+
 function cleanTrackNameForSearch(trackName: string) {
   return compactWhitespace(
     trackName
@@ -166,6 +176,17 @@ function getSearchQuery({ trackName, artistsLabel }: SearchSongVideoInput) {
   const cleanedArtistsLabel = compactWhitespace(artistsLabel.replaceAll("·", " "));
 
   return compactWhitespace(`${cleanedArtistsLabel} "${cleanedTrackName}"`);
+}
+
+function getSearchCacheKey(input: SearchSongVideoInput) {
+  const cleanedTrackName = cleanTrackNameForSearch(input.trackName);
+
+  return [
+    normalizeForComparison(cleanedTrackName),
+    normalizeForComparison(compactWhitespace(input.artistsLabel.replaceAll("·", " "))),
+    normalizeForComparison(normalizeNullableValue(input.albumName) ?? ""),
+    normalizeForComparison(normalizeNullableValue(input.albumReleaseYear) ?? ""),
+  ].join("::");
 }
 
 function getThumbnailUrl(candidate: {
@@ -351,6 +372,13 @@ async function fetchYouTubeJson<T>(path: string, params: URLSearchParams) {
 
   if (!response.ok) {
     const errorText = await response.text();
+
+    if (response.status === 403 && errorText.includes("quotaExceeded")) {
+      throw new Error(
+        "YouTube ha agotado la cuota diaria de la API para búsquedas nuevas. Los vídeos ya cacheados seguirán funcionando; para el resto toca esperar al siguiente reset o ampliar cuota.",
+      );
+    }
+
     throw new Error(`YouTube devolvió ${response.status}: ${errorText}`);
   }
 
@@ -365,9 +393,16 @@ export async function searchYouTubeSongVideo(
   }
 
   const searchQuery = getSearchQuery(input);
+  const cacheKey = getSearchCacheKey(input);
 
   if (!searchQuery) {
     return null;
+  }
+
+  const cachedResult = await readYouTubeMatchCache(cacheKey);
+
+  if (cachedResult.status === "hit") {
+    return cachedResult.video;
   }
 
   const searchResponse = await fetchYouTubeJson<YouTubeSearchResponse>(
@@ -386,6 +421,15 @@ export async function searchYouTubeSongVideo(
     .filter(Boolean) ?? [];
 
   if (videoIds.length === 0) {
+    await upsertYouTubeMatchCache({
+      cacheKey,
+      trackName: input.trackName,
+      artistsLabel: input.artistsLabel,
+      albumName: input.albumName,
+      albumReleaseYear: input.albumReleaseYear,
+      matchedQuery: searchQuery,
+      video: null,
+    });
     return null;
   }
 
@@ -421,6 +465,15 @@ export async function searchYouTubeSongVideo(
     .filter((candidate): candidate is SearchCandidate => candidate !== null);
 
   if (candidates.length === 0) {
+    await upsertYouTubeMatchCache({
+      cacheKey,
+      trackName: input.trackName,
+      artistsLabel: input.artistsLabel,
+      albumName: input.albumName,
+      albumReleaseYear: input.albumReleaseYear,
+      matchedQuery: searchQuery,
+      video: null,
+    });
     return null;
   }
 
@@ -443,10 +496,19 @@ export async function searchYouTubeSongVideo(
     })[0];
 
   if (!bestCandidate || getVideoScore(bestCandidate, input) < 40) {
+    await upsertYouTubeMatchCache({
+      cacheKey,
+      trackName: input.trackName,
+      artistsLabel: input.artistsLabel,
+      albumName: input.albumName,
+      albumReleaseYear: input.albumReleaseYear,
+      matchedQuery: searchQuery,
+      video: null,
+    });
     return null;
   }
 
-  return {
+  const matchedVideo = {
     id: bestCandidate.id,
     title: bestCandidate.title,
     channelTitle: bestCandidate.channelTitle,
@@ -458,4 +520,16 @@ export async function searchYouTubeSongVideo(
     viewCountLabel: formatViewCountLabel(bestCandidate.viewCount),
     matchedQuery: searchQuery,
   } satisfies YouTubeMatchedVideoAsset;
+
+  await upsertYouTubeMatchCache({
+    cacheKey,
+    trackName: input.trackName,
+    artistsLabel: input.artistsLabel,
+    albumName: input.albumName,
+    albumReleaseYear: input.albumReleaseYear,
+    matchedQuery: searchQuery,
+    video: matchedVideo,
+  });
+
+  return matchedVideo;
 }
