@@ -15,6 +15,7 @@ import {
   usePersistedGridDensity,
 } from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
+import { YouTubeEmbeddedPlayer } from "@/components/youtube-embedded-player";
 import type {
   SpotifyPlaylistAsset,
   SpotifyPlaylistTrackAsset,
@@ -412,6 +413,26 @@ export function SpotifyViewer({
 
   function handleOpenPlaylistViewer(playlistId: string) {
     setSelectedPlaylistId(playlistId);
+  }
+
+  function handleAdvanceToNextTrack() {
+    setSelectedTrackId((currentTrackId) => {
+      if (!currentTrackId || playlistTracks.length === 0) {
+        return currentTrackId;
+      }
+
+      const currentTrackIndex = playlistTracks.findIndex(
+        (track) => track.id === currentTrackId,
+      );
+
+      if (currentTrackIndex < 0) {
+        return currentTrackId;
+      }
+
+      const nextTrack = playlistTracks[currentTrackIndex + 1];
+
+      return nextTrack?.id ?? currentTrackId;
+    });
   }
 
   function handleClosePlaylistViewer() {
@@ -844,39 +865,6 @@ export function SpotifyViewer({
                         </div>
 
                         <div className="flex min-h-[28rem] flex-col gap-6 p-6">
-                          <div className="grid gap-4 sm:grid-cols-3">
-                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-4">
-                              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
-                                Canción
-                              </p>
-                              <p className="mt-3 text-base font-semibold text-white">
-                                {selectedTrack?.name || "Sin seleccionar"}
-                              </p>
-                            </div>
-                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-4">
-                              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
-                                Artista
-                              </p>
-                              <p className="mt-3 text-base font-semibold text-white">
-                                {selectedTrack?.artistsLabel || "Pendiente"}
-                              </p>
-                            </div>
-                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-4">
-                              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
-                                Estado
-                              </p>
-                              <p className="mt-3 text-base font-semibold text-white">
-                                {videoStatus === "loading"
-                                  ? "Buscando"
-                                  : videoStatus === "error"
-                                    ? "Error"
-                                    : selectedVideo
-                                      ? "Vídeo cargado"
-                                      : "Sin vídeo"}
-                              </p>
-                            </div>
-                          </div>
-
                           {videoStatus === "loading" ? (
                             <div className="flex flex-1 items-center justify-center rounded-[1.75rem] border border-dashed border-cyan-300/30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_52%),rgba(2,6,23,0.72)] p-6">
                               <div className="mx-auto max-w-xl text-center">
@@ -904,44 +892,18 @@ export function SpotifyViewer({
                             </div>
                           ) : selectedVideo ? (
                             <div className="space-y-4">
-                              <div className="flex flex-col gap-4 rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-                                <div className="min-w-0">
-                                  <p className="truncate text-lg font-semibold text-white">
-                                    {selectedVideo.title}
-                                  </p>
-                                  <p className="mt-2 truncate text-xs uppercase tracking-[0.24em] text-slate-400">
-                                    {selectedVideo.channelTitle} · {selectedVideo.viewCountLabel} visualizaciones
-                                  </p>
-                                </div>
-
-                                <a
-                                  href={selectedVideo.externalUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="shrink-0 rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-red-300/45 hover:text-white"
-                                >
-                                  Abrir en YouTube
-                                </a>
-                              </div>
-
                               <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/60 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
                                 <div className="aspect-video">
-                                  <iframe
-                                    key={selectedVideo.embedUrl}
-                                    src={selectedVideo.embedUrl}
+                                  <YouTubeEmbeddedPlayer
+                                    key={selectedVideo.id}
+                                    videoId={selectedVideo.id}
                                     title={selectedVideo.title}
-                                    className="h-full w-full border-0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                    allowFullScreen
+                                    autoplay
+                                    onEnded={handleAdvanceToNextTrack}
+                                    className="h-full w-full"
                                   />
                                 </div>
                               </div>
-
-                              {selectedVideo.description ? (
-                                <p className="text-sm leading-7 text-slate-300">
-                                  {selectedVideo.description}
-                                </p>
-                              ) : null}
                             </div>
                           ) : (
                             <div className="flex flex-1 items-center justify-center rounded-[1.75rem] border border-dashed border-cyan-300/30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_52%),rgba(2,6,23,0.72)] p-6">
