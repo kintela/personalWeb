@@ -31,29 +31,37 @@ function GridDensityIcon({
 }
 
 export function usePersistedGridDensity(storageKey: string) {
-  const [gridDensity, setGridDensity] = useState<GridDensity>(() => {
-    if (typeof window === "undefined") {
-      return "default";
-    }
+  const [gridDensity, setGridDensity] = useState<GridDensity>("default");
+  const [hasHydratedGridDensity, setHasHydratedGridDensity] = useState(false);
 
+  useEffect(() => {
     const savedValue = window.localStorage.getItem(storageKey) as
       | GridDensity
       | null;
-
-    if (
+    const nextGridDensity: GridDensity =
       savedValue === "compact" ||
       savedValue === "dense" ||
       savedValue === "default"
-    ) {
-      return savedValue;
-    }
+        ? savedValue
+        : "default";
 
-    return "default";
-  });
+    const animationFrameId = window.requestAnimationFrame(() => {
+      setGridDensity(nextGridDensity);
+      setHasHydratedGridDensity(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [storageKey]);
 
   useEffect(() => {
+    if (!hasHydratedGridDensity) {
+      return;
+    }
+
     window.localStorage.setItem(storageKey, gridDensity);
-  }, [gridDensity, storageKey]);
+  }, [gridDensity, hasHydratedGridDensity, storageKey]);
 
   return [gridDensity, setGridDensity] as const;
 }

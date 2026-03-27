@@ -282,25 +282,8 @@ export function ConcertsViewer({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isClient, setIsClient] = useState(false);
-  const [gridDensity, setGridDensity] = useState<ConcertGridDensity>(() => {
-    if (typeof window === "undefined") {
-      return "default";
-    }
-
-    const savedValue = window.localStorage.getItem(
-      CONCERTS_VIEWER_GRID_STORAGE_KEY,
-    );
-
-    if (
-      savedValue === "compact" ||
-      savedValue === "dense" ||
-      savedValue === "default"
-    ) {
-      return savedValue;
-    }
-
-    return "default";
-  });
+  const [gridDensity, setGridDensity] = useState<ConcertGridDensity>("default");
+  const [hasHydratedGridDensity, setHasHydratedGridDensity] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<SelectedConcertVideo | null>(
     null,
   );
@@ -328,6 +311,27 @@ export function ConcertsViewer({
 
   useEffect(() => {
     setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    const savedValue = window.localStorage.getItem(
+      CONCERTS_VIEWER_GRID_STORAGE_KEY,
+    ) as ConcertGridDensity | null;
+    const nextGridDensity: ConcertGridDensity =
+      savedValue === "compact" ||
+      savedValue === "dense" ||
+      savedValue === "default"
+        ? savedValue
+        : "default";
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      setGridDensity(nextGridDensity);
+      setHasHydratedGridDensity(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
   }, []);
 
   const applyFilters = (
@@ -446,11 +450,15 @@ export function ConcertsViewer({
   }, [selectedPhotoViewer, selectedVideo]);
 
   useEffect(() => {
+    if (!hasHydratedGridDensity) {
+      return;
+    }
+
     window.localStorage.setItem(
       CONCERTS_VIEWER_GRID_STORAGE_KEY,
       gridDensity,
     );
-  }, [gridDensity]);
+  }, [gridDensity, hasHydratedGridDensity]);
 
   useEffect(() => {
     setFilterInput(filterValue);

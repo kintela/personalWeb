@@ -146,6 +146,8 @@ export function SpotifyViewer({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const sharedSpotifyPlaylistId = searchParams.get("spotifyPlaylist")?.trim() ?? "";
+  const sharedSpotifyTrackId = searchParams.get("spotifyTrack")?.trim() ?? "";
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
     SPOTIFY_VIEWER_GRID_STORAGE_KEY,
   );
@@ -247,6 +249,12 @@ export function SpotifyViewer({
     playbackOrderedTracks.find((track) => track.id === selectedTrackId) ??
     playbackOrderedTracks[0] ??
     null;
+  const selectedPlaylistViewerAnchorId = selectedPlaylist
+    ? `spotify-playlist-viewer-${selectedPlaylist.id}`
+    : "";
+  const selectedTrackAnchorId = selectedTrack
+    ? `spotify-track-${selectedTrack.id}`
+    : "";
   const selectedTrackIndex = selectedTrack
     ? playbackOrderedTracks.findIndex((track) => track.id === selectedTrack.id)
     : -1;
@@ -273,6 +281,61 @@ export function SpotifyViewer({
     });
   });
 
+  function resetPlaylistViewerState() {
+    setSelectedPlaylistId(null);
+    setPlaylistTracks([]);
+    setTrackFilterInput("");
+    setIsTrackShuffleEnabled(false);
+    setShuffledTrackIds([]);
+    setSelectedTrackId("");
+    setTrackStatus("idle");
+    setTrackError(null);
+    setSelectedVideo(null);
+    setVideoStatus("idle");
+    setVideoError(null);
+  }
+
+  function clearSpotifyShareParams() {
+    const params = new URLSearchParams(searchParams.toString());
+    let didChange = false;
+
+    for (const key of ["spotifyPlaylist", "spotifyTrack", "focus"]) {
+      if (!params.has(key)) {
+        continue;
+      }
+
+      params.delete(key);
+      didChange = true;
+    }
+
+    const currentHash = decodeURIComponent(window.location.hash.slice(1));
+    const shouldResetHash =
+      currentHash.startsWith("spotify-playlist-viewer-") ||
+      currentHash.startsWith("spotify-track-");
+
+    if (!didChange && !shouldResetHash) {
+      return;
+    }
+
+    const query = params.toString();
+    const hash = shouldResetHash ? "#spotify" : window.location.hash;
+
+    startTransition(() => {
+      router.replace(`${pathname}${query ? `?${query}` : ""}${hash}`, {
+        scroll: false,
+      });
+    });
+  }
+
+  function handleClosePlaylistViewer() {
+    resetPlaylistViewerState();
+    clearSpotifyShareParams();
+  }
+
+  const handleClosePlaylistViewerEffect = useEffectEvent(() => {
+    handleClosePlaylistViewer();
+  });
+
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -280,6 +343,21 @@ export function SpotifyViewer({
   useEffect(() => {
     setFilterInput(filterValue);
   }, [filterValue]);
+
+  useEffect(() => {
+    if (!sharedSpotifyPlaylistId) {
+      return;
+    }
+
+    if (!playlists.some((playlist) => playlist.id === sharedSpotifyPlaylistId)) {
+      return;
+    }
+
+    setSelectedPlaylistId(sharedSpotifyPlaylistId);
+    setTrackFilterInput("");
+    setIsTrackShuffleEnabled(false);
+    setShuffledTrackIds([]);
+  }, [playlists, sharedSpotifyPlaylistId]);
 
   useEffect(() => {
     const currentValue = filterValue.trim();
@@ -316,7 +394,7 @@ export function SpotifyViewer({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        handleClosePlaylistViewer();
+        handleClosePlaylistViewerEffect();
       }
     }
 
@@ -426,6 +504,25 @@ export function SpotifyViewer({
   }, [filteredPlaylistTracks, isTrackShuffleEnabled]);
 
   useEffect(() => {
+    if (!selectedPlaylist) {
+      setSelectedTrackId("");
+      return;
+    }
+
+    if (sharedSpotifyTrackId) {
+      if (playbackOrderedTracks.length === 0) {
+        setSelectedTrackId(sharedSpotifyTrackId);
+        return;
+      }
+
+      if (
+        playbackOrderedTracks.some((track) => track.id === sharedSpotifyTrackId)
+      ) {
+        setSelectedTrackId(sharedSpotifyTrackId);
+        return;
+      }
+    }
+
     if (playbackOrderedTracks.length === 0) {
       setSelectedTrackId("");
       return;
@@ -441,7 +538,7 @@ export function SpotifyViewer({
 
       return playbackOrderedTracks[0]?.id ?? "";
     });
-  }, [playbackOrderedTracks]);
+  }, [playbackOrderedTracks, selectedPlaylist, sharedSpotifyTrackId]);
 
   useEffect(() => {
     if (!selectedTrack) {
@@ -574,20 +671,6 @@ export function SpotifyViewer({
 
       return nextValue;
     });
-  }
-
-  function handleClosePlaylistViewer() {
-    setSelectedPlaylistId(null);
-    setPlaylistTracks([]);
-    setTrackFilterInput("");
-    setIsTrackShuffleEnabled(false);
-    setShuffledTrackIds([]);
-    setSelectedTrackId("");
-    setTrackStatus("idle");
-    setTrackError(null);
-    setSelectedVideo(null);
-    setVideoStatus("idle");
-    setVideoError(null);
   }
 
   return (
@@ -805,9 +888,9 @@ export function SpotifyViewer({
                       className="group relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                     >
                       <ShareCardButton
-                        anchorId={anchorId}
+                        anchorId={`spotify-playlist-viewer-${playlist.id}`}
                         sectionId="spotify"
-                        queryKeys={["spotifyFilter"]}
+                        queryValues={{ spotifyPlaylist: playlist.id }}
                         className="absolute right-4 top-4 z-10"
                       />
 
@@ -897,7 +980,10 @@ export function SpotifyViewer({
               <div className="relative z-10 h-full overflow-y-auto px-4 py-6">
                 <div className="mx-auto flex min-h-full w-full max-w-7xl items-start justify-center">
                   <div className="flex w-full flex-col gap-4">
-                    <div className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 md:flex-row md:items-center md:justify-between">
+                    <div
+                      id={selectedPlaylistViewerAnchorId}
+                      className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 md:flex-row md:items-center md:justify-between"
+                    >
                       <div className="min-w-0">
                         <p className="truncate font-medium text-white">
                           {selectedPlaylist.name}
@@ -909,6 +995,11 @@ export function SpotifyViewer({
                       </div>
 
                       <div className="flex items-center gap-3">
+                        <ShareCardButton
+                          anchorId={selectedPlaylistViewerAnchorId}
+                          sectionId="spotify"
+                          queryValues={{ spotifyPlaylist: selectedPlaylist.id }}
+                        />
                         <a
                           href={selectedPlaylist.externalUrl}
                           target="_blank"
@@ -994,6 +1085,7 @@ export function SpotifyViewer({
                                 return (
                                   <button
                                     key={track.id}
+                                    id={`spotify-track-${track.id}`}
                                     type="button"
                                     onClick={() => setSelectedTrackId(track.id)}
                                     className={`flex w-full items-start justify-between gap-3 rounded-[1.35rem] border px-4 py-4 text-left transition ${
@@ -1051,6 +1143,16 @@ export function SpotifyViewer({
                           </div>
 
                           <div className="flex items-center gap-2">
+                            {selectedTrack ? (
+                              <ShareCardButton
+                                anchorId={selectedTrackAnchorId}
+                                sectionId="spotify"
+                                queryValues={{
+                                  spotifyPlaylist: selectedPlaylist.id,
+                                  spotifyTrack: selectedTrack.id,
+                                }}
+                              />
+                            ) : null}
                             <button
                               type="button"
                               onClick={handleGoToPreviousTrack}

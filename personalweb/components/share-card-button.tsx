@@ -9,6 +9,7 @@ type ShareCardButtonProps = {
   sectionId?: string;
   className?: string;
   queryKeys?: readonly string[];
+  queryValues?: Readonly<Record<string, string | null | undefined>>;
 };
 
 function ShareIcon() {
@@ -52,6 +53,7 @@ export function ShareCardButton({
   sectionId,
   className,
   queryKeys = [],
+  queryValues,
 }: ShareCardButtonProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -78,6 +80,18 @@ export function ShareCardButton({
     for (const key of queryKeys) {
       for (const value of searchParams.getAll(key)) {
         params.append(key, value);
+      }
+    }
+
+    if (queryValues) {
+      for (const [key, value] of Object.entries(queryValues)) {
+        const normalizedValue = value?.trim();
+
+        if (normalizedValue) {
+          params.set(key, normalizedValue);
+        } else {
+          params.delete(key);
+        }
       }
     }
 

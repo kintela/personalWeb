@@ -26,6 +26,8 @@ const TARGET_SECTION_PREFIXES = [
   { prefix: "guitarra-tema-", sectionId: "guitarra" },
   { prefix: "guitarra-tema-video-", sectionId: "guitarra" },
   { prefix: "spotify-playlist-", sectionId: "spotify" },
+  { prefix: "spotify-playlist-viewer-", sectionId: "spotify" },
+  { prefix: "spotify-track-", sectionId: "spotify" },
   { prefix: "video-", sectionId: "videos" },
 ] as const;
 
