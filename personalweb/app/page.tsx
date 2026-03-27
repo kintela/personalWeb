@@ -32,6 +32,11 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const SECTION_SHORTCUTS = [
   {
+    href: "#spotify",
+    label: "Spotify",
+    eyebrow: "Playlists",
+  },
+  {
     href: "#fotos",
     label: "Fotos",
     eyebrow: "PhotoTeka",
@@ -65,11 +70,6 @@ const SECTION_SHORTCUTS = [
     href: "#guitarra",
     label: "Guitarra",
     eyebrow: "Cuerdas",
-  },
-  {
-    href: "#spotify",
-    label: "Spotify",
-    eyebrow: "Playlists",
   },
   {
     href: "#videos",
@@ -322,6 +322,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
         <div id="spotify" className="scroll-mt-32">
           <SpotifyViewer
             playlists={spotifyPlaylists.playlists}
+            quickAccess={spotifyPlaylists.quickAccess}
             configured={spotifyPlaylists.configured}
             connected={spotifyPlaylists.connected}
             error={spotifyPlaylists.error}

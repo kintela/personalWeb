@@ -18,12 +18,14 @@ import { ShareCardButton } from "@/components/share-card-button";
 import { YouTubeEmbeddedPlayer } from "@/components/youtube-embedded-player";
 import type {
   SpotifyPlaylistAsset,
+  SpotifyQuickAccessAsset,
   SpotifyPlaylistTrackAsset,
 } from "@/lib/spotify-types";
 import type { YouTubeMatchedVideoAsset } from "@/lib/youtube-types";
 
 type SpotifyViewerProps = {
   playlists: SpotifyPlaylistAsset[];
+  quickAccess: SpotifyQuickAccessAsset[];
   configured: boolean;
   connected: boolean;
   error: string | null;
@@ -46,7 +48,6 @@ type YouTubeMatchPayload = {
 type SpotifyTrackStatus = "idle" | "loading" | "ready" | "error";
 
 const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
-
 function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
 }
@@ -115,6 +116,24 @@ function PlaylistIcon() {
   );
 }
 
+function ArtistIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
+    </svg>
+  );
+}
+
 function VideoPlaceholderIcon() {
   return (
     <svg
@@ -135,6 +154,7 @@ function VideoPlaceholderIcon() {
 
 export function SpotifyViewer({
   playlists,
+  quickAccess,
   configured,
   connected,
   error,
@@ -798,6 +818,48 @@ export function SpotifyViewer({
                     </span>
                   </p>
                 ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-white/10 bg-slate-950/35 p-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                {quickAccess.map((accessLink) => (
+                  <a
+                    key={accessLink.id}
+                    href={accessLink.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group flex items-center gap-4 rounded-[1.35rem] border border-white/10 bg-black/20 px-4 py-4 transition hover:border-cyan-300/45 hover:bg-cyan-300/10"
+                  >
+                    <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/12 bg-white/6 text-slate-100 transition group-hover:border-cyan-300/50 group-hover:text-white">
+                      {accessLink.imageUrl ? (
+                        <Image
+                          src={accessLink.imageUrl}
+                          alt={`Imagen de ${accessLink.label}`}
+                          width={44}
+                          height={44}
+                          unoptimized
+                          className="h-full w-full object-cover"
+                        />
+                      ) : accessLink.kind === "artist" ? (
+                        <ArtistIcon />
+                      ) : (
+                        <PlaylistIcon />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1 space-y-1">
+                      <span className="block text-[0.68rem] uppercase tracking-[0.28em] text-cyan-300/80">
+                        {accessLink.eyebrow}
+                      </span>
+                      <span className="block truncate text-base font-semibold text-white">
+                        {accessLink.label}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xl text-cyan-200 transition group-hover:translate-x-1">
+                      →
+                    </span>
+                  </a>
+                ))}
               </div>
             </div>
 

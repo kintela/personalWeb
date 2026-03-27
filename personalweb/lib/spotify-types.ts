@@ -11,6 +11,15 @@ export type SpotifyPlaylistAsset = {
   collaborative: boolean;
 };
 
+export type SpotifyQuickAccessAsset = {
+  id: string;
+  label: string;
+  eyebrow: string;
+  href: string;
+  imageUrl: string | null;
+  kind: "artist" | "playlist";
+};
+
 export type SpotifyPlaylistTrackAsset = {
   id: string;
   position: number;
@@ -23,6 +32,7 @@ export type SpotifyPlaylistTrackAsset = {
 
 export type SpotifyPlaylistListResult = {
   playlists: SpotifyPlaylistAsset[];
+  quickAccess: SpotifyQuickAccessAsset[];
   configured: boolean;
   connected: boolean;
   error: string | null;

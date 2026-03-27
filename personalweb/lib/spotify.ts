@@ -4,6 +4,7 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import type {
   SpotifyPlaylistAsset,
   SpotifyPlaylistListResult,
+  SpotifyQuickAccessAsset,
   SpotifyPlaylistTrackAsset,
 } from "@/lib/spotify-types";
 
@@ -17,6 +18,8 @@ const SPOTIFY_STATE_COOKIE_NAME = "personalweb-spotify-auth-state";
 const SPOTIFY_STATE_COOKIE_MAX_AGE = 60 * 10;
 const SPOTIFY_LOGIN_PATH = "/api/spotify/login";
 const SPOTIFY_CALLBACK_PATH = "/api/spotify/callback";
+const KINTELA_SPOTIFY_ARTIST_ID = "1wL3xbiQUvV9cwYEjN70rB";
+const DESGARRAMANTAS_SPOTIFY_ARTIST_ID = "7cpd2HqTblNj4YFdU6R0RT";
 
 type SpotifyTokenResponse = {
   access_token: string;
@@ -32,6 +35,19 @@ type SpotifyProfileResponse = {
   external_urls?: {
     spotify?: string;
   };
+};
+
+type SpotifyArtistResponse = {
+  id: string;
+  name: string;
+  external_urls?: {
+    spotify?: string;
+  };
+  images?: Array<{
+    url: string;
+    width: number | null;
+    height: number | null;
+  }>;
 };
 
 type SpotifyPlaylistResponse = {
@@ -313,6 +329,44 @@ function mapSpotifyPlaylist(playlist: SpotifyPlaylistResponse) {
   } satisfies SpotifyPlaylistAsset;
 }
 
+function mapSpotifyArtistQuickAccess(
+  artist: SpotifyArtistResponse,
+): SpotifyQuickAccessAsset {
+  return {
+    id: artist.id,
+    label: artist.name.trim(),
+    eyebrow: "Perfil",
+    href:
+      artist.external_urls?.spotify?.trim() ||
+      `https://open.spotify.com/artist/${artist.id}`,
+    imageUrl: artist.images?.[0]?.url?.trim() || null,
+    kind: "artist",
+  } satisfies SpotifyQuickAccessAsset;
+}
+
+function buildLegacyQuickAccess(
+  playlists: SpotifyPlaylistAsset[],
+): SpotifyQuickAccessAsset | null {
+  const legacyPlaylist =
+    playlists.find(
+      (playlist) =>
+        playlist.name.trim().toLocaleLowerCase("es-ES") === "legacy",
+    ) ?? null;
+
+  if (!legacyPlaylist) {
+    return null;
+  }
+
+  return {
+    id: `playlist-${legacyPlaylist.id}`,
+    label: legacyPlaylist.name,
+    eyebrow: "Lista",
+    href: legacyPlaylist.externalUrl,
+    imageUrl: legacyPlaylist.imageUrl,
+    kind: "playlist",
+  } satisfies SpotifyQuickAccessAsset;
+}
+
 function formatDurationLabel(durationMs: number | null) {
   if (!durationMs || durationMs < 0) {
     return "--:--";
@@ -419,6 +473,7 @@ export async function getSpotifyPlaylistList(): Promise<SpotifyPlaylistListResul
   if (!isSpotifyConfigured()) {
     return {
       playlists: [],
+      quickAccess: [],
       configured: false,
       connected: false,
       error:
@@ -432,6 +487,7 @@ export async function getSpotifyPlaylistList(): Promise<SpotifyPlaylistListResul
   if (!isSpotifyConnected()) {
     return {
       playlists: [],
+      quickAccess: [],
       configured: true,
       connected: false,
       error: null,
@@ -469,9 +525,27 @@ export async function getSpotifyPlaylistList(): Promise<SpotifyPlaylistListResul
       .sort((left, right) =>
         left.name.localeCompare(right.name, "es", { sensitivity: "base" }),
       );
+    const [kintelaArtist, desgarramantasArtist] = await Promise.all([
+      fetchSpotifyJson<SpotifyArtistResponse>(
+        `${SPOTIFY_API_BASE_URL}/artists/${KINTELA_SPOTIFY_ARTIST_ID}`,
+        accessToken,
+      ),
+      fetchSpotifyJson<SpotifyArtistResponse>(
+        `${SPOTIFY_API_BASE_URL}/artists/${DESGARRAMANTAS_SPOTIFY_ARTIST_ID}`,
+        accessToken,
+      ),
+    ]);
+    const quickAccess = [
+      mapSpotifyArtistQuickAccess(kintelaArtist),
+      mapSpotifyArtistQuickAccess(desgarramantasArtist),
+      buildLegacyQuickAccess(ownedPlaylists),
+    ].filter(
+      (asset): asset is SpotifyQuickAccessAsset => asset !== null,
+    );
 
     return {
       playlists: ownedPlaylists,
+      quickAccess,
       configured: true,
       connected: true,
       error: null,
@@ -487,6 +561,7 @@ export async function getSpotifyPlaylistList(): Promise<SpotifyPlaylistListResul
 
     return {
       playlists: [],
+      quickAccess: [],
       configured: true,
       connected: true,
       error: `No he podido leer Spotify: ${message}`,
