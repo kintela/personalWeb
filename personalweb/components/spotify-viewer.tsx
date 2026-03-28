@@ -218,10 +218,10 @@ export function SpotifyViewer({
     useState<YouTubeMatchedVideoAsset | null>(null);
   const [videoStatus, setVideoStatus] = useState<SpotifyTrackStatus>("idle");
   const [videoError, setVideoError] = useState<string | null>(null);
-  const [isManualVideoPanelOpen, setIsManualVideoPanelOpen] = useState(false);
-  const [isManualVideoUnlocked, setIsManualVideoUnlocked] = useState(
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(
     initiallyAdminUnlocked,
   );
+  const [isManualVideoPanelOpen, setIsManualVideoPanelOpen] = useState(false);
   const [manualVideoPassword, setManualVideoPassword] = useState("");
   const [manualVideoUrl, setManualVideoUrl] = useState("");
   const [manualVideoError, setManualVideoError] = useState("");
@@ -395,7 +395,7 @@ export function SpotifyViewer({
   }, [filterValue]);
 
   useEffect(() => {
-    setIsManualVideoUnlocked(initiallyAdminUnlocked);
+    setIsAdminUnlocked(initiallyAdminUnlocked);
   }, [initiallyAdminUnlocked]);
 
   useEffect(() => {
@@ -739,6 +739,23 @@ export function SpotifyViewer({
     setManualVideoSuccess("");
   }
 
+  async function unlockSpotifyAdminSession(password: string) {
+    const response = await fetch("/api/admin/session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+    const payload = (await response.json()) as { ok?: boolean; error?: string };
+
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error ?? "No he podido validar la contraseña admin.");
+    }
+
+    setIsAdminUnlocked(true);
+  }
+
   async function handleUnlockManualVideo(
     event: React.FormEvent<HTMLFormElement>,
   ) {
@@ -748,24 +765,14 @@ export function SpotifyViewer({
     setManualVideoSuccess("");
 
     try {
-      const response = await fetch("/api/admin/session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ password: manualVideoPassword }),
-      });
-      const payload = (await response.json()) as { ok?: boolean; error?: string };
-
-      if (!response.ok || !payload.ok) {
-        setManualVideoError(
-          payload.error ?? "No he podido validar la contraseña admin.",
-        );
-        return;
-      }
-
-      setIsManualVideoUnlocked(true);
+      await unlockSpotifyAdminSession(manualVideoPassword);
       setManualVideoPassword("");
+    } catch (error) {
+      setManualVideoError(
+        error instanceof Error
+          ? error.message
+          : "No he podido validar la contraseña admin.",
+      );
     } finally {
       setIsManualVideoUnlocking(false);
     }
@@ -808,7 +815,7 @@ export function SpotifyViewer({
 
       if (!response.ok || !payload.ok || !payload.video) {
         if (response.status === 401) {
-          setIsManualVideoUnlocked(false);
+          setIsAdminUnlocked(false);
         }
 
         throw new Error(
@@ -1368,7 +1375,7 @@ export function SpotifyViewer({
                         {selectedTrack && isManualVideoPanelOpen ? (
                           <div className="border-b border-white/10 px-5 py-4">
                             <div className="rounded-[1.5rem] border border-cyan-300/20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_55%),rgba(8,15,31,0.72)] p-4">
-                              {!isManualVideoUnlocked ? (
+                              {!isAdminUnlocked ? (
                                 <form
                                   className="space-y-4"
                                   onSubmit={handleUnlockManualVideo}

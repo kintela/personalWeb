@@ -256,11 +256,16 @@ async function getSpotifyAccessToken() {
   return tokenResponse.access_token;
 }
 
-async function fetchSpotifyJson<T>(input: string, accessToken: string) {
+async function fetchSpotifyJson<T>(
+  input: string,
+  accessToken: string,
+  init?: RequestInit,
+) {
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${accessToken}`);
   const response = await fetch(input, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
+    ...init,
+    headers,
     cache: "no-store",
   });
 
