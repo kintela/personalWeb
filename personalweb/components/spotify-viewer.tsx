@@ -258,6 +258,7 @@ export function SpotifyViewer({
     playbackOrderedTracks.find((track) => track.id === selectedTrackId) ??
     playbackOrderedTracks[0] ??
     null;
+  const selectedTrackYear = selectedTrack?.albumReleaseDate?.slice(0, 4) ?? null;
   const selectedPlaylistViewerAnchorId = selectedPlaylist
     ? `spotify-playlist-viewer-${selectedPlaylist.id}`
     : "";
@@ -1135,11 +1136,23 @@ export function SpotifyViewer({
                             <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
                               Visor
                             </p>
-                            <p className="mt-2 text-sm text-slate-300">
-                              {selectedTrack
-                                ? `${selectedTrack.name} · ${selectedTrack.artistsLabel}`
-                                : "Selecciona una canción para preparar el visor del vídeo."}
-                            </p>
+                            {selectedTrack ? (
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-300">
+                                <p>
+                                  {selectedTrack.name} · {selectedTrack.artistsLabel}
+                                </p>
+                                {selectedTrackYear ? (
+                                  <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[0.62rem] font-medium uppercase tracking-[0.18em] text-cyan-100">
+                                    {selectedTrackYear}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-sm text-slate-300">
+                                Selecciona una canción para preparar el visor del
+                                vídeo.
+                              </p>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-2">
