@@ -330,6 +330,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
             loginHref={spotifyPlaylists.loginHref}
             callbackPath={spotifyPlaylists.callbackPath}
             filterValue={spotifyFilterValue}
+            initiallyAdminUnlocked={isUploaderUnlocked}
           />
         </div>
 

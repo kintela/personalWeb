@@ -17,6 +17,10 @@ type SearchSongVideoInput = {
   albumReleaseYear?: string | null;
 };
 
+type ManualYouTubeSongVideoInput = SearchSongVideoInput & {
+  videoUrl: string;
+};
+
 type YouTubeSearchResponse = {
   items?: Array<{
     id?: {
@@ -68,6 +72,8 @@ type YouTubeVideoListResponse = {
     };
   }>;
 };
+
+type YouTubeVideoListItem = NonNullable<YouTubeVideoListResponse["items"]>[number];
 
 type SearchCandidate = {
   id: string;
@@ -161,6 +167,71 @@ function normalizeNullableValue(value: string | null | undefined) {
   return normalizedValue ? normalizedValue : null;
 }
 
+function isValidYouTubeVideoId(value: string) {
+  return /^[A-Za-z0-9_-]{11}$/.test(value.trim());
+}
+
+function getNormalizedYouTubeUrl(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmedValue)
+    ? trimmedValue
+    : `https://${trimmedValue}`;
+}
+
+function getYouTubePathVideoId(value: string | undefined) {
+  const normalizedValue = value?.trim() ?? "";
+
+  return isValidYouTubeVideoId(normalizedValue) ? normalizedValue : null;
+}
+
+function extractYouTubeVideoId(value: string) {
+  const trimmedValue = value.trim();
+
+  if (isValidYouTubeVideoId(trimmedValue)) {
+    return trimmedValue;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(getNormalizedYouTubeUrl(trimmedValue));
+  } catch {
+    return null;
+  }
+
+  const hostname = url.hostname.toLocaleLowerCase("en-US").replace(/^www\./, "");
+
+  if (hostname === "youtu.be") {
+    return getYouTubePathVideoId(url.pathname.split("/")[1]);
+  }
+
+  if (
+    hostname !== "youtube.com" &&
+    hostname !== "m.youtube.com" &&
+    hostname !== "music.youtube.com" &&
+    hostname !== "youtube-nocookie.com"
+  ) {
+    return null;
+  }
+
+  if (url.pathname === "/watch") {
+    return getYouTubePathVideoId(url.searchParams.get("v") ?? undefined);
+  }
+
+  const [, pathRoot, pathVideoId] = url.pathname.split("/");
+
+  if (["embed", "shorts", "live", "v"].includes(pathRoot ?? "")) {
+    return getYouTubePathVideoId(pathVideoId);
+  }
+
+  return null;
+}
+
 function cleanTrackNameForSearch(trackName: string) {
   return compactWhitespace(
     trackName
@@ -225,6 +296,34 @@ function buildExternalUrl(videoId: string) {
   url.searchParams.set("v", videoId);
 
   return url.toString();
+}
+
+function buildMatchedVideoAssetFromVideoItem(
+  item: YouTubeVideoListItem,
+  matchedQuery: string,
+): YouTubeMatchedVideoAsset | null {
+  const id = item.id?.trim() || "";
+  const title = item.snippet?.title?.trim() || "";
+  const channelTitle = item.snippet?.channelTitle?.trim() || "";
+
+  if (!id || !title || !channelTitle) {
+    return null;
+  }
+
+  const viewCount = Number.parseInt(item.statistics?.viewCount ?? "0", 10) || 0;
+
+  return {
+    id,
+    title,
+    channelTitle,
+    description: item.snippet?.description?.trim() || null,
+    thumbnailUrl: getThumbnailUrl(item),
+    externalUrl: buildExternalUrl(id),
+    embedUrl: buildEmbedUrl(id),
+    viewCount,
+    viewCountLabel: formatViewCountLabel(viewCount),
+    matchedQuery,
+  } satisfies YouTubeMatchedVideoAsset;
 }
 
 function tokenize(value: string) {
@@ -383,6 +482,67 @@ async function fetchYouTubeJson<T>(path: string, params: URLSearchParams) {
   }
 
   return (await response.json()) as T;
+}
+
+export async function saveManualYouTubeSongVideo(
+  input: ManualYouTubeSongVideoInput,
+): Promise<YouTubeMatchedVideoAsset> {
+  if (!isYouTubeConfigured()) {
+    throw new Error(
+      "Falta YOUTUBE_API_KEY para validar el vídeo manual en YouTube.",
+    );
+  }
+
+  const videoId = extractYouTubeVideoId(input.videoUrl);
+
+  if (!videoId) {
+    throw new Error("Pega un enlace válido de YouTube o un ID de vídeo.");
+  }
+
+  const matchedQuery = `manual:${buildExternalUrl(videoId)}`;
+  const cacheKey = getSearchCacheKey(input);
+  const videoResponse = await fetchYouTubeJson<YouTubeVideoListResponse>(
+    "/videos",
+    new URLSearchParams({
+      part: "snippet,statistics,status",
+      id: videoId,
+      maxResults: "1",
+    }),
+  );
+  const matchedVideoItem = videoResponse.items?.[0];
+
+  if (!matchedVideoItem?.id) {
+    throw new Error("No he encontrado ese vídeo en YouTube.");
+  }
+
+  if (matchedVideoItem.status?.embeddable === false) {
+    throw new Error("Ese vídeo no permite reproducción embebida.");
+  }
+
+  const matchedVideo = buildMatchedVideoAssetFromVideoItem(
+    matchedVideoItem,
+    matchedQuery,
+  );
+
+  if (!matchedVideo) {
+    throw new Error("No he podido leer los datos de ese vídeo en YouTube.");
+  }
+
+  const saveResult = await upsertYouTubeMatchCache({
+    cacheKey,
+    trackName: input.trackName,
+    artistsLabel: input.artistsLabel,
+    albumName: input.albumName,
+    albumReleaseYear: input.albumReleaseYear,
+    matchedQuery,
+    video: matchedVideo,
+  });
+
+  if (!saveResult.ok) {
+    throw new Error(saveResult.error);
+  }
+
+  return matchedVideo;
 }
 
 export async function searchYouTubeSongVideo(

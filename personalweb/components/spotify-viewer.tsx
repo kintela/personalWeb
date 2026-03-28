@@ -33,6 +33,7 @@ type SpotifyViewerProps = {
   loginHref: string;
   callbackPath: string;
   filterValue: string;
+  initiallyAdminUnlocked: boolean;
 };
 
 type SpotifyPlaylistTracksPayload = {
@@ -41,6 +42,7 @@ type SpotifyPlaylistTracksPayload = {
 };
 
 type YouTubeMatchPayload = {
+  ok?: boolean;
   video?: YouTubeMatchedVideoAsset | null;
   error?: string;
 };
@@ -152,6 +154,26 @@ function VideoPlaceholderIcon() {
   );
 }
 
+function ManualVideoIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <rect x="3.5" y="7" width="11" height="10" rx="2.2" />
+      <path d="m14.5 10 4 2.5-4 2.5Z" fill="currentColor" stroke="none" />
+      <path d="M18 4.5v4" />
+      <path d="M16 6.5h4" />
+    </svg>
+  );
+}
+
 export function SpotifyViewer({
   playlists,
   quickAccess,
@@ -162,6 +184,7 @@ export function SpotifyViewer({
   loginHref,
   callbackPath,
   filterValue,
+  initiallyAdminUnlocked,
 }: SpotifyViewerProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -195,6 +218,16 @@ export function SpotifyViewer({
     useState<YouTubeMatchedVideoAsset | null>(null);
   const [videoStatus, setVideoStatus] = useState<SpotifyTrackStatus>("idle");
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [isManualVideoPanelOpen, setIsManualVideoPanelOpen] = useState(false);
+  const [isManualVideoUnlocked, setIsManualVideoUnlocked] = useState(
+    initiallyAdminUnlocked,
+  );
+  const [manualVideoPassword, setManualVideoPassword] = useState("");
+  const [manualVideoUrl, setManualVideoUrl] = useState("");
+  const [manualVideoError, setManualVideoError] = useState("");
+  const [manualVideoSuccess, setManualVideoSuccess] = useState("");
+  const [isManualVideoUnlocking, setIsManualVideoUnlocking] = useState(false);
+  const [isManualVideoSaving, setIsManualVideoSaving] = useState(false);
   const gridClassName =
     gridDensity === "dense"
       ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
@@ -303,6 +336,13 @@ export function SpotifyViewer({
     setSelectedVideo(null);
     setVideoStatus("idle");
     setVideoError(null);
+    setIsManualVideoPanelOpen(false);
+    setManualVideoPassword("");
+    setManualVideoUrl("");
+    setManualVideoError("");
+    setManualVideoSuccess("");
+    setIsManualVideoUnlocking(false);
+    setIsManualVideoSaving(false);
   }
 
   function clearSpotifyShareParams() {
@@ -353,6 +393,20 @@ export function SpotifyViewer({
   useEffect(() => {
     setFilterInput(filterValue);
   }, [filterValue]);
+
+  useEffect(() => {
+    setIsManualVideoUnlocked(initiallyAdminUnlocked);
+  }, [initiallyAdminUnlocked]);
+
+  useEffect(() => {
+    setIsManualVideoPanelOpen(false);
+    setManualVideoPassword("");
+    setManualVideoUrl("");
+    setManualVideoError("");
+    setManualVideoSuccess("");
+    setIsManualVideoUnlocking(false);
+    setIsManualVideoSaving(false);
+  }, [selectedTrack?.id]);
 
   useEffect(() => {
     if (!sharedSpotifyPlaylistId) {
@@ -677,6 +731,109 @@ export function SpotifyViewer({
 
       return nextValue;
     });
+  }
+
+  function handleToggleManualVideoPanel() {
+    setIsManualVideoPanelOpen((currentValue) => !currentValue);
+    setManualVideoError("");
+    setManualVideoSuccess("");
+  }
+
+  async function handleUnlockManualVideo(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    setIsManualVideoUnlocking(true);
+    setManualVideoError("");
+    setManualVideoSuccess("");
+
+    try {
+      const response = await fetch("/api/admin/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password: manualVideoPassword }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+
+      if (!response.ok || !payload.ok) {
+        setManualVideoError(
+          payload.error ?? "No he podido validar la contraseña admin.",
+        );
+        return;
+      }
+
+      setIsManualVideoUnlocked(true);
+      setManualVideoPassword("");
+    } finally {
+      setIsManualVideoUnlocking(false);
+    }
+  }
+
+  async function handleSaveManualVideo(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!selectedTrack) {
+      setManualVideoError("Selecciona primero una canción.");
+      return;
+    }
+
+    if (!manualVideoUrl.trim()) {
+      setManualVideoError("Pega un enlace de YouTube antes de guardar.");
+      return;
+    }
+
+    setIsManualVideoSaving(true);
+    setManualVideoError("");
+    setManualVideoSuccess("");
+
+    try {
+      const response = await fetch("/api/youtube/match", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          track: selectedTrack.name,
+          artists: selectedTrack.artistsLabel,
+          album: selectedTrack.albumName ?? "",
+          year: selectedTrackYear ?? "",
+          youtubeUrl: manualVideoUrl.trim(),
+        }),
+      });
+      const payload = (await response.json()) as YouTubeMatchPayload;
+
+      if (!response.ok || !payload.ok || !payload.video) {
+        if (response.status === 401) {
+          setIsManualVideoUnlocked(false);
+        }
+
+        throw new Error(
+          payload.error ?? "No he podido guardar el vídeo manual.",
+        );
+      }
+
+      setVideoCache((currentCache) => ({
+        ...currentCache,
+        [selectedTrack.id]: payload.video ?? null,
+      }));
+      setSelectedVideo(payload.video);
+      setVideoStatus("ready");
+      setVideoError(null);
+      setManualVideoSuccess("Vídeo manual guardado en la caché.");
+      setManualVideoUrl("");
+    } catch (error) {
+      setManualVideoError(
+        error instanceof Error
+          ? error.message
+          : "No he podido guardar el vídeo manual.",
+      );
+    } finally {
+      setIsManualVideoSaving(false);
+    }
   }
 
   return (
@@ -1157,6 +1314,29 @@ export function SpotifyViewer({
 
                           <div className="flex items-center gap-2">
                             {selectedTrack ? (
+                              <button
+                                type="button"
+                                onClick={handleToggleManualVideoPanel}
+                                aria-label={
+                                  isManualVideoPanelOpen
+                                    ? "Cerrar formulario de vídeo manual"
+                                    : "Añadir vídeo manualmente"
+                                }
+                                title={
+                                  isManualVideoPanelOpen
+                                    ? "Cerrar formulario de vídeo manual"
+                                    : "Añadir vídeo manualmente"
+                                }
+                                className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
+                                  isManualVideoPanelOpen
+                                    ? "border-cyan-300/55 bg-cyan-300/14 text-cyan-100"
+                                    : "border-white/12 bg-white/6 text-slate-100 hover:border-cyan-300/45 hover:text-white"
+                                }`}
+                              >
+                                <ManualVideoIcon />
+                              </button>
+                            ) : null}
+                            {selectedTrack ? (
                               <ShareCardButton
                                 anchorId={selectedTrackAnchorId}
                                 sectionId="spotify"
@@ -1184,6 +1364,116 @@ export function SpotifyViewer({
                             </button>
                           </div>
                         </div>
+
+                        {selectedTrack && isManualVideoPanelOpen ? (
+                          <div className="border-b border-white/10 px-5 py-4">
+                            <div className="rounded-[1.5rem] border border-cyan-300/20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_55%),rgba(8,15,31,0.72)] p-4">
+                              {!isManualVideoUnlocked ? (
+                                <form
+                                  className="space-y-4"
+                                  onSubmit={handleUnlockManualVideo}
+                                >
+                                  <div className="space-y-2">
+                                    <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">
+                                      Vídeo manual
+                                    </p>
+                                    <p className="text-sm text-slate-300">
+                                      Introduce la contraseña admin para
+                                      sustituir el vídeo cacheado de{" "}
+                                      <span className="font-medium text-white">
+                                        {selectedTrack.name}
+                                      </span>
+                                      .
+                                    </p>
+                                  </div>
+
+                                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                                    <input
+                                      type="password"
+                                      value={manualVideoPassword}
+                                      onChange={(event) =>
+                                        setManualVideoPassword(event.target.value)
+                                      }
+                                      className="w-full rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                                      placeholder="Contraseña admin"
+                                      autoComplete="current-password"
+                                      required
+                                    />
+                                    <button
+                                      type="submit"
+                                      disabled={isManualVideoUnlocking}
+                                      className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      {isManualVideoUnlocking
+                                        ? "Validando..."
+                                        : "Desbloquear"}
+                                    </button>
+                                  </div>
+
+                                  {manualVideoError ? (
+                                    <p className="text-sm text-rose-200">
+                                      {manualVideoError}
+                                    </p>
+                                  ) : null}
+                                </form>
+                              ) : (
+                                <form
+                                  className="space-y-4"
+                                  onSubmit={handleSaveManualVideo}
+                                >
+                                  <div className="space-y-2">
+                                    <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">
+                                      Vídeo manual
+                                    </p>
+                                    <p className="text-sm text-slate-300">
+                                      Pega un enlace de YouTube para reemplazar
+                                      el vídeo guardado de{" "}
+                                      <span className="font-medium text-white">
+                                        {selectedTrack.name}
+                                      </span>
+                                      . Acepta enlaces de YouTube o el ID del
+                                      vídeo.
+                                    </p>
+                                  </div>
+
+                                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                                    <input
+                                      type="text"
+                                      value={manualVideoUrl}
+                                      onChange={(event) =>
+                                        setManualVideoUrl(event.target.value)
+                                      }
+                                      className="w-full rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                                      placeholder="https://www.youtube.com/watch?v=..."
+                                      inputMode="url"
+                                      required
+                                    />
+                                    <button
+                                      type="submit"
+                                      disabled={isManualVideoSaving}
+                                      className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      {isManualVideoSaving
+                                        ? "Guardando..."
+                                        : "Guardar vídeo"}
+                                    </button>
+                                  </div>
+
+                                  {manualVideoSuccess ? (
+                                    <p className="text-sm text-emerald-200">
+                                      {manualVideoSuccess}
+                                    </p>
+                                  ) : null}
+                                  {manualVideoError ? (
+                                    <p className="text-sm text-rose-200">
+                                      {manualVideoError}
+                                    </p>
+                                  ) : null}
+                                </form>
+                              )}
+                            </div>
+                          </div>
+                        ) : null}
 
                         <div className="flex min-h-[28rem] flex-col gap-6 p-6">
                           {videoStatus === "loading" ? (

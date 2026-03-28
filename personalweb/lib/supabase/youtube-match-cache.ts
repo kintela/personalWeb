@@ -37,6 +37,15 @@ type UpsertYouTubeVideoMatchCacheInput = {
   video: YouTubeMatchedVideoAsset | null;
 };
 
+type UpsertYouTubeVideoMatchCacheResult =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 function getSupabaseUrl() {
   return process.env.NEXT_PUBLIC_SUPABASE_URL;
 }
@@ -143,11 +152,14 @@ export async function upsertYouTubeMatchCache({
   albumReleaseYear,
   matchedQuery,
   video,
-}: UpsertYouTubeVideoMatchCacheInput) {
+}: UpsertYouTubeVideoMatchCacheInput): Promise<UpsertYouTubeVideoMatchCacheResult> {
   const supabase = createSupabaseServerClient();
 
   if (!supabase) {
-    return;
+    return {
+      ok: false,
+      error: "Falta configurar Supabase para guardar la caché de YouTube.",
+    };
   }
 
   try {
@@ -175,9 +187,17 @@ export async function upsertYouTubeMatchCache({
     );
 
     if (error) {
-      return;
+      return {
+        ok: false,
+        error: `No he podido guardar la caché de YouTube: ${error.message}`,
+      };
     }
+
+    return { ok: true };
   } catch {
-    return;
+    return {
+      ok: false,
+      error: "No he podido guardar la caché de YouTube.",
+    };
   }
 }
