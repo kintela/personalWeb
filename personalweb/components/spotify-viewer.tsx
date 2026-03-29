@@ -102,15 +102,22 @@ function shuffleTrackOrder(
   return [...nextTrackIds, ...remainingTrackIds];
 }
 
-function PlayIcon() {
+function SpotifyLogoIcon() {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
-      fill="currentColor"
-      className="h-4 w-4 translate-x-[1px]"
+      fill="none"
+      stroke="#ffffff"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
     >
-      <path d="M8 6.5v11l9-5.5-9-5.5Z" />
+      <circle cx="12" cy="12" r="8.25" fill="#1DB954" stroke="none" />
+      <path d="M8.2 10.15c2.45-.78 5.43-.58 7.78.54" />
+      <path d="M8.95 12.55c2-.58 4.28-.41 6.18.5" />
+      <path d="M9.8 14.8c1.5-.38 3.1-.26 4.48.38" />
     </svg>
   );
 }
@@ -131,6 +138,28 @@ function PlaylistIcon() {
       <path d="M4 12h10" />
       <path d="M4 17h7" />
       <path d="m16 14 4 3-4 3v-6Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function YouTubeLogoIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#ffffff"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+    >
+      <path
+        d="M20.2 8.55c-.2-.9-.9-1.6-1.8-1.82C17.05 6.4 14.95 6.25 12 6.25s-5.05.15-6.4.48c-.9.22-1.6.92-1.8 1.82-.33 1.38-.47 2.5-.47 3.45s.14 2.07.47 3.45c.2.9.9 1.6 1.8 1.82 1.35.33 3.45.48 6.4.48s5.05-.15 6.4-.48c.9-.22 1.6-.92 1.8-1.82.33-1.38.47-2.5.47-3.45s-.14-2.07-.47-3.45Z"
+        fill="#FF0033"
+        stroke="none"
+      />
+      <path d="m10 9.35 4.65 2.65L10 14.65v-5.3Z" fill="#ffffff" stroke="none" />
     </svg>
   );
 }
@@ -1349,9 +1378,9 @@ export function SpotifyViewer({
                               onClick={() => handleOpenPlaylistViewer(playlist.id)}
                               aria-label={`Abrir canciones de ${playlist.name}`}
                               title={`Abrir canciones de ${playlist.name}`}
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/6 text-slate-100 transition hover:border-cyan-300/55 hover:bg-cyan-300/12 hover:text-white"
+                              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-300/35 bg-[radial-gradient(circle_at_top,rgba(255,0,51,0.28),rgba(15,23,42,0.92))] text-white shadow-[0_10px_24px_rgba(255,0,51,0.16)] transition hover:border-rose-200/55 hover:bg-[radial-gradient(circle_at_top,rgba(255,0,51,0.38),rgba(15,23,42,0.96))] hover:shadow-[0_14px_32px_rgba(255,0,51,0.22)]"
                             >
-                              <PlaylistIcon />
+                              <YouTubeLogoIcon />
                             </button>
                             <a
                               href={playlist.externalUrl}
@@ -1359,9 +1388,9 @@ export function SpotifyViewer({
                               rel="noreferrer"
                               aria-label={`Escuchar ${playlist.name} en Spotify`}
                               title={`Escuchar ${playlist.name} en Spotify`}
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-300/12 text-emerald-100 transition hover:border-emerald-300/65 hover:bg-emerald-300/18 hover:text-white"
+                              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-emerald-300/40 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.3),rgba(15,23,42,0.92))] text-white shadow-[0_10px_24px_rgba(29,185,84,0.16)] transition hover:border-emerald-200/55 hover:bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.42),rgba(15,23,42,0.96))] hover:shadow-[0_14px_32px_rgba(29,185,84,0.22)]"
                             >
-                              <PlayIcon />
+                              <SpotifyLogoIcon />
                             </a>
                           </div>
                         </div>
