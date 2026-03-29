@@ -477,8 +477,8 @@ export function ConcertsViewer({
   }, [groupValue]);
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/6 p-6 shadow-[0_24px_80px_rgba(3,7,18,0.24)] backdrop-blur">
+    <section className="space-y-6 min-w-0">
+      <div className="flex min-w-0 flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/6 p-4 shadow-[0_24px_80px_rgba(3,7,18,0.24)] backdrop-blur sm:p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div className="space-y-2">
             <p className="text-xs font-medium uppercase tracking-[0.3em] text-amber-300/85">
@@ -586,7 +586,7 @@ export function ConcertsViewer({
         ) : null}
 
         {configured ? (
-          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/35 p-4 md:p-5">
+          <div className="min-w-0 rounded-[1.75rem] border border-white/10 bg-slate-950/35 p-4 md:p-5">
             <form
               className="space-y-4"
               onSubmit={(event) => {
@@ -605,7 +605,7 @@ export function ConcertsViewer({
                 </p>
               </div>
 
-              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_160px_220px_240px_auto_auto]">
+              <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_160px_220px_240px_auto_auto]">
                 <input
                   type="search"
                   value={filterInput}
@@ -727,7 +727,7 @@ export function ConcertsViewer({
         ) : null}
 
         {concerts.length > 0 ? (
-          <div className={gridClassName}>
+          <div className={`${gridClassName} min-w-0`}>
             {concerts.map((concert) => {
               const location = buildConcertLocation(concert);
               const concertName = concert.groupName ?? "Grupo sin vincular";
@@ -737,7 +737,7 @@ export function ConcertsViewer({
                 <article
                   key={concert.id}
                   id={anchorId}
-                  className="relative scroll-mt-32 rounded-[1.5rem] border border-white/10 bg-slate-950/55 p-5 shadow-[0_18px_50px_rgba(17,24,39,0.28)]"
+                  className="relative min-w-0 overflow-hidden scroll-mt-32 rounded-[1.5rem] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(17,24,39,0.28)] sm:p-5"
                 >
                   <ShareCardButton
                     anchorId={anchorId}
@@ -751,21 +751,23 @@ export function ConcertsViewer({
                     className="absolute right-4 top-4 z-10"
                   />
 
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-3 pr-12 md:flex-row md:items-start md:justify-between">
-                      <div className="space-y-2">
+                  <div className="flex min-w-0 flex-col gap-4">
+                    <div className="flex min-w-0 flex-col gap-3 pr-10 md:flex-row md:items-start md:justify-between md:pr-12">
+                      <div className="min-w-0 space-y-2">
                         <p className="text-xs font-medium uppercase tracking-[0.28em] text-cyan-200/80">
                           {concert.dateLabel}
                         </p>
-                        <h3 className="text-xl font-semibold text-white">
+                        <h3 className="break-words text-xl font-semibold text-white">
                           {concertName}
                         </h3>
                         {location ? (
-                          <p className="text-sm text-slate-300">{location}</p>
+                          <p className="break-words text-sm text-slate-300">
+                            {location}
+                          </p>
                         ) : null}
                       </div>
 
-                      <div className="flex flex-wrap gap-2 md:justify-end">
+                      <div className="flex min-w-0 flex-wrap gap-2 md:justify-end">
                         {concert.festival ? (
                           <span className="rounded-full border border-amber-300/35 bg-amber-300/10 px-3 py-1 text-xs font-medium text-amber-100">
                             Festival
@@ -805,11 +807,11 @@ export function ConcertsViewer({
                     </div>
 
                     {concert.description ? (
-                      <p className="line-clamp-3 text-sm leading-7 text-slate-300">
+                      <p className="line-clamp-3 break-words text-sm leading-7 text-slate-300">
                         {concert.description}
                       </p>
                     ) : concert.review ? (
-                      <p className="line-clamp-3 text-sm leading-7 text-slate-300">
+                      <p className="line-clamp-3 break-words text-sm leading-7 text-slate-300">
                         {concert.review}
                       </p>
                     ) : null}
@@ -893,20 +895,20 @@ export function ConcertsViewer({
                     </div>
 
                     {concert.ticketImageSrc || concert.posterImageSrc ? (
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                         {concert.ticketImageSrc ? (
-                          <div className="space-y-2">
+                          <div className="min-w-0 space-y-2">
                             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                               Entrada
                             </p>
-                            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                            <div className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
                               <Image
                                 src={concert.ticketImageSrc}
                                 alt={`${concert.groupName ?? "Concierto"} entrada`}
                                 width={1200}
                                 height={700}
                                 unoptimized
-                                className="h-auto w-full object-contain"
+                                className="block h-auto w-full max-w-full object-contain"
                                 sizes="(max-width: 640px) 100vw, 50vw"
                               />
                             </div>
@@ -914,18 +916,18 @@ export function ConcertsViewer({
                         ) : null}
 
                         {concert.posterImageSrc ? (
-                          <div className="space-y-2">
+                          <div className="min-w-0 space-y-2">
                             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                               Cartel
                             </p>
-                            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                            <div className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
                               <Image
                                 src={concert.posterImageSrc}
                                 alt={`${concert.groupName ?? "Concierto"} cartel`}
                                 width={1200}
                                 height={700}
                                 unoptimized
-                                className="h-auto w-full object-contain"
+                                className="block h-auto w-full max-w-full object-contain"
                                 sizes="(max-width: 640px) 100vw, 50vw"
                               />
                             </div>
