@@ -218,6 +218,8 @@ export function SpotifyViewer({
     useState<YouTubeMatchedVideoAsset | null>(null);
   const [videoStatus, setVideoStatus] = useState<SpotifyTrackStatus>("idle");
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [isVideoExtendedMode, setIsVideoExtendedMode] = useState(true);
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(
     initiallyAdminUnlocked,
   );
@@ -324,6 +326,36 @@ export function SpotifyViewer({
     });
   });
 
+  async function requestNativeFullscreen() {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (document.fullscreenElement) {
+      setIsNativeFullscreen(true);
+      return;
+    }
+
+    try {
+      await document.documentElement.requestFullscreen();
+      setIsNativeFullscreen(true);
+    } catch {
+      setIsNativeFullscreen(Boolean(document.fullscreenElement));
+    }
+  }
+
+  async function exitNativeFullscreen() {
+    if (typeof document === "undefined" || !document.fullscreenElement) {
+      return;
+    }
+
+    try {
+      await document.exitFullscreen();
+    } catch {
+      return;
+    }
+  }
+
   function resetPlaylistViewerState() {
     setSelectedPlaylistId(null);
     setPlaylistTracks([]);
@@ -336,6 +368,7 @@ export function SpotifyViewer({
     setSelectedVideo(null);
     setVideoStatus("idle");
     setVideoError(null);
+    setIsVideoExtendedMode(true);
     setIsManualVideoPanelOpen(false);
     setManualVideoPassword("");
     setManualVideoUrl("");
@@ -378,6 +411,7 @@ export function SpotifyViewer({
   }
 
   function handleClosePlaylistViewer() {
+    void exitNativeFullscreen();
     resetPlaylistViewerState();
     clearSpotifyShareParams();
   }
@@ -391,6 +425,18 @@ export function SpotifyViewer({
   }, []);
 
   useEffect(() => {
+    function handleFullscreenChange() {
+      setIsNativeFullscreen(Boolean(document.fullscreenElement));
+    }
+
+    handleFullscreenChange();
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    return () =>
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
     setFilterInput(filterValue);
   }, [filterValue]);
 
@@ -399,6 +445,7 @@ export function SpotifyViewer({
   }, [initiallyAdminUnlocked]);
 
   useEffect(() => {
+    setIsVideoExtendedMode(true);
     setIsManualVideoPanelOpen(false);
     setManualVideoPassword("");
     setManualVideoUrl("");
@@ -421,6 +468,7 @@ export function SpotifyViewer({
     setTrackFilterInput("");
     setIsTrackShuffleEnabled(false);
     setShuffledTrackIds([]);
+    setIsVideoExtendedMode(true);
   }, [playlists, sharedSpotifyPlaylistId]);
 
   useEffect(() => {
@@ -684,6 +732,30 @@ export function SpotifyViewer({
     setTrackFilterInput("");
     setIsTrackShuffleEnabled(false);
     setShuffledTrackIds([]);
+    setIsVideoExtendedMode(true);
+    void requestNativeFullscreen();
+  }
+
+  function handleSelectTrack(trackId: string) {
+    setSelectedTrackId(trackId);
+
+    if (isVideoExtendedMode) {
+      void requestNativeFullscreen();
+    }
+  }
+
+  function handleToggleVideoExtendedMode() {
+    setIsVideoExtendedMode((currentValue) => {
+      const nextValue = !currentValue;
+
+      if (nextValue) {
+        void requestNativeFullscreen();
+      } else {
+        void exitNativeFullscreen();
+      }
+
+      return nextValue;
+    });
   }
 
   function handleStepTrack(direction: "previous" | "next") {
@@ -709,11 +781,19 @@ export function SpotifyViewer({
     });
   }
 
-  function handleAdvanceToNextTrack() {
+  function handleAdvanceToNextTrack(options?: { requestFullscreen?: boolean }) {
+    if (options?.requestFullscreen) {
+      void requestNativeFullscreen();
+    }
+
     handleStepTrack("next");
   }
 
-  function handleGoToPreviousTrack() {
+  function handleGoToPreviousTrack(options?: { requestFullscreen?: boolean }) {
+    if (options?.requestFullscreen) {
+      void requestNativeFullscreen();
+    }
+
     handleStepTrack("previous");
   }
 
@@ -1130,7 +1210,9 @@ export function SpotifyViewer({
       {isClient && selectedPlaylist
         ? createPortal(
             <div
-              className="fixed inset-0 z-[100] bg-slate-950/92 backdrop-blur-sm"
+              className={`fixed inset-0 z-[100] ${
+                isNativeFullscreen ? "bg-black" : "bg-slate-950/92 backdrop-blur-sm"
+              }`}
               role="dialog"
               aria-modal="true"
               aria-label={`Canciones de ${selectedPlaylist.name}`}
@@ -1142,237 +1224,283 @@ export function SpotifyViewer({
                 onClick={handleClosePlaylistViewer}
               />
 
-              <div className="relative z-10 h-full overflow-y-auto px-4 py-6">
-                <div className="mx-auto flex min-h-full w-full max-w-7xl items-start justify-center">
-                  <div className="flex w-full flex-col gap-4">
-                    <div
-                      id={selectedPlaylistViewerAnchorId}
-                      className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 md:flex-row md:items-center md:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-white">
-                          {selectedPlaylist.name}
-                        </p>
-                        <p className="truncate text-xs uppercase tracking-[0.24em] text-slate-400">
-                          {selectedPlaylist.trackCount} temas
-                          {selectedTrack ? ` · ${selectedTrack.name}` : ""}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <ShareCardButton
-                          anchorId={selectedPlaylistViewerAnchorId}
-                          sectionId="spotify"
-                          queryValues={{ spotifyPlaylist: selectedPlaylist.id }}
-                        />
-                        <a
-                          href={selectedPlaylist.externalUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-emerald-300/45 hover:text-white"
-                        >
-                          Abrir en Spotify
-                        </a>
-                        <button
-                          type="button"
-                          onClick={handleClosePlaylistViewer}
-                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
-                        >
-                          Cerrar
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-                      <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
-                        <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-                          <div className="flex items-center gap-2">
-                            <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
-                              Canciones
-                            </p>
-                            <button
-                              type="button"
-                              onClick={handleToggleTrackShuffle}
-                              className={`rounded-full border px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] transition ${
-                                isTrackShuffleEnabled
-                                  ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
-                                  : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white"
-                              }`}
-                            >
-                              Aleatorio
-                            </button>
-                          </div>
-                          <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
-                            {getTrackCountLabel(
-                              playbackOrderedTracks.length ||
-                                (normalizedTrackFilterValue
-                                  ? 0
-                                  : selectedPlaylist.trackCount),
-                            )}
-                          </span>
+              <div
+                className={`relative z-10 h-full ${
+                  isNativeFullscreen ? "overflow-hidden p-0" : "overflow-y-auto px-4 py-6"
+                }`}
+              >
+                <div
+                  className={`mx-auto flex w-full items-start justify-center ${
+                    isNativeFullscreen
+                      ? "h-full max-w-none"
+                      : isVideoExtendedMode
+                        ? "min-h-full max-w-none"
+                        : "min-h-full max-w-7xl"
+                  }`}
+                >
+                  <div className={`flex w-full flex-col ${isNativeFullscreen ? "h-full gap-0" : "gap-4"}`}>
+                    {!isNativeFullscreen ? (
+                      <div
+                        id={selectedPlaylistViewerAnchorId}
+                        className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-white">
+                            {selectedPlaylist.name}
+                          </p>
+                          <p className="truncate text-xs uppercase tracking-[0.24em] text-slate-400">
+                            {selectedPlaylist.trackCount} temas
+                            {selectedTrack ? ` · ${selectedTrack.name}` : ""}
+                          </p>
                         </div>
 
-                        <div className="border-b border-white/10 px-3 py-3">
-                          <input
-                            type="search"
-                            value={trackFilterInput}
-                            onChange={(event) =>
-                              setTrackFilterInput(event.target.value)
-                            }
-                            placeholder="Filtrar por tema, grupo, disco o año..."
-                            className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/70"
+                        <div className="flex items-center gap-3">
+                          <ShareCardButton
+                            anchorId={selectedPlaylistViewerAnchorId}
+                            sectionId="spotify"
+                            queryValues={{ spotifyPlaylist: selectedPlaylist.id }}
                           />
-                        </div>
-
-                        <div className="max-h-[70vh] overflow-y-auto p-3">
-                          {trackStatus === "loading" ? (
-                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
-                              Cargando canciones de Spotify...
-                            </div>
-                          ) : trackStatus === "error" ? (
-                            <div className="rounded-[1.35rem] border border-rose-400/25 bg-rose-400/10 px-4 py-6 text-sm leading-7 text-rose-100">
-                              {trackError || "No he podido leer las canciones de esta playlist."}
-                            </div>
-                          ) : playlistTracks.length === 0 ? (
-                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
-                              Esta playlist no devuelve canciones utilizables
-                              desde la API de Spotify.
-                            </div>
-                          ) : playbackOrderedTracks.length === 0 ? (
-                            <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
-                              No hay canciones que coincidan con ese filtro.
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              {playbackOrderedTracks.map((track) => {
-                                const isSelected = selectedTrack?.id === track.id;
-
-                                return (
-                                  <button
-                                    key={track.id}
-                                    id={`spotify-track-${track.id}`}
-                                    type="button"
-                                    onClick={() => setSelectedTrackId(track.id)}
-                                    className={`flex w-full items-start justify-between gap-3 rounded-[1.35rem] border px-4 py-4 text-left transition ${
-                                      isSelected
-                                        ? "border-cyan-300/55 bg-cyan-300/12"
-                                        : "border-white/10 bg-white/6 hover:border-cyan-300/35 hover:bg-cyan-300/8"
-                                    }`}
-                                  >
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-2 text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
-                                        <span className="shrink-0">
-                                          Pista {track.position}
-                                        </span>
-                                        <span className="truncate text-slate-300">
-                                          {track.artistsLabel}
-                                        </span>
-                                      </div>
-                                      <p className="mt-2 truncate text-base font-semibold text-white">
-                                        {track.name}
-                                      </p>
-                                      {track.albumName ? (
-                                        <p
-                                          className="mt-1 truncate text-sm text-cyan-100/80"
-                                          title={`${track.albumName}${track.albumReleaseDate ? ` · ${track.albumReleaseDate.slice(0, 4)}` : ""}`}
-                                        >
-                                          {track.albumName}
-                                          {track.albumReleaseDate
-                                            ? ` · ${track.albumReleaseDate.slice(0, 4)}`
-                                            : ""}
-                                        </p>
-                                      ) : null}
-                                    </div>
-                                    <span className="shrink-0 rounded-full border border-white/12 bg-black/20 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
-                                      {track.durationLabel}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
+                          <a
+                            href={selectedPlaylist.externalUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-emerald-300/45 hover:text-white"
+                          >
+                            Abrir en Spotify
+                          </a>
+                          <button
+                            type="button"
+                            onClick={handleClosePlaylistViewer}
+                            className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                          >
+                            Cerrar
+                          </button>
                         </div>
                       </div>
+                    ) : null}
 
-                      <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
-                        <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
-                              Visor
-                            </p>
-                            {selectedTrack ? (
-                              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-300">
-                                <p>
-                                  {selectedTrack.name} · {selectedTrack.artistsLabel}
-                                </p>
-                                {selectedTrackYear ? (
-                                  <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[0.62rem] font-medium uppercase tracking-[0.18em] text-cyan-100">
-                                    {selectedTrackYear}
-                                  </span>
-                                ) : null}
-                              </div>
-                            ) : (
-                              <p className="mt-2 text-sm text-slate-300">
-                                Selecciona una canción para preparar el visor del
-                                vídeo.
+                    <div
+                      className={
+                        isNativeFullscreen
+                          ? "grid h-full gap-0"
+                          : isVideoExtendedMode
+                          ? "grid gap-4"
+                          : "grid gap-4 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]"
+                      }
+                    >
+                      {!isNativeFullscreen && !isVideoExtendedMode ? (
+                        <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
+                          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
+                                Canciones
                               </p>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {selectedTrack ? (
                               <button
                                 type="button"
-                                onClick={handleToggleManualVideoPanel}
-                                aria-label={
-                                  isManualVideoPanelOpen
-                                    ? "Cerrar formulario de vídeo manual"
-                                    : "Añadir vídeo manualmente"
-                                }
-                                title={
-                                  isManualVideoPanelOpen
-                                    ? "Cerrar formulario de vídeo manual"
-                                    : "Añadir vídeo manualmente"
-                                }
-                                className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
-                                  isManualVideoPanelOpen
-                                    ? "border-cyan-300/55 bg-cyan-300/14 text-cyan-100"
-                                    : "border-white/12 bg-white/6 text-slate-100 hover:border-cyan-300/45 hover:text-white"
+                                onClick={handleToggleTrackShuffle}
+                                className={`rounded-full border px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] transition ${
+                                  isTrackShuffleEnabled
+                                    ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
+                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white"
                                 }`}
                               >
-                                <ManualVideoIcon />
+                                Aleatorio
                               </button>
-                            ) : null}
-                            {selectedTrack ? (
-                              <ShareCardButton
-                                anchorId={selectedTrackAnchorId}
-                                sectionId="spotify"
-                                queryValues={{
-                                  spotifyPlaylist: selectedPlaylist.id,
-                                  spotifyTrack: selectedTrack.id,
-                                }}
-                              />
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={handleGoToPreviousTrack}
-                              disabled={!hasPreviousTrack}
-                              className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              Anterior
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleAdvanceToNextTrack}
-                              disabled={!hasNextTrack}
-                              className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              Siguiente
-                            </button>
+                            </div>
+                            <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
+                              {getTrackCountLabel(
+                                playbackOrderedTracks.length ||
+                                  (normalizedTrackFilterValue
+                                    ? 0
+                                    : selectedPlaylist.trackCount),
+                              )}
+                            </span>
+                          </div>
+
+                          <div className="border-b border-white/10 px-3 py-3">
+                            <input
+                              type="search"
+                              value={trackFilterInput}
+                              onChange={(event) =>
+                                setTrackFilterInput(event.target.value)
+                              }
+                              placeholder="Filtrar por tema, grupo, disco o año..."
+                              className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/70"
+                            />
+                          </div>
+
+                          <div className="max-h-[70vh] overflow-y-auto p-3">
+                            {trackStatus === "loading" ? (
+                              <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
+                                Cargando canciones de Spotify...
+                              </div>
+                            ) : trackStatus === "error" ? (
+                              <div className="rounded-[1.35rem] border border-rose-400/25 bg-rose-400/10 px-4 py-6 text-sm leading-7 text-rose-100">
+                                {trackError ||
+                                  "No he podido leer las canciones de esta playlist."}
+                              </div>
+                            ) : playlistTracks.length === 0 ? (
+                              <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
+                                Esta playlist no devuelve canciones utilizables
+                                desde la API de Spotify.
+                              </div>
+                            ) : playbackOrderedTracks.length === 0 ? (
+                              <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
+                                No hay canciones que coincidan con ese filtro.
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {playbackOrderedTracks.map((track) => {
+                                  const isSelected = selectedTrack?.id === track.id;
+
+                                  return (
+                                    <button
+                                      key={track.id}
+                                      id={`spotify-track-${track.id}`}
+                                      type="button"
+                                      onClick={() => handleSelectTrack(track.id)}
+                                      className={`flex w-full items-start justify-between gap-3 rounded-[1.35rem] border px-4 py-4 text-left transition ${
+                                        isSelected
+                                          ? "border-cyan-300/55 bg-cyan-300/12"
+                                          : "border-white/10 bg-white/6 hover:border-cyan-300/35 hover:bg-cyan-300/8"
+                                      }`}
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2 text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
+                                          <span className="shrink-0">
+                                            Pista {track.position}
+                                          </span>
+                                          <span className="truncate text-slate-300">
+                                            {track.artistsLabel}
+                                          </span>
+                                        </div>
+                                        <p className="mt-2 truncate text-base font-semibold text-white">
+                                          {track.name}
+                                        </p>
+                                        {track.albumName ? (
+                                          <p
+                                            className="mt-1 truncate text-sm text-cyan-100/80"
+                                            title={`${track.albumName}${track.albumReleaseDate ? ` · ${track.albumReleaseDate.slice(0, 4)}` : ""}`}
+                                          >
+                                            {track.albumName}
+                                            {track.albumReleaseDate
+                                              ? ` · ${track.albumReleaseDate.slice(0, 4)}`
+                                              : ""}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                      <span className="shrink-0 rounded-full border border-white/12 bg-black/20 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
+                                        {track.durationLabel}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
+                      ) : null}
 
-                        {selectedTrack && isManualVideoPanelOpen ? (
+                      <div
+                        className={`overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)] ${
+                          isNativeFullscreen
+                            ? "h-full rounded-none border-0 bg-black shadow-none"
+                            : isVideoExtendedMode
+                            ? "flex min-h-[calc(100vh-11rem)] flex-col"
+                            : ""
+                        }`}
+                      >
+                        {!isNativeFullscreen ? (
+                          <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
+                                Visor
+                              </p>
+                              {selectedTrack ? (
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-300">
+                                  <p>
+                                    {selectedTrack.name} · {selectedTrack.artistsLabel}
+                                  </p>
+                                  {selectedTrackYear ? (
+                                    <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[0.62rem] font-medium uppercase tracking-[0.18em] text-cyan-100">
+                                      {selectedTrackYear}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <p className="mt-2 text-sm text-slate-300">
+                                  Selecciona una canción para preparar el visor del
+                                  vídeo.
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleToggleVideoExtendedMode}
+                                className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/45 hover:text-white"
+                              >
+                                {isVideoExtendedMode ? "Lista" : "Extendido"}
+                              </button>
+                              {selectedTrack ? (
+                                <button
+                                  type="button"
+                                  onClick={handleToggleManualVideoPanel}
+                                  aria-label={
+                                    isManualVideoPanelOpen
+                                      ? "Cerrar formulario de vídeo manual"
+                                      : "Añadir vídeo manualmente"
+                                  }
+                                  title={
+                                    isManualVideoPanelOpen
+                                      ? "Cerrar formulario de vídeo manual"
+                                      : "Añadir vídeo manualmente"
+                                  }
+                                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition ${
+                                    isManualVideoPanelOpen
+                                      ? "border-cyan-300/55 bg-cyan-300/14 text-cyan-100"
+                                      : "border-white/12 bg-white/6 text-slate-100 hover:border-cyan-300/45 hover:text-white"
+                                  }`}
+                                >
+                                  <ManualVideoIcon />
+                                </button>
+                              ) : null}
+                              {selectedTrack ? (
+                                <ShareCardButton
+                                  anchorId={selectedTrackAnchorId}
+                                  sectionId="spotify"
+                                  queryValues={{
+                                    spotifyPlaylist: selectedPlaylist.id,
+                                    spotifyTrack: selectedTrack.id,
+                                  }}
+                                />
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleGoToPreviousTrack({ requestFullscreen: true })
+                                }
+                                disabled={!hasPreviousTrack}
+                                className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                Anterior
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAdvanceToNextTrack({ requestFullscreen: true })
+                                }
+                                disabled={!hasNextTrack}
+                                className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                Siguiente
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {selectedTrack && isManualVideoPanelOpen && !isNativeFullscreen ? (
                           <div className="border-b border-white/10 px-5 py-4">
                             <div className="rounded-[1.5rem] border border-cyan-300/20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_55%),rgba(8,15,31,0.72)] p-4">
                               {!isAdminUnlocked ? (
@@ -1482,7 +1610,15 @@ export function SpotifyViewer({
                           </div>
                         ) : null}
 
-                        <div className="flex min-h-[28rem] flex-col gap-6 p-6">
+                        <div
+                          className={`flex flex-col gap-6 p-6 ${
+                            isNativeFullscreen
+                              ? "h-full min-h-0 flex-1 gap-0 p-0"
+                              : isVideoExtendedMode
+                              ? "min-h-0 flex-1"
+                              : "min-h-[28rem]"
+                          }`}
+                        >
                           {videoStatus === "loading" ? (
                             <div className="flex flex-1 items-center justify-center rounded-[1.75rem] border border-dashed border-cyan-300/30 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_52%),rgba(2,6,23,0.72)] p-6">
                               <div className="mx-auto max-w-xl text-center">
@@ -1509,9 +1645,19 @@ export function SpotifyViewer({
                               </div>
                             </div>
                           ) : selectedVideo ? (
-                            <div className="space-y-4">
-                              <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/60 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
-                                <div className="aspect-video">
+                            <div
+                              className={
+                                isVideoExtendedMode
+                                  ? "flex min-h-0 flex-1 flex-col"
+                                  : "space-y-4"
+                              }
+                            >
+                              <div
+                                className={`overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/60 shadow-[0_24px_80px_rgba(0,0,0,0.38)] ${
+                                  isVideoExtendedMode ? "min-h-0 flex-1" : ""
+                                }`}
+                              >
+                                <div className={isVideoExtendedMode ? "h-full" : "aspect-video"}>
                                   <YouTubeEmbeddedPlayer
                                     key={selectedVideo.id}
                                     videoId={selectedVideo.id}
