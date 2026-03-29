@@ -290,7 +290,7 @@ export function SpotifyViewer({
   const selectedPlaylist =
     playlists.find((playlist) => playlist.id === selectedPlaylistId) ?? null;
   const selectedTrack =
-    playbackOrderedTracks.find((track) => track.id === selectedTrackId) ??
+    playlistTracks.find((track) => track.id === selectedTrackId) ??
     playbackOrderedTracks[0] ??
     null;
   const selectedTrackYear = selectedTrack?.albumReleaseDate?.slice(0, 4) ?? null;
@@ -454,6 +454,37 @@ export function SpotifyViewer({
     setIsManualVideoUnlocking(false);
     setIsManualVideoSaving(false);
   }, [selectedTrack?.id]);
+
+  useEffect(() => {
+    if (
+      !selectedTrackId ||
+      !normalizedTrackFilterValue ||
+      filteredPlaylistTracks.some((track) => track.id === selectedTrackId)
+    ) {
+      return;
+    }
+
+    setTrackFilterInput("");
+  }, [filteredPlaylistTracks, normalizedTrackFilterValue, selectedTrackId]);
+
+  useEffect(() => {
+    if (!selectedTrack || isVideoExtendedMode || isNativeFullscreen) {
+      return;
+    }
+
+    const selectedTrackElement = document.getElementById(
+      `spotify-track-${selectedTrack.id}`,
+    );
+
+    if (!(selectedTrackElement instanceof HTMLElement)) {
+      return;
+    }
+
+    selectedTrackElement.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth",
+    });
+  }, [isNativeFullscreen, isVideoExtendedMode, selectedTrack?.id]);
 
   useEffect(() => {
     if (!sharedSpotifyPlaylistId) {
@@ -742,6 +773,15 @@ export function SpotifyViewer({
     if (isVideoExtendedMode) {
       void requestNativeFullscreen();
     }
+  }
+
+  function handleRevealSelectedTrack() {
+    if (!selectedTrack) {
+      return;
+    }
+
+    setTrackFilterInput("");
+    setIsVideoExtendedMode(false);
   }
 
   function handleToggleVideoExtendedMode() {
@@ -1413,9 +1453,20 @@ export function SpotifyViewer({
                         {!isNativeFullscreen ? (
                           <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
                             <div>
-                              <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
-                                Visor
-                              </p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
+                                  Visor
+                                </p>
+                                {selectedTrack ? (
+                                  <button
+                                    type="button"
+                                    onClick={handleRevealSelectedTrack}
+                                    className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[0.62rem] font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/45 hover:bg-cyan-300/16 hover:text-white"
+                                  >
+                                    Pista {selectedTrack.position}
+                                  </button>
+                                ) : null}
+                              </div>
                               {selectedTrack ? (
                                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-300">
                                   <p>
