@@ -1659,7 +1659,6 @@ export function SpotifyViewer({
                               >
                                 <div className={isVideoExtendedMode ? "h-full" : "aspect-video"}>
                                   <YouTubeEmbeddedPlayer
-                                    key={selectedVideo.id}
                                     videoId={selectedVideo.id}
                                     title={selectedVideo.title}
                                     autoplay
