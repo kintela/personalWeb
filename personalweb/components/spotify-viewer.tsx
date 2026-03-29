@@ -54,8 +54,24 @@ function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
 }
 
-function getTrackCountLabel(count: number) {
-  return `${count} tema${count === 1 ? "" : "s"}`;
+function formatPlaylistDurationLabel(durationMs: number) {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return null;
+  }
+
+  const totalMinutes = Math.floor(durationMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours <= 0) {
+    return `${minutes} min`;
+  }
+
+  if (minutes === 0) {
+    return `${hours} h`;
+  }
+
+  return `${hours} h ${minutes} min`;
 }
 
 function shuffleTrackOrder(
@@ -300,6 +316,12 @@ export function SpotifyViewer({
   const selectedTrackAnchorId = selectedTrack
     ? `spotify-track-${selectedTrack.id}`
     : "";
+  const selectedPlaylistDurationLabel = formatPlaylistDurationLabel(
+    playlistTracks.reduce(
+      (totalDuration, track) => totalDuration + Math.max(track.durationMs ?? 0, 0),
+      0,
+    ),
+  );
   const selectedTrackIndex = selectedTrack
     ? playbackOrderedTracks.findIndex((track) => track.id === selectedTrack.id)
     : -1;
@@ -1290,7 +1312,9 @@ export function SpotifyViewer({
                           </p>
                           <p className="truncate text-xs uppercase tracking-[0.24em] text-slate-400">
                             {selectedPlaylist.trackCount} temas
-                            {selectedTrack ? ` · ${selectedTrack.name}` : ""}
+                            {selectedPlaylistDurationLabel
+                              ? ` · ${selectedPlaylistDurationLabel}`
+                              : ""}
                           </p>
                         </div>
 
@@ -1347,14 +1371,6 @@ export function SpotifyViewer({
                                 Aleatorio
                               </button>
                             </div>
-                            <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
-                              {getTrackCountLabel(
-                                playbackOrderedTracks.length ||
-                                  (normalizedTrackFilterValue
-                                    ? 0
-                                    : selectedPlaylist.trackCount),
-                              )}
-                            </span>
                           </div>
 
                           <div className="border-b border-white/10 px-3 py-3">

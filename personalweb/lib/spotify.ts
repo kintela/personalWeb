@@ -470,6 +470,7 @@ function mapSpotifyPlaylistTrack(
     artistsLabel,
     albumName,
     albumReleaseDate,
+    durationMs: track.duration_ms,
     durationLabel: formatDurationLabel(track.duration_ms),
   } satisfies SpotifyPlaylistTrackAsset;
 }
