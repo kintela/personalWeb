@@ -1436,7 +1436,9 @@ export function SpotifyViewer({
 
               <div
                 className={`relative z-10 h-full ${
-                  isNativeFullscreen ? "overflow-hidden p-0" : "overflow-y-auto px-4 py-6"
+                  isNativeFullscreen
+                    ? "overflow-hidden p-0"
+                    : "overflow-y-auto px-3 py-4 sm:px-4 sm:py-6"
                 }`}
               >
                 <div
@@ -1448,7 +1450,11 @@ export function SpotifyViewer({
                         : "min-h-full max-w-7xl"
                   }`}
                 >
-                  <div className={`flex w-full flex-col ${isNativeFullscreen ? "h-full gap-0" : "gap-4"}`}>
+                  <div
+                    className={`flex w-full min-w-0 flex-col ${
+                      isNativeFullscreen ? "h-full gap-0" : "gap-4"
+                    }`}
+                  >
                     {!isNativeFullscreen ? (
                       <div
                         id={selectedPlaylistViewerAnchorId}
@@ -1501,7 +1507,7 @@ export function SpotifyViewer({
                       }
                     >
                       {!isNativeFullscreen && !isVideoExtendedMode ? (
-                        <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
+                        <div className="order-2 min-w-0 overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)] xl:order-1">
                           <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
                             <div>
                               <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
@@ -1565,7 +1571,7 @@ export function SpotifyViewer({
                             />
                           </div>
 
-                          <div className="max-h-[70vh] overflow-y-auto p-3">
+                          <div className="max-h-[45vh] overflow-y-auto p-3 sm:max-h-[70vh]">
                             {trackStatus === "loading" ? (
                               <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
                                 Cargando canciones de Spotify...
@@ -1595,7 +1601,7 @@ export function SpotifyViewer({
                                       id={`spotify-track-${track.id}`}
                                       type="button"
                                       onClick={() => handleSelectTrack(track.id)}
-                                      className={`flex w-full items-start justify-between gap-3 rounded-[1.35rem] border px-4 py-4 text-left transition ${
+                                      className={`flex w-full min-w-0 items-start justify-between gap-3 rounded-[1.35rem] border px-3 py-3 text-left transition sm:px-4 sm:py-4 ${
                                         isSelected
                                           ? "border-cyan-300/55 bg-cyan-300/12"
                                           : "border-white/10 bg-white/6 hover:border-cyan-300/35 hover:bg-cyan-300/8"
@@ -1644,11 +1650,11 @@ export function SpotifyViewer({
                             : isVideoExtendedMode
                             ? "flex min-h-[calc(100vh-11rem)] flex-col"
                             : ""
-                        }`}
+                        } ${!isNativeFullscreen && !isVideoExtendedMode ? "order-1 min-w-0 xl:order-2" : "min-w-0"}`}
                       >
                         {!isNativeFullscreen ? (
-                          <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
-                            <div>
+                          <div className="flex flex-col gap-4 border-b border-white/10 px-4 py-4 sm:px-5 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
                                   Visor
@@ -1682,7 +1688,7 @@ export function SpotifyViewer({
                               )}
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                               {selectedTrack ? (
                                 <button
                                   type="button"
@@ -1852,7 +1858,7 @@ export function SpotifyViewer({
 
                         <div
                           ref={playerViewportRef}
-                          className={`flex flex-col gap-6 p-6 ${
+                          className={`flex min-w-0 flex-col gap-4 p-3 sm:gap-6 sm:p-6 ${
                             isNativeFullscreen
                               ? "h-full min-h-0 flex-1 gap-0 p-0"
                               : isVideoExtendedMode
