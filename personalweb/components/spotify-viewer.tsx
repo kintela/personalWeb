@@ -49,6 +49,7 @@ type YouTubeMatchPayload = {
 };
 
 type SpotifyTrackStatus = "idle" | "loading" | "ready" | "error";
+type VideoCacheFilterMode = "all" | "uncached" | "cached";
 
 const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
 function getPlaylistCountLabel(count: number) {
@@ -241,6 +242,25 @@ function UncachedVideoFilterIcon() {
   );
 }
 
+function CachedVideoFilterIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <rect x="3.5" y="6.5" width="11" height="9" rx="2.2" />
+      <path d="m14.5 9.25 4 2.25-4 2.25Z" fill="currentColor" stroke="none" />
+      <path d="m16.8 18.1 1.55 1.55 3.15-3.4" />
+    </svg>
+  );
+}
+
 export function SpotifyViewer({
   playlists,
   quickAccess,
@@ -274,8 +294,8 @@ export function SpotifyViewer({
   >({});
   const [trackFilterInput, setTrackFilterInput] = useState("");
   const [isTrackShuffleEnabled, setIsTrackShuffleEnabled] = useState(false);
-  const [isUncachedVideoFilterEnabled, setIsUncachedVideoFilterEnabled] =
-    useState(false);
+  const [videoCacheFilterMode, setVideoCacheFilterMode] =
+    useState<VideoCacheFilterMode>("all");
   const [shuffledTrackIds, setShuffledTrackIds] = useState<string[]>([]);
   const [selectedTrackId, setSelectedTrackId] = useState("");
   const [trackStatus, setTrackStatus] = useState<SpotifyTrackStatus>("idle");
@@ -339,11 +359,19 @@ export function SpotifyViewer({
   const uncachedTrackCount = textFilteredPlaylistTracks.filter(
     (track) => track.youtubeCacheStatus === "uncached",
   ).length;
-  const filteredPlaylistTracks = isUncachedVideoFilterEnabled
-    ? textFilteredPlaylistTracks.filter(
-        (track) => track.youtubeCacheStatus === "uncached",
-      )
-    : textFilteredPlaylistTracks;
+  const cachedTrackCount = textFilteredPlaylistTracks.filter(
+    (track) => track.youtubeCacheStatus === "cached",
+  ).length;
+  const filteredPlaylistTracks =
+    videoCacheFilterMode === "uncached"
+      ? textFilteredPlaylistTracks.filter(
+          (track) => track.youtubeCacheStatus === "uncached",
+        )
+      : videoCacheFilterMode === "cached"
+        ? textFilteredPlaylistTracks.filter(
+            (track) => track.youtubeCacheStatus === "cached",
+          )
+        : textFilteredPlaylistTracks;
   const playbackOrderedTracks = (() => {
     if (!isTrackShuffleEnabled || shuffledTrackIds.length === 0) {
       return filteredPlaylistTracks;
@@ -452,7 +480,7 @@ export function SpotifyViewer({
     setPlaylistTracks([]);
     setTrackFilterInput("");
     setIsTrackShuffleEnabled(false);
-    setIsUncachedVideoFilterEnabled(false);
+    setVideoCacheFilterMode("all");
     setShuffledTrackIds([]);
     setSelectedTrackId("");
     setTrackStatus("idle");
@@ -583,7 +611,7 @@ export function SpotifyViewer({
   }, [filteredPlaylistTracks, normalizedTrackFilterValue, selectedTrackId]);
 
   useEffect(() => {
-    if (!isUncachedVideoFilterEnabled || !selectedTrackId) {
+    if (videoCacheFilterMode === "all" || !selectedTrackId) {
       return;
     }
 
@@ -598,7 +626,7 @@ export function SpotifyViewer({
     }
 
     setSelectedTrackId(nextVisibleTrack.id);
-  }, [isUncachedVideoFilterEnabled, playbackOrderedTracks, selectedTrackId]);
+  }, [playbackOrderedTracks, selectedTrackId, videoCacheFilterMode]);
 
   useEffect(() => {
     if (!selectedTrack || isVideoExtendedMode || isNativeFullscreen) {
@@ -631,7 +659,7 @@ export function SpotifyViewer({
     setSelectedPlaylistId(sharedSpotifyPlaylistId);
     setTrackFilterInput("");
     setIsTrackShuffleEnabled(false);
-    setIsUncachedVideoFilterEnabled(false);
+    setVideoCacheFilterMode("all");
     setShuffledTrackIds([]);
     setIsVideoExtendedMode(true);
     setShouldAutoEnterFullscreen(true);
@@ -919,7 +947,7 @@ export function SpotifyViewer({
     setSelectedPlaylistId(playlistId);
     setTrackFilterInput("");
     setIsTrackShuffleEnabled(false);
-    setIsUncachedVideoFilterEnabled(false);
+    setVideoCacheFilterMode("all");
     setShuffledTrackIds([]);
     setIsVideoExtendedMode(true);
     setShouldAutoEnterFullscreen(true);
@@ -964,7 +992,15 @@ export function SpotifyViewer({
   }
 
   function handleToggleUncachedVideoFilter() {
-    setIsUncachedVideoFilterEnabled((currentValue) => !currentValue);
+    setVideoCacheFilterMode((currentValue) =>
+      currentValue === "uncached" ? "all" : "uncached",
+    );
+  }
+
+  function handleToggleCachedVideoFilter() {
+    setVideoCacheFilterMode((currentValue) =>
+      currentValue === "cached" ? "all" : "cached",
+    );
   }
 
   function handleStepTrack(direction: "previous" | "next") {
@@ -1536,25 +1572,51 @@ export function SpotifyViewer({
                                 type="button"
                                 onClick={handleToggleUncachedVideoFilter}
                                 aria-label={
-                                  isUncachedVideoFilterEnabled
+                                  videoCacheFilterMode === "uncached"
                                     ? "Mostrar todas las canciones"
                                     : "Mostrar canciones sin vídeo cacheado"
                                 }
                                 title={
-                                  isUncachedVideoFilterEnabled
+                                  videoCacheFilterMode === "uncached"
                                     ? "Mostrar todas las canciones"
                                     : "Mostrar canciones sin vídeo cacheado"
                                 }
                                 disabled={
-                                  !isUncachedVideoFilterEnabled && uncachedTrackCount === 0
+                                  videoCacheFilterMode !== "uncached" &&
+                                  uncachedTrackCount === 0
                                 }
                                 className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
-                                  isUncachedVideoFilterEnabled
+                                  videoCacheFilterMode === "uncached"
                                     ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
                                     : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
                                 }`}
                               >
                                 <UncachedVideoFilterIcon />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleToggleCachedVideoFilter}
+                                aria-label={
+                                  videoCacheFilterMode === "cached"
+                                    ? "Mostrar todas las canciones"
+                                    : "Mostrar canciones con vídeo cacheado"
+                                }
+                                title={
+                                  videoCacheFilterMode === "cached"
+                                    ? "Mostrar todas las canciones"
+                                    : "Mostrar canciones con vídeo cacheado"
+                                }
+                                disabled={
+                                  videoCacheFilterMode !== "cached" &&
+                                  cachedTrackCount === 0
+                                }
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                                  videoCacheFilterMode === "cached"
+                                    ? "border-emerald-300/55 bg-emerald-300/12 text-emerald-100"
+                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-emerald-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                                }`}
+                              >
+                                <CachedVideoFilterIcon />
                               </button>
                             </div>
                           </div>
