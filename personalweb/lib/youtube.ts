@@ -260,6 +260,15 @@ function getSearchCacheKey(input: SearchSongVideoInput) {
   ].join("::");
 }
 
+export function getYouTubeSongVideoCacheKey(input: {
+  trackName: string;
+  artistsLabel: string;
+  albumName?: string | null;
+  albumReleaseYear?: string | null;
+}) {
+  return getSearchCacheKey(input);
+}
+
 function getThumbnailUrl(candidate: {
   snippet?: {
     thumbnails?: {

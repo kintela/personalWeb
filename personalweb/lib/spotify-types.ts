@@ -29,6 +29,7 @@ export type SpotifyPlaylistTrackAsset = {
   albumReleaseDate: string | null;
   durationMs: number | null;
   durationLabel: string;
+  youtubeCacheStatus: "cached" | "uncached";
 };
 
 export type SpotifyPlaylistListResult = {

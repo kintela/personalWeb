@@ -190,6 +190,27 @@ function ManualVideoIcon() {
   );
 }
 
+function UncachedVideoFilterIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <rect x="3.5" y="6.5" width="11" height="9" rx="2.2" />
+      <path d="m14.5 9.25 4 2.25-4 2.25Z" fill="currentColor" stroke="none" />
+      <path d="M18.25 5.25h2.25" />
+      <path d="M19.375 4.125v2.25" />
+      <circle cx="19.375" cy="18" r="1.375" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function SpotifyViewer({
   playlists,
   quickAccess,
@@ -223,6 +244,8 @@ export function SpotifyViewer({
   >({});
   const [trackFilterInput, setTrackFilterInput] = useState("");
   const [isTrackShuffleEnabled, setIsTrackShuffleEnabled] = useState(false);
+  const [isUncachedVideoFilterEnabled, setIsUncachedVideoFilterEnabled] =
+    useState(false);
   const [shuffledTrackIds, setShuffledTrackIds] = useState<string[]>([]);
   const [selectedTrackId, setSelectedTrackId] = useState("");
   const [trackStatus, setTrackStatus] = useState<SpotifyTrackStatus>("idle");
@@ -266,7 +289,7 @@ export function SpotifyViewer({
   const normalizedTrackFilterValue = trackFilterInput
     .trim()
     .toLocaleLowerCase("es-ES");
-  const filteredPlaylistTracks = normalizedTrackFilterValue
+  const textFilteredPlaylistTracks = normalizedTrackFilterValue
     ? playlistTracks.filter((track) => {
         const haystack = [
           track.name,
@@ -281,6 +304,14 @@ export function SpotifyViewer({
         return haystack.includes(normalizedTrackFilterValue);
       })
     : playlistTracks;
+  const uncachedTrackCount = textFilteredPlaylistTracks.filter(
+    (track) => track.youtubeCacheStatus === "uncached",
+  ).length;
+  const filteredPlaylistTracks = isUncachedVideoFilterEnabled
+    ? textFilteredPlaylistTracks.filter(
+        (track) => track.youtubeCacheStatus === "uncached",
+      )
+    : textFilteredPlaylistTracks;
   const playbackOrderedTracks = (() => {
     if (!isTrackShuffleEnabled || shuffledTrackIds.length === 0) {
       return filteredPlaylistTracks;
@@ -383,6 +414,7 @@ export function SpotifyViewer({
     setPlaylistTracks([]);
     setTrackFilterInput("");
     setIsTrackShuffleEnabled(false);
+    setIsUncachedVideoFilterEnabled(false);
     setShuffledTrackIds([]);
     setSelectedTrackId("");
     setTrackStatus("idle");
@@ -490,6 +522,24 @@ export function SpotifyViewer({
   }, [filteredPlaylistTracks, normalizedTrackFilterValue, selectedTrackId]);
 
   useEffect(() => {
+    if (!isUncachedVideoFilterEnabled || !selectedTrackId) {
+      return;
+    }
+
+    if (playbackOrderedTracks.some((track) => track.id === selectedTrackId)) {
+      return;
+    }
+
+    const nextVisibleTrack = playbackOrderedTracks[0];
+
+    if (!nextVisibleTrack) {
+      return;
+    }
+
+    setSelectedTrackId(nextVisibleTrack.id);
+  }, [isUncachedVideoFilterEnabled, playbackOrderedTracks, selectedTrackId]);
+
+  useEffect(() => {
     if (!selectedTrack || isVideoExtendedMode || isNativeFullscreen) {
       return;
     }
@@ -520,6 +570,7 @@ export function SpotifyViewer({
     setSelectedPlaylistId(sharedSpotifyPlaylistId);
     setTrackFilterInput("");
     setIsTrackShuffleEnabled(false);
+    setIsUncachedVideoFilterEnabled(false);
     setShuffledTrackIds([]);
     setIsVideoExtendedMode(true);
   }, [playlists, sharedSpotifyPlaylistId]);
@@ -638,7 +689,9 @@ export function SpotifyViewer({
 
   useEffect(() => {
     if (!isTrackShuffleEnabled) {
-      setShuffledTrackIds([]);
+      setShuffledTrackIds((currentTrackIds) =>
+        currentTrackIds.length === 0 ? currentTrackIds : [],
+      );
       return;
     }
 
@@ -653,11 +706,19 @@ export function SpotifyViewer({
         .map((track) => track.id)
         .filter((trackId) => !nextTrackIds.includes(trackId));
 
+      if (
+        missingTrackIds.length === 0 &&
+        nextTrackIds.length === currentTrackIds.length &&
+        nextTrackIds.every((trackId, index) => trackId === currentTrackIds[index])
+      ) {
+        return currentTrackIds;
+      }
+
       if (nextTrackIds.length === filteredPlaylistTracks.length) {
         return nextTrackIds;
       }
 
-      return [
+      const reorderedTrackIds = [
         ...nextTrackIds,
         ...shuffleTrackOrder(
           filteredPlaylistTracks.filter((track) =>
@@ -665,6 +726,17 @@ export function SpotifyViewer({
           ),
         ),
       ];
+
+      if (
+        reorderedTrackIds.length === currentTrackIds.length &&
+        reorderedTrackIds.every(
+          (trackId, index) => trackId === currentTrackIds[index],
+        )
+      ) {
+        return currentTrackIds;
+      }
+
+      return reorderedTrackIds;
     });
   }, [filteredPlaylistTracks, isTrackShuffleEnabled]);
 
@@ -757,6 +829,7 @@ export function SpotifyViewer({
           ...currentCache,
           [selectedTrack.id]: nextVideo,
         }));
+        markTrackVideoAsCached(selectedTrack.id);
         setSelectedVideo(nextVideo);
         setVideoStatus("ready");
       } catch (error) {
@@ -784,9 +857,35 @@ export function SpotifyViewer({
     setSelectedPlaylistId(playlistId);
     setTrackFilterInput("");
     setIsTrackShuffleEnabled(false);
+    setIsUncachedVideoFilterEnabled(false);
     setShuffledTrackIds([]);
     setIsVideoExtendedMode(true);
     void requestNativeFullscreen();
+  }
+
+  function markTrackVideoAsCached(trackId: string) {
+    setPlaylistTracks((currentTracks) =>
+      currentTracks.map((track) =>
+        track.id === trackId
+          ? { ...track, youtubeCacheStatus: "cached" }
+          : track,
+      ),
+    );
+
+    setTrackCache((currentCache) => {
+      if (!selectedPlaylistId || !currentCache[selectedPlaylistId]) {
+        return currentCache;
+      }
+
+      return {
+        ...currentCache,
+        [selectedPlaylistId]: currentCache[selectedPlaylistId].map((track) =>
+          track.id === trackId
+            ? { ...track, youtubeCacheStatus: "cached" }
+            : track,
+        ),
+      };
+    });
   }
 
   function handleSelectTrack(trackId: string) {
@@ -806,18 +905,8 @@ export function SpotifyViewer({
     setIsVideoExtendedMode(false);
   }
 
-  function handleToggleVideoExtendedMode() {
-    setIsVideoExtendedMode((currentValue) => {
-      const nextValue = !currentValue;
-
-      if (nextValue) {
-        void requestNativeFullscreen();
-      } else {
-        void exitNativeFullscreen();
-      }
-
-      return nextValue;
-    });
+  function handleToggleUncachedVideoFilter() {
+    setIsUncachedVideoFilterEnabled((currentValue) => !currentValue);
   }
 
   function handleStepTrack(direction: "previous" | "next") {
@@ -969,6 +1058,7 @@ export function SpotifyViewer({
         ...currentCache,
         [selectedTrack.id]: payload.video ?? null,
       }));
+      markTrackVideoAsCached(selectedTrack.id);
       setSelectedVideo(payload.video);
       setVideoStatus("ready");
       setVideoError(null);
@@ -1355,10 +1445,18 @@ export function SpotifyViewer({
                       {!isNativeFullscreen && !isVideoExtendedMode ? (
                         <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
                           <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-                            <div className="flex items-center gap-2">
+                            <div>
                               <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
                                 Canciones
                               </p>
+                              <p className="mt-2 text-[0.62rem] uppercase tracking-[0.22em] text-slate-500">
+                                {filteredPlaylistTracks.length}{" "}
+                                {filteredPlaylistTracks.length === 1
+                                  ? "canción"
+                                  : "canciones"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <button
                                 type="button"
                                 onClick={handleToggleTrackShuffle}
@@ -1369,6 +1467,30 @@ export function SpotifyViewer({
                                 }`}
                               >
                                 Aleatorio
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleToggleUncachedVideoFilter}
+                                aria-label={
+                                  isUncachedVideoFilterEnabled
+                                    ? "Mostrar todas las canciones"
+                                    : "Mostrar canciones sin vídeo cacheado"
+                                }
+                                title={
+                                  isUncachedVideoFilterEnabled
+                                    ? "Mostrar todas las canciones"
+                                    : "Mostrar canciones sin vídeo cacheado"
+                                }
+                                disabled={
+                                  !isUncachedVideoFilterEnabled && uncachedTrackCount === 0
+                                }
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                                  isUncachedVideoFilterEnabled
+                                    ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
+                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                                }`}
+                              >
+                                <UncachedVideoFilterIcon />
                               </button>
                             </div>
                           </div>
@@ -1503,13 +1625,6 @@ export function SpotifyViewer({
                             </div>
 
                             <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={handleToggleVideoExtendedMode}
-                                className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-cyan-300/45 hover:text-white"
-                              >
-                                {isVideoExtendedMode ? "Lista" : "Extendido"}
-                              </button>
                               {selectedTrack ? (
                                 <button
                                   type="button"

@@ -27,6 +27,10 @@ type YouTubeVideoMatchCacheRow = {
   view_count: number | string | null;
 };
 
+type YouTubeVideoMatchCacheKeyRow = {
+  cache_key: string;
+};
+
 type UpsertYouTubeVideoMatchCacheInput = {
   cacheKey: string;
   trackName: string;
@@ -141,6 +145,38 @@ export async function readYouTubeMatchCache(
     };
   } catch {
     return { status: "miss" };
+  }
+}
+
+export async function readYouTubeMatchCacheStatuses(cacheKeys: string[]) {
+  const supabase = createSupabaseServerClient();
+  const normalizedCacheKeys = [...new Set(cacheKeys.map((key) => key.trim()).filter(Boolean))];
+
+  if (!supabase || normalizedCacheKeys.length === 0) {
+    return {} as Record<string, boolean>;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("youtube_video_matches")
+      .select("cache_key")
+      .in("cache_key", normalizedCacheKeys)
+      .returns<YouTubeVideoMatchCacheKeyRow[]>();
+
+    if (error || !data) {
+      return {} as Record<string, boolean>;
+    }
+
+    const cachedKeySet = new Set(
+      data.map((row) => row.cache_key.trim()).filter(Boolean),
+    );
+
+    return normalizedCacheKeys.reduce<Record<string, boolean>>((statusMap, cacheKey) => {
+      statusMap[cacheKey] = cachedKeySet.has(cacheKey);
+      return statusMap;
+    }, {});
+  } catch {
+    return {} as Record<string, boolean>;
   }
 }
 
