@@ -6,6 +6,7 @@ import {
   startTransition,
   useEffect,
   useEffectEvent,
+  useRef,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
@@ -259,6 +260,7 @@ export function SpotifyViewer({
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isVideoExtendedMode, setIsVideoExtendedMode] = useState(true);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+  const [shouldAutoEnterFullscreen, setShouldAutoEnterFullscreen] = useState(false);
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(
     initiallyAdminUnlocked,
   );
@@ -269,6 +271,7 @@ export function SpotifyViewer({
   const [manualVideoSuccess, setManualVideoSuccess] = useState("");
   const [isManualVideoUnlocking, setIsManualVideoUnlocking] = useState(false);
   const [isManualVideoSaving, setIsManualVideoSaving] = useState(false);
+  const playerViewportRef = useRef<HTMLDivElement | null>(null);
   const gridClassName =
     gridDensity === "dense"
       ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
@@ -384,13 +387,19 @@ export function SpotifyViewer({
       return;
     }
 
-    if (document.fullscreenElement === document.documentElement) {
+    const fullscreenTarget = playerViewportRef.current;
+
+    if (!fullscreenTarget) {
+      return;
+    }
+
+    if (document.fullscreenElement === fullscreenTarget) {
       setIsNativeFullscreen(true);
       return;
     }
 
     try {
-      await document.documentElement.requestFullscreen();
+      await fullscreenTarget.requestFullscreen();
       setIsNativeFullscreen(true);
     } catch {
       setIsNativeFullscreen(Boolean(document.fullscreenElement));
@@ -424,6 +433,7 @@ export function SpotifyViewer({
     setVideoError(null);
     setIsVideoExtendedMode(true);
     setIsManualVideoPanelOpen(false);
+    setShouldAutoEnterFullscreen(false);
     setManualVideoPassword("");
     setManualVideoUrl("");
     setManualVideoError("");
@@ -480,7 +490,13 @@ export function SpotifyViewer({
 
   useEffect(() => {
     function handleFullscreenChange() {
-      setIsNativeFullscreen(Boolean(document.fullscreenElement));
+      const hasFullscreenElement = Boolean(document.fullscreenElement);
+
+      setIsNativeFullscreen(hasFullscreenElement);
+
+      if (!hasFullscreenElement) {
+        setIsVideoExtendedMode(false);
+      }
     }
 
     handleFullscreenChange();
@@ -499,7 +515,6 @@ export function SpotifyViewer({
   }, [initiallyAdminUnlocked]);
 
   useEffect(() => {
-    setIsVideoExtendedMode(true);
     setIsManualVideoPanelOpen(false);
     setManualVideoPassword("");
     setManualVideoUrl("");
@@ -508,6 +523,23 @@ export function SpotifyViewer({
     setIsManualVideoUnlocking(false);
     setIsManualVideoSaving(false);
   }, [selectedTrack?.id]);
+
+  useEffect(() => {
+    if (!shouldAutoEnterFullscreen || !selectedPlaylist || !isVideoExtendedMode) {
+      return;
+    }
+
+    if (!playerViewportRef.current) {
+      return;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      void requestNativeFullscreen();
+      setShouldAutoEnterFullscreen(false);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [isVideoExtendedMode, requestNativeFullscreen, selectedPlaylist, shouldAutoEnterFullscreen]);
 
   useEffect(() => {
     if (
@@ -573,6 +605,7 @@ export function SpotifyViewer({
     setIsUncachedVideoFilterEnabled(false);
     setShuffledTrackIds([]);
     setIsVideoExtendedMode(true);
+    setShouldAutoEnterFullscreen(true);
   }, [playlists, sharedSpotifyPlaylistId]);
 
   useEffect(() => {
@@ -860,7 +893,7 @@ export function SpotifyViewer({
     setIsUncachedVideoFilterEnabled(false);
     setShuffledTrackIds([]);
     setIsVideoExtendedMode(true);
-    void requestNativeFullscreen();
+    setShouldAutoEnterFullscreen(true);
   }
 
   function markTrackVideoAsCached(trackId: string) {
@@ -890,10 +923,6 @@ export function SpotifyViewer({
 
   function handleSelectTrack(trackId: string) {
     setSelectedTrackId(trackId);
-
-    if (isVideoExtendedMode) {
-      void requestNativeFullscreen();
-    }
   }
 
   function handleRevealSelectedTrack() {
@@ -933,7 +962,7 @@ export function SpotifyViewer({
   }
 
   function handleAdvanceToNextTrack(options?: { requestFullscreen?: boolean }) {
-    if (options?.requestFullscreen) {
+    if (options?.requestFullscreen && isNativeFullscreen) {
       void requestNativeFullscreen();
     }
 
@@ -941,7 +970,7 @@ export function SpotifyViewer({
   }
 
   function handleGoToPreviousTrack(options?: { requestFullscreen?: boolean }) {
-    if (options?.requestFullscreen) {
+    if (options?.requestFullscreen && isNativeFullscreen) {
       void requestNativeFullscreen();
     }
 
@@ -1793,6 +1822,7 @@ export function SpotifyViewer({
                         ) : null}
 
                         <div
+                          ref={playerViewportRef}
                           className={`flex flex-col gap-6 p-6 ${
                             isNativeFullscreen
                               ? "h-full min-h-0 flex-1 gap-0 p-0"
