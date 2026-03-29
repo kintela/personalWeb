@@ -331,7 +331,7 @@ export function SpotifyViewer({
       return;
     }
 
-    if (document.fullscreenElement) {
+    if (document.fullscreenElement === document.documentElement) {
       setIsNativeFullscreen(true);
       return;
     }
