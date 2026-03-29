@@ -1653,7 +1653,7 @@ export function SpotifyViewer({
                               }
                             >
                               <div
-                                className={`overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/60 shadow-[0_24px_80px_rgba(0,0,0,0.38)] ${
+                                className={`relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/60 shadow-[0_24px_80px_rgba(0,0,0,0.38)] ${
                                   isVideoExtendedMode ? "min-h-0 flex-1" : ""
                                 }`}
                               >
