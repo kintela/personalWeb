@@ -1360,9 +1360,9 @@ export function SpotifyViewer({
 
     if (!isAdminUnlocked) {
       setSelectedTrackId(track.id);
-      setIsVideoExtendedMode(true);
       setIsManualVideoPanelOpen(true);
       setManualVideoSuccess("");
+      setRatingError("Desbloquea la sesión admin para guardar estrellas en esta pista.");
       setManualVideoError(
         "Desbloquea la sesión admin para guardar estrellas en esta pista.",
       );
@@ -1397,7 +1397,6 @@ export function SpotifyViewer({
         if (response.status === 401) {
           setIsAdminUnlocked(false);
           setSelectedTrackId(track.id);
-          setIsVideoExtendedMode(true);
           setIsManualVideoPanelOpen(true);
         }
 
