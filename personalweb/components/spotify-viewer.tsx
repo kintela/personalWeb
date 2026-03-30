@@ -542,6 +542,8 @@ export function SpotifyViewer({
     playlistTracks.find((track) => track.id === selectedTrackId) ??
     playbackOrderedTracks[0] ??
     null;
+  const isSelectedTrackExpectedFromCache =
+    selectedTrack?.youtubeCacheStatus === "cached";
   const selectedTrackYear = selectedTrack?.albumReleaseDate?.slice(0, 4) ?? null;
   const selectedPlaylistViewerAnchorId = selectedPlaylist
     ? `spotify-playlist-viewer-${selectedPlaylist.id}`
@@ -2239,10 +2241,14 @@ export function SpotifyViewer({
                                   <VideoPlaceholderIcon />
                                 </div>
                                 <p className="mt-5 text-sm font-medium uppercase tracking-[0.28em] text-cyan-300/80">
-                                  Buscando en YouTube
+                                  {isSelectedTrackExpectedFromCache
+                                    ? "Cargando caché"
+                                    : "Buscando en YouTube"}
                                 </p>
                                 <h3 className="mt-3 text-2xl font-semibold text-white">
-                                  Estoy localizando el mejor vídeo para esta canción
+                                  {isSelectedTrackExpectedFromCache
+                                    ? "Estoy leyendo el vídeo guardado para esta canción"
+                                    : "Estoy localizando el mejor vídeo para esta canción"}
                                 </h3>
                               </div>
                             </div>
