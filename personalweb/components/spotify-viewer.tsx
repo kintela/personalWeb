@@ -1846,44 +1846,46 @@ export function SpotifyViewer({
                                     <div
                                       key={track.id}
                                       id={`spotify-track-${track.id}`}
-                                      className={`flex w-full min-w-0 items-start justify-between gap-3 rounded-[1.35rem] border px-3 py-3 text-left transition sm:px-4 sm:py-4 ${
+                                      className={`flex w-full min-w-0 flex-col gap-3 rounded-[1.35rem] border px-3 py-3 text-left transition sm:px-4 sm:py-4 ${
                                         isSelected
                                           ? "border-cyan-300/55 bg-cyan-300/12"
                                           : "border-white/10 bg-white/6 hover:border-cyan-300/35 hover:bg-cyan-300/8"
                                       }`}
                                     >
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSelectTrack(track.id)}
-                                        className="min-w-0 flex-1 text-left focus:outline-none"
-                                      >
-                                        <div className="flex items-center gap-2 text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
-                                          <span className="shrink-0">
-                                            Pista {track.position}
-                                          </span>
-                                          <span className="truncate text-slate-300">
-                                            {track.artistsLabel}
-                                          </span>
-                                        </div>
-                                        <p className="mt-2 truncate text-base font-semibold text-white">
-                                          {track.name}
-                                        </p>
-                                        {track.albumName ? (
-                                          <p
-                                            className="mt-1 truncate text-sm text-cyan-100/80"
-                                            title={`${track.albumName}${track.albumReleaseDate ? ` · ${track.albumReleaseDate.slice(0, 4)}` : ""}`}
-                                          >
-                                            {track.albumName}
-                                            {track.albumReleaseDate
-                                              ? ` · ${track.albumReleaseDate.slice(0, 4)}`
-                                              : ""}
+                                      <div className="flex min-w-0 items-start justify-between gap-3">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSelectTrack(track.id)}
+                                          className="min-w-0 flex-1 text-left focus:outline-none"
+                                        >
+                                          <div className="flex items-center gap-2 text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
+                                            <span className="shrink-0">
+                                              Pista {track.position}
+                                            </span>
+                                            <span className="truncate text-slate-300">
+                                              {track.artistsLabel}
+                                            </span>
+                                          </div>
+                                          <p className="mt-2 truncate text-base font-semibold text-white">
+                                            {track.name}
                                           </p>
-                                        ) : null}
-                                      </button>
-                                      <div className="flex shrink-0 flex-col items-end gap-3">
+                                          {track.albumName ? (
+                                            <p
+                                              className="mt-1 truncate text-sm text-cyan-100/80"
+                                              title={`${track.albumName}${track.albumReleaseDate ? ` · ${track.albumReleaseDate.slice(0, 4)}` : ""}`}
+                                            >
+                                              {track.albumName}
+                                              {track.albumReleaseDate
+                                                ? ` · ${track.albumReleaseDate.slice(0, 4)}`
+                                                : ""}
+                                            </p>
+                                          ) : null}
+                                        </button>
                                         <span className="shrink-0 rounded-full border border-white/12 bg-black/20 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
                                           {track.durationLabel}
                                         </span>
+                                      </div>
+                                      <div className="flex justify-start">
                                         <TrackRatingControl
                                           trackName={track.name}
                                           rating={track.rating}
