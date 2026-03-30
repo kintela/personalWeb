@@ -366,13 +366,8 @@ export function MtvViewer({
             </p>
             <div className="space-y-3">
               <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
-                Vídeos cacheados con ranking...
+                como la MTV pero mejor...
               </h2>
-              <p className="max-w-3xl text-base leading-8 text-slate-300 md:text-lg">
-                Solo salen los vídeos ya guardados en caché y con estrellas.
-                Primero van los mejor puntuados; luego ya filtras por artista,
-                tema o texto libre.
-              </p>
             </div>
           </div>
 
@@ -539,13 +534,6 @@ export function MtvViewer({
                                 {video.rating}★
                               </span>
                             </div>
-
-                            <div className="flex items-center justify-between gap-3">
-                              <MtvRatingStars rating={video.rating} />
-                              <span className="truncate text-xs text-slate-400">
-                                {video.video.channelTitle}
-                              </span>
-                            </div>
                           </button>
                         );
                       })}
@@ -565,36 +553,27 @@ export function MtvViewer({
                         <h3 className="mt-2 text-2xl font-semibold text-white">
                           {selectedVideo.trackName}
                         </h3>
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-300">
-                          <p>{selectedVideo.artistsLabel}</p>
+                        <div className="mt-3 flex flex-nowrap items-center gap-2 text-sm text-slate-300">
+                          <p className="min-w-0 truncate">
+                            {selectedVideo.artistsLabel}
+                          </p>
                           {selectedVideo.albumReleaseYear ? (
-                            <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-[0.62rem] font-medium uppercase tracking-[0.18em] text-amber-100">
+                            <span className="shrink-0 rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-[0.62rem] font-medium uppercase tracking-[0.18em] text-amber-100">
                               {selectedVideo.albumReleaseYear}
                             </span>
                           ) : null}
-                          <span className="rounded-full border border-white/12 bg-white/6 px-2.5 py-1 text-[0.62rem] font-medium uppercase tracking-[0.18em] text-slate-100">
-                            {selectedVideo.video.viewCountLabel} vistas
-                          </span>
                         </div>
                         <div className="mt-3">
                           <MtvRatingStars rating={selectedVideo.rating} />
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                        <a
-                          href={selectedVideo.video.externalUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-rose-300/45 hover:text-white"
-                        >
-                          Abrir en YouTube
-                        </a>
+                      <div className="flex shrink-0 flex-nowrap items-center gap-2 lg:justify-end">
                         <button
                           type="button"
                           onClick={() => handleStepVideo("previous")}
                           disabled={!hasPreviousVideo}
-                          className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-amber-300/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                          className="whitespace-nowrap rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-amber-300/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Anterior
                         </button>
@@ -602,14 +581,14 @@ export function MtvViewer({
                           type="button"
                           onClick={() => handleStepVideo("next")}
                           disabled={!hasNextVideo}
-                          className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-amber-300/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                          className="whitespace-nowrap rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-amber-300/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Siguiente
                         </button>
                       </div>
                     </div>
 
-                    <div className="space-y-5 p-4 sm:p-6">
+                    <div className="p-4 sm:p-6">
                       <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/60 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
                         <div className="aspect-video">
                           <YouTubeEmbeddedPlayer
@@ -619,44 +598,6 @@ export function MtvViewer({
                             onEnded={() => handleStepVideo("next")}
                             className="h-full w-full"
                           />
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-                        <div className="space-y-4">
-                          <div className="rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
-                            <p className="text-xs uppercase tracking-[0.24em] text-amber-300/80">
-                              Vídeo cacheado
-                            </p>
-                            <p className="mt-2 text-base font-medium text-white">
-                              {selectedVideo.video.title}
-                            </p>
-                            <p className="mt-2 text-sm leading-7 text-slate-300">
-                              Canal: {selectedVideo.video.channelTitle}
-                            </p>
-                          </div>
-
-                          {selectedVideo.matchedQuery ? (
-                            <div className="rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
-                              <p className="text-xs uppercase tracking-[0.24em] text-amber-300/80">
-                                Query guardada
-                              </p>
-                              <p className="mt-2 text-sm leading-7 text-slate-300">
-                                {selectedVideo.matchedQuery}
-                              </p>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 lg:justify-end">
-                          {selectedVideo.albumName ? (
-                            <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-slate-100">
-                              {selectedVideo.albumName}
-                            </span>
-                          ) : null}
-                          <span className="rounded-full border border-amber-300/25 bg-amber-300/12 px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-amber-100">
-                            Ranking {selectedVideo.rating}/5
-                          </span>
                         </div>
                       </div>
                     </div>
