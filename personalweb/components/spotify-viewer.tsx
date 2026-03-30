@@ -55,7 +55,7 @@ type TrackRatingPayload = {
 };
 
 type SpotifyTrackStatus = "idle" | "loading" | "ready" | "error";
-type VideoCacheFilterMode = "all" | "uncached" | "cached";
+type VideoCacheFilterMode = "all" | "uncached" | "cached" | "ranked";
 
 const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
 const TRACK_RATING_VALUES = [1, 2, 3, 4, 5] as const;
@@ -262,19 +262,26 @@ function CachedVideoFilterIcon() {
       strokeLinejoin="round"
       className="h-4 w-4"
     >
-      <rect x="3.5" y="6.5" width="11" height="9" rx="2.2" />
-      <path d="m14.5 9.25 4 2.25-4 2.25Z" fill="currentColor" stroke="none" />
-      <path d="m16.8 18.1 1.55 1.55 3.15-3.4" />
+      <ellipse cx="12" cy="5.5" rx="6.25" ry="2.75" />
+      <path d="M5.75 5.5v4.5c0 1.52 2.8 2.75 6.25 2.75s6.25-1.23 6.25-2.75V5.5" />
+      <path d="M5.75 10v4.5c0 1.52 2.8 2.75 6.25 2.75s6.25-1.23 6.25-2.75V10" />
+      <path d="M5.75 14.5V19c0 1.52 2.8 2.75 6.25 2.75s6.25-1.23 6.25-2.75v-4.5" />
     </svg>
   );
 }
 
-function RatingStarIcon({ active }: { active: boolean }) {
+function RatingStarIcon({
+  active,
+  className = "h-3.5 w-3.5",
+}: {
+  active: boolean;
+  className?: string;
+}) {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
-      className="h-3.5 w-3.5"
+      className={className}
       fill={active ? "currentColor" : "none"}
       stroke="currentColor"
       strokeWidth="1.8"
@@ -284,6 +291,32 @@ function RatingStarIcon({ active }: { active: boolean }) {
       <path d="m12 3.6 2.55 5.18 5.72.83-4.14 4.04.98 5.7L12 16.67 6.89 19.35l.98-5.7L3.73 9.61l5.72-.83L12 3.6Z" />
     </svg>
   );
+}
+
+function ShuffleIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M16 4h4v4" />
+      <path d="m4 18 6.5-6.5" />
+      <path d="M20 4 13 11" />
+      <path d="M16 20h4v-4" />
+      <path d="m4 6 6.5 6.5" />
+      <path d="M20 20 13 13" />
+    </svg>
+  );
+}
+
+function RankedTrackFilterIcon() {
+  return <RatingStarIcon active={true} className="h-4 w-4" />;
 }
 
 function TrackRatingControl({
@@ -448,6 +481,9 @@ export function SpotifyViewer({
   const cachedTrackCount = textFilteredPlaylistTracks.filter(
     (track) => track.youtubeCacheStatus === "cached",
   ).length;
+  const rankedTrackCount = textFilteredPlaylistTracks.filter(
+    (track) => track.rating > 0,
+  ).length;
   const filteredPlaylistTracks =
     videoCacheFilterMode === "uncached"
       ? textFilteredPlaylistTracks.filter(
@@ -457,8 +493,28 @@ export function SpotifyViewer({
         ? textFilteredPlaylistTracks.filter(
             (track) => track.youtubeCacheStatus === "cached",
           )
+        : videoCacheFilterMode === "ranked"
+          ? [...textFilteredPlaylistTracks]
+              .filter((track) => track.rating > 0)
+              .sort((left, right) => {
+                if (right.rating !== left.rating) {
+                  return right.rating - left.rating;
+                }
+
+                if (left.position !== right.position) {
+                  return left.position - right.position;
+                }
+
+                return left.name.localeCompare(right.name, "es", {
+                  sensitivity: "base",
+                });
+              })
         : textFilteredPlaylistTracks;
   const playbackOrderedTracks = (() => {
+    if (videoCacheFilterMode === "ranked") {
+      return filteredPlaylistTracks;
+    }
+
     if (!isTrackShuffleEnabled || shuffledTrackIds.length === 0) {
       return filteredPlaylistTracks;
     }
@@ -1117,6 +1173,19 @@ export function SpotifyViewer({
     );
   }
 
+  function handleToggleRankedTrackFilter() {
+    setVideoCacheFilterMode((currentValue) => {
+      const nextValue = currentValue === "ranked" ? "all" : "ranked";
+
+      if (nextValue === "ranked") {
+        setIsTrackShuffleEnabled(false);
+        setShuffledTrackIds([]);
+      }
+
+      return nextValue;
+    });
+  }
+
   function handleStepTrack(direction: "previous" | "next") {
     setSelectedTrackId((currentTrackId) => {
       if (!currentTrackId || playbackOrderedTracks.length === 0) {
@@ -1740,13 +1809,24 @@ export function SpotifyViewer({
                               <button
                                 type="button"
                                 onClick={handleToggleTrackShuffle}
-                                className={`rounded-full border px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] transition ${
+                                disabled={videoCacheFilterMode === "ranked"}
+                                aria-label={
+                                  isTrackShuffleEnabled
+                                    ? "Desactivar orden aleatorio"
+                                    : "Activar orden aleatorio"
+                                }
+                                title={
+                                  isTrackShuffleEnabled
+                                    ? "Desactivar orden aleatorio"
+                                    : "Activar orden aleatorio"
+                                }
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
                                   isTrackShuffleEnabled
                                     ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
-                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white"
+                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
                                 }`}
                               >
-                                Aleatorio
+                                <ShuffleIcon />
                               </button>
                               <button
                                 type="button"
@@ -1797,6 +1877,31 @@ export function SpotifyViewer({
                                 }`}
                               >
                                 <CachedVideoFilterIcon />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleToggleRankedTrackFilter}
+                                aria-label={
+                                  videoCacheFilterMode === "ranked"
+                                    ? "Mostrar todas las canciones"
+                                    : "Mostrar canciones con ranking"
+                                }
+                                title={
+                                  videoCacheFilterMode === "ranked"
+                                    ? "Mostrar todas las canciones"
+                                    : "Mostrar canciones con ranking"
+                                }
+                                disabled={
+                                  videoCacheFilterMode !== "ranked" &&
+                                  rankedTrackCount === 0
+                                }
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                                  videoCacheFilterMode === "ranked"
+                                    ? "border-amber-300/55 bg-amber-300/12 text-amber-100"
+                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-amber-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                                }`}
+                              >
+                                <RankedTrackFilterIcon />
                               </button>
                             </div>
                           </div>
