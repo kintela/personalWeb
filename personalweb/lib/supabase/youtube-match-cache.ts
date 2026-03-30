@@ -4,6 +4,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { YouTubeMatchedVideoAsset } from "@/lib/youtube-types";
 
+type YouTubeMatchRating = 0 | 1 | 2 | 3 | 4 | 5;
+
 type YouTubeMatchCacheLookupResult =
   | {
       status: "hit";
@@ -25,10 +27,12 @@ type YouTubeVideoMatchCacheRow = {
   external_url: string | null;
   embed_url: string | null;
   view_count: number | string | null;
+  rating: number | string | null;
 };
 
-type YouTubeVideoMatchCacheKeyRow = {
+type YouTubeVideoMatchCacheSummaryRow = {
   cache_key: string;
+  rating: number | string | null;
 };
 
 type UpsertYouTubeVideoMatchCacheInput = {
@@ -39,6 +43,15 @@ type UpsertYouTubeVideoMatchCacheInput = {
   albumReleaseYear?: string | null;
   matchedQuery: string;
   video: YouTubeMatchedVideoAsset | null;
+};
+
+type UpsertYouTubeMatchRatingInput = {
+  cacheKey: string;
+  trackName: string;
+  artistsLabel: string;
+  albumName?: string | null;
+  albumReleaseYear?: string | null;
+  rating: YouTubeMatchRating;
 };
 
 type UpsertYouTubeVideoMatchCacheResult =
@@ -87,6 +100,29 @@ function normalizeNullableValue(value: string | null | undefined) {
   return normalizedValue ? normalizedValue : null;
 }
 
+function normalizeMatchRating(
+  value: number | string | null | undefined,
+): YouTubeMatchRating {
+  const normalizedValue =
+    typeof value === "number"
+      ? value
+      : Number.parseInt(value ?? "", 10);
+
+  if (!Number.isInteger(normalizedValue)) {
+    return 0;
+  }
+
+  if (normalizedValue < 0) {
+    return 0;
+  }
+
+  if (normalizedValue > 5) {
+    return 5;
+  }
+
+  return normalizedValue as YouTubeMatchRating;
+}
+
 function formatViewCountLabel(viewCount: number) {
   return new Intl.NumberFormat("es-ES").format(viewCount);
 }
@@ -130,7 +166,7 @@ export async function readYouTubeMatchCache(
     const { data, error } = await supabase
       .from("youtube_video_matches")
       .select(
-        "cache_key, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count",
+        "cache_key, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count, rating",
       )
       .eq("cache_key", cacheKey)
       .maybeSingle<YouTubeVideoMatchCacheRow>();
@@ -148,35 +184,65 @@ export async function readYouTubeMatchCache(
   }
 }
 
-export async function readYouTubeMatchCacheStatuses(cacheKeys: string[]) {
+export async function readYouTubeMatchCacheTrackMetadata(cacheKeys: string[]) {
   const supabase = createSupabaseServerClient();
-  const normalizedCacheKeys = [...new Set(cacheKeys.map((key) => key.trim()).filter(Boolean))];
+  const normalizedCacheKeys = [
+    ...new Set(cacheKeys.map((key) => key.trim()).filter(Boolean)),
+  ];
 
   if (!supabase || normalizedCacheKeys.length === 0) {
-    return {} as Record<string, boolean>;
+    return {} as Record<string, { cached: boolean; rating: YouTubeMatchRating }>;
   }
 
   try {
     const { data, error } = await supabase
       .from("youtube_video_matches")
-      .select("cache_key")
+      .select("cache_key, rating")
       .in("cache_key", normalizedCacheKeys)
-      .returns<YouTubeVideoMatchCacheKeyRow[]>();
+      .returns<YouTubeVideoMatchCacheSummaryRow[]>();
 
     if (error || !data) {
-      return {} as Record<string, boolean>;
+      return {} as Record<string, { cached: boolean; rating: YouTubeMatchRating }>;
     }
 
-    const cachedKeySet = new Set(
-      data.map((row) => row.cache_key.trim()).filter(Boolean),
+    const summaryByKey = new Map(
+      data
+        .map((row) => {
+          const cacheKey = row.cache_key.trim();
+
+          if (!cacheKey) {
+            return null;
+          }
+
+          return [
+            cacheKey,
+            {
+              cached: true,
+              rating: normalizeMatchRating(row.rating),
+            },
+          ] as const;
+        })
+        .filter(
+          (
+            entry,
+          ): entry is readonly [
+            string,
+            { cached: true; rating: YouTubeMatchRating },
+          ] => entry !== null,
+        ),
     );
 
-    return normalizedCacheKeys.reduce<Record<string, boolean>>((statusMap, cacheKey) => {
-      statusMap[cacheKey] = cachedKeySet.has(cacheKey);
+    return normalizedCacheKeys.reduce<
+      Record<string, { cached: boolean; rating: YouTubeMatchRating }>
+    >((statusMap, cacheKey) => {
+      statusMap[cacheKey] = summaryByKey.get(cacheKey) ?? {
+        cached: false,
+        rating: 0,
+      };
       return statusMap;
     }, {});
   } catch {
-    return {} as Record<string, boolean>;
+    return {} as Record<string, { cached: boolean; rating: YouTubeMatchRating }>;
   }
 }
 
@@ -199,28 +265,48 @@ export async function upsertYouTubeMatchCache({
   }
 
   try {
-    const { error } = await supabase.from("youtube_video_matches").upsert(
-      {
-        cache_key: cacheKey,
-        track_name: trackName.trim(),
-        artists_label: artistsLabel.trim(),
-        album_name: normalizeNullableValue(albumName),
-        album_release_year: normalizeNullableValue(albumReleaseYear),
-        matched_query: matchedQuery.trim(),
-        has_match: Boolean(video),
-        video_id: normalizeNullableValue(video?.id),
-        title: normalizeNullableValue(video?.title),
-        channel_title: normalizeNullableValue(video?.channelTitle),
-        description: normalizeNullableValue(video?.description),
-        thumbnail_url: normalizeNullableValue(video?.thumbnailUrl),
-        external_url: normalizeNullableValue(video?.externalUrl),
-        embed_url: normalizeNullableValue(video?.embedUrl),
-        view_count: video?.viewCount ?? null,
-      },
-      {
-        onConflict: "cache_key",
-      },
-    );
+    const normalizedCacheKey = cacheKey.trim();
+    const normalizedTrackName = trackName.trim();
+    const normalizedArtistsLabel = artistsLabel.trim();
+    const basePayload = {
+      cache_key: normalizedCacheKey,
+      track_name: normalizedTrackName,
+      artists_label: normalizedArtistsLabel,
+      album_name: normalizeNullableValue(albumName),
+      album_release_year: normalizeNullableValue(albumReleaseYear),
+      matched_query: matchedQuery.trim(),
+      has_match: Boolean(video),
+      video_id: normalizeNullableValue(video?.id),
+      title: normalizeNullableValue(video?.title),
+      channel_title: normalizeNullableValue(video?.channelTitle),
+      description: normalizeNullableValue(video?.description),
+      thumbnail_url: normalizeNullableValue(video?.thumbnailUrl),
+      external_url: normalizeNullableValue(video?.externalUrl),
+      embed_url: normalizeNullableValue(video?.embedUrl),
+      view_count: video?.viewCount ?? null,
+    };
+    const { data: existingRow, error: existingRowError } = await supabase
+      .from("youtube_video_matches")
+      .select("cache_key")
+      .eq("cache_key", normalizedCacheKey)
+      .maybeSingle<{ cache_key: string }>();
+
+    if (existingRowError) {
+      return {
+        ok: false,
+        error: `No he podido preparar la caché de YouTube: ${existingRowError.message}`,
+      };
+    }
+
+    const { error } = existingRow
+      ? await supabase
+          .from("youtube_video_matches")
+          .update(basePayload)
+          .eq("cache_key", normalizedCacheKey)
+      : await supabase.from("youtube_video_matches").insert({
+          ...basePayload,
+          rating: 0,
+        });
 
     if (error) {
       return {
@@ -234,6 +320,75 @@ export async function upsertYouTubeMatchCache({
     return {
       ok: false,
       error: "No he podido guardar la caché de YouTube.",
+    };
+  }
+}
+
+export async function upsertYouTubeMatchRating({
+  cacheKey,
+  trackName,
+  artistsLabel,
+  albumName,
+  albumReleaseYear,
+  rating,
+}: UpsertYouTubeMatchRatingInput): Promise<UpsertYouTubeVideoMatchCacheResult> {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      ok: false,
+      error: "Falta configurar Supabase para guardar la puntuación del vídeo.",
+    };
+  }
+
+  try {
+    const normalizedCacheKey = cacheKey.trim();
+    const normalizedTrackName = trackName.trim();
+    const normalizedArtistsLabel = artistsLabel.trim();
+    const normalizedRating = normalizeMatchRating(rating);
+    const { data: existingRow, error: existingRowError } = await supabase
+      .from("youtube_video_matches")
+      .select("cache_key")
+      .eq("cache_key", normalizedCacheKey)
+      .maybeSingle<{ cache_key: string }>();
+
+    if (existingRowError) {
+      return {
+        ok: false,
+        error: `No he podido preparar la puntuación del vídeo: ${existingRowError.message}`,
+      };
+    }
+
+    const { error } = existingRow
+      ? await supabase
+          .from("youtube_video_matches")
+          .update({
+            rating: normalizedRating,
+          })
+          .eq("cache_key", normalizedCacheKey)
+      : await supabase.from("youtube_video_matches").insert({
+          cache_key: normalizedCacheKey,
+          track_name: normalizedTrackName,
+          artists_label: normalizedArtistsLabel,
+          album_name: normalizeNullableValue(albumName),
+          album_release_year: normalizeNullableValue(albumReleaseYear),
+          matched_query: null,
+          has_match: false,
+          rating: normalizedRating,
+        });
+
+    if (error) {
+      return {
+        ok: false,
+        error: `No he podido guardar la puntuación del vídeo: ${error.message}`,
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    return {
+      ok: false,
+      error: "No he podido guardar la puntuación del vídeo.",
     };
   }
 }

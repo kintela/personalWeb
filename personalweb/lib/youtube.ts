@@ -3,6 +3,7 @@ import "server-only";
 import {
   readYouTubeMatchCache,
   upsertYouTubeMatchCache,
+  upsertYouTubeMatchRating,
 } from "@/lib/supabase/youtube-match-cache";
 import type { YouTubeMatchedVideoAsset } from "@/lib/youtube-types";
 
@@ -19,6 +20,10 @@ type SearchSongVideoInput = {
 
 type ManualYouTubeSongVideoInput = SearchSongVideoInput & {
   videoUrl: string;
+};
+
+type SaveYouTubeSongVideoRatingInput = SearchSongVideoInput & {
+  rating: number;
 };
 
 type YouTubeSearchResponse = {
@@ -552,6 +557,27 @@ export async function saveManualYouTubeSongVideo(
   }
 
   return matchedVideo;
+}
+
+export async function saveYouTubeSongVideoRating(
+  input: SaveYouTubeSongVideoRatingInput,
+) {
+  const normalizedRating = Math.max(0, Math.min(5, Math.round(input.rating)));
+  const cacheKey = getSearchCacheKey(input);
+  const saveResult = await upsertYouTubeMatchRating({
+    cacheKey,
+    trackName: input.trackName,
+    artistsLabel: input.artistsLabel,
+    albumName: input.albumName,
+    albumReleaseYear: input.albumReleaseYear,
+    rating: normalizedRating as 0 | 1 | 2 | 3 | 4 | 5,
+  });
+
+  if (!saveResult.ok) {
+    throw new Error(saveResult.error);
+  }
+
+  return normalizedRating;
 }
 
 export async function searchYouTubeSongVideo(

@@ -48,10 +48,18 @@ type YouTubeMatchPayload = {
   error?: string;
 };
 
+type TrackRatingPayload = {
+  ok?: boolean;
+  rating?: number;
+  error?: string;
+};
+
 type SpotifyTrackStatus = "idle" | "loading" | "ready" | "error";
 type VideoCacheFilterMode = "all" | "uncached" | "cached";
 
 const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
+const TRACK_RATING_VALUES = [1, 2, 3, 4, 5] as const;
+
 function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
 }
@@ -261,6 +269,80 @@ function CachedVideoFilterIcon() {
   );
 }
 
+function RatingStarIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5"
+      fill={active ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m12 3.6 2.55 5.18 5.72.83-4.14 4.04.98 5.7L12 16.67 6.89 19.35l.98-5.7L3.73 9.61l5.72-.83L12 3.6Z" />
+    </svg>
+  );
+}
+
+function TrackRatingControl({
+  trackName,
+  rating,
+  isSaving,
+  isEditable,
+  onChange,
+}: {
+  trackName: string;
+  rating: number;
+  isSaving: boolean;
+  isEditable: boolean;
+  onChange: (nextRating: number) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={`Puntuación de ${trackName}`}
+      className="flex items-center gap-1"
+      title={
+        isEditable
+          ? "Haz clic en una estrella para puntuar; repite clic en la misma para volver a 0."
+          : "Desbloquea la sesión admin para editar estrellas."
+      }
+    >
+      {TRACK_RATING_VALUES.map((value) => {
+        const isActive = rating >= value;
+        const actionLabel =
+          rating === value
+            ? "Quitar puntuación"
+            : `Poner ${value} estrella${value === 1 ? "" : "s"}`;
+
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onChange(rating === value ? 0 : value);
+            }}
+            disabled={isSaving}
+            aria-pressed={isActive}
+            aria-label={`${actionLabel} a ${trackName}`}
+            className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition ${
+              isActive
+                ? "border-amber-300/40 bg-amber-300/14 text-amber-200"
+                : "border-white/10 bg-black/15 text-slate-500 hover:border-cyan-300/35 hover:text-cyan-100"
+            } ${isSaving ? "cursor-wait opacity-60" : ""}`}
+          >
+            <RatingStarIcon active={isActive} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SpotifyViewer({
   playlists,
   quickAccess,
@@ -320,6 +402,10 @@ export function SpotifyViewer({
   const [manualVideoSuccess, setManualVideoSuccess] = useState("");
   const [isManualVideoUnlocking, setIsManualVideoUnlocking] = useState(false);
   const [isManualVideoSaving, setIsManualVideoSaving] = useState(false);
+  const [ratingError, setRatingError] = useState<string | null>(null);
+  const [ratingSavingTrackId, setRatingSavingTrackId] = useState<string | null>(
+    null,
+  );
   const playerViewportRef = useRef<HTMLDivElement | null>(null);
   const gridClassName =
     gridDensity === "dense"
@@ -497,6 +583,8 @@ export function SpotifyViewer({
     setManualVideoSuccess("");
     setIsManualVideoUnlocking(false);
     setIsManualVideoSaving(false);
+    setRatingError(null);
+    setRatingSavingTrackId(null);
   }
 
   function clearSpotifyShareParams() {
@@ -579,6 +667,8 @@ export function SpotifyViewer({
     setManualVideoSuccess("");
     setIsManualVideoUnlocking(false);
     setIsManualVideoSaving(false);
+    setRatingError(null);
+    setRatingSavingTrackId(null);
   }, [selectedTrack?.id]);
 
   useEffect(() => {
@@ -951,6 +1041,8 @@ export function SpotifyViewer({
     setShuffledTrackIds([]);
     setIsVideoExtendedMode(true);
     setShouldAutoEnterFullscreen(true);
+    setRatingError(null);
+    setRatingSavingTrackId(null);
   }
 
   function markTrackVideoAsCached(trackId: string) {
@@ -980,6 +1072,28 @@ export function SpotifyViewer({
 
   function handleSelectTrack(trackId: string) {
     setSelectedTrackId(trackId);
+    setRatingError(null);
+  }
+
+  function updateTrackRatingLocally(trackId: string, rating: number) {
+    setPlaylistTracks((currentTracks) =>
+      currentTracks.map((track) =>
+        track.id === trackId ? { ...track, rating } : track,
+      ),
+    );
+
+    setTrackCache((currentCache) => {
+      if (!selectedPlaylistId || !currentCache[selectedPlaylistId]) {
+        return currentCache;
+      }
+
+      return {
+        ...currentCache,
+        [selectedPlaylistId]: currentCache[selectedPlaylistId].map((track) =>
+          track.id === trackId ? { ...track, rating } : track,
+        ),
+      };
+    });
   }
 
   function handleRevealSelectedTrack() {
@@ -1166,6 +1280,72 @@ export function SpotifyViewer({
       );
     } finally {
       setIsManualVideoSaving(false);
+    }
+  }
+
+  async function handleSetTrackRating(
+    track: SpotifyPlaylistTrackAsset,
+    nextRating: number,
+  ) {
+    setRatingError(null);
+
+    if (!isAdminUnlocked) {
+      setSelectedTrackId(track.id);
+      setIsVideoExtendedMode(true);
+      setIsManualVideoPanelOpen(true);
+      setManualVideoSuccess("");
+      setManualVideoError(
+        "Desbloquea la sesión admin para guardar estrellas en esta pista.",
+      );
+      return;
+    }
+
+    setRatingSavingTrackId(track.id);
+
+    try {
+      const response = await fetch("/api/youtube/match", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          track: track.name,
+          artists: track.artistsLabel,
+          album: track.albumName ?? "",
+          year: track.albumReleaseDate?.slice(0, 4) ?? "",
+          rating: nextRating,
+        }),
+      });
+      const payload = (await response.json()) as TrackRatingPayload;
+      const savedRating = payload.rating;
+
+      if (
+        !response.ok ||
+        !payload.ok ||
+        typeof savedRating !== "number" ||
+        !Number.isInteger(savedRating)
+      ) {
+        if (response.status === 401) {
+          setIsAdminUnlocked(false);
+          setSelectedTrackId(track.id);
+          setIsVideoExtendedMode(true);
+          setIsManualVideoPanelOpen(true);
+        }
+
+        throw new Error(
+          payload.error ?? "No he podido guardar la puntuación.",
+        );
+      }
+
+      updateTrackRatingLocally(track.id, savedRating);
+    } catch (error) {
+      setRatingError(
+        error instanceof Error
+          ? error.message
+          : "No he podido guardar la puntuación.",
+      );
+    } finally {
+      setRatingSavingTrackId(null);
     }
   }
 
@@ -1654,22 +1834,29 @@ export function SpotifyViewer({
                               </div>
                             ) : (
                               <div className="space-y-2">
+                                {ratingError ? (
+                                  <div className="rounded-[1.1rem] border border-rose-400/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+                                    {ratingError}
+                                  </div>
+                                ) : null}
                                 {playbackOrderedTracks.map((track) => {
                                   const isSelected = selectedTrack?.id === track.id;
 
                                   return (
-                                    <button
+                                    <div
                                       key={track.id}
                                       id={`spotify-track-${track.id}`}
-                                      type="button"
-                                      onClick={() => handleSelectTrack(track.id)}
                                       className={`flex w-full min-w-0 items-start justify-between gap-3 rounded-[1.35rem] border px-3 py-3 text-left transition sm:px-4 sm:py-4 ${
                                         isSelected
                                           ? "border-cyan-300/55 bg-cyan-300/12"
                                           : "border-white/10 bg-white/6 hover:border-cyan-300/35 hover:bg-cyan-300/8"
                                       }`}
                                     >
-                                      <div className="min-w-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSelectTrack(track.id)}
+                                        className="min-w-0 flex-1 text-left focus:outline-none"
+                                      >
                                         <div className="flex items-center gap-2 text-[0.68rem] uppercase tracking-[0.24em] text-slate-400">
                                           <span className="shrink-0">
                                             Pista {track.position}
@@ -1692,11 +1879,22 @@ export function SpotifyViewer({
                                               : ""}
                                           </p>
                                         ) : null}
+                                      </button>
+                                      <div className="flex shrink-0 flex-col items-end gap-3">
+                                        <span className="shrink-0 rounded-full border border-white/12 bg-black/20 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
+                                          {track.durationLabel}
+                                        </span>
+                                        <TrackRatingControl
+                                          trackName={track.name}
+                                          rating={track.rating}
+                                          isSaving={ratingSavingTrackId === track.id}
+                                          isEditable={isAdminUnlocked}
+                                          onChange={(nextRating) =>
+                                            void handleSetTrackRating(track, nextRating)
+                                          }
+                                        />
                                       </div>
-                                      <span className="shrink-0 rounded-full border border-white/12 bg-black/20 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
-                                        {track.durationLabel}
-                                      </span>
-                                    </button>
+                                    </div>
                                   );
                                 })}
                               </div>

@@ -7,7 +7,7 @@ import type {
   SpotifyQuickAccessAsset,
   SpotifyPlaylistTrackAsset,
 } from "@/lib/spotify-types";
-import { readYouTubeMatchCacheStatuses } from "@/lib/supabase/youtube-match-cache";
+import { readYouTubeMatchCacheTrackMetadata } from "@/lib/supabase/youtube-match-cache";
 import { getYouTubeSongVideoCacheKey } from "@/lib/youtube";
 
 const SPOTIFY_ACCOUNTS_BASE_URL = "https://accounts.spotify.com";
@@ -475,6 +475,7 @@ function mapSpotifyPlaylistTrack(
     durationMs: track.duration_ms,
     durationLabel: formatDurationLabel(track.duration_ms),
     youtubeCacheStatus: "uncached",
+    rating: 0,
   } satisfies SpotifyPlaylistTrackAsset;
 }
 
@@ -637,7 +638,7 @@ export async function getSpotifyPlaylistTracks(playlistId: string) {
       position: index + 1,
     }));
 
-  const cacheStatusByKey = await readYouTubeMatchCacheStatuses(
+  const trackMetadataByKey = await readYouTubeMatchCacheTrackMetadata(
     sortedTracks.map((track) =>
       getYouTubeSongVideoCacheKey({
         trackName: track.name,
@@ -650,15 +651,24 @@ export async function getSpotifyPlaylistTracks(playlistId: string) {
 
   return sortedTracks.map((track) => ({
     ...track,
-    youtubeCacheStatus: cacheStatusByKey[
+    youtubeCacheStatus: trackMetadataByKey[
       getYouTubeSongVideoCacheKey({
         trackName: track.name,
         artistsLabel: track.artistsLabel,
         albumName: track.albumName,
         albumReleaseYear: track.albumReleaseDate?.slice(0, 4) ?? null,
       })
-    ]
+    ]?.cached
       ? "cached"
       : "uncached",
+    rating:
+      trackMetadataByKey[
+        getYouTubeSongVideoCacheKey({
+          trackName: track.name,
+          artistsLabel: track.artistsLabel,
+          albumName: track.albumName,
+          albumReleaseYear: track.albumReleaseDate?.slice(0, 4) ?? null,
+        })
+      ]?.rating ?? 0,
   }));
 }

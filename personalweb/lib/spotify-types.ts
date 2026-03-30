@@ -30,6 +30,7 @@ export type SpotifyPlaylistTrackAsset = {
   durationMs: number | null;
   durationLabel: string;
   youtubeCacheStatus: "cached" | "uncached";
+  rating: number;
 };
 
 export type SpotifyPlaylistListResult = {
