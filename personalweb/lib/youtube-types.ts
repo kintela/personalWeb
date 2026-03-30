@@ -10,3 +10,21 @@ export type YouTubeMatchedVideoAsset = {
   viewCountLabel: string;
   matchedQuery: string;
 };
+
+export type RankedYouTubeVideoAsset = {
+  cacheKey: string;
+  trackName: string;
+  artistsLabel: string;
+  albumName: string | null;
+  albumReleaseYear: string | null;
+  rating: number;
+  matchedQuery: string | null;
+  video: YouTubeMatchedVideoAsset;
+};
+
+export type RankedYouTubeVideoListResult = {
+  videos: RankedYouTubeVideoAsset[];
+  configured: boolean;
+  error: string | null;
+  totalCount: number;
+};

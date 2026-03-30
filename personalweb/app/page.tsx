@@ -4,6 +4,7 @@ import { ConcertsViewer } from "@/components/concerts-viewer";
 import { DeepLinkFocus } from "@/components/deep-link-focus";
 import { GuitarViewer } from "@/components/guitar-viewer";
 import { HistoryViewer } from "@/components/history-viewer";
+import { MtvViewer } from "@/components/mtv-viewer";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { SpotifyViewer } from "@/components/spotify-viewer";
 import { VinilosViewer } from "@/components/vinilos-viewer";
@@ -24,6 +25,7 @@ import {
   getHistoryVideoList,
   getVideoList,
 } from "@/lib/supabase/videos";
+import { getRankedYouTubeVideoList } from "@/lib/supabase/youtube-match-cache";
 import { getSpotifyPlaylistList } from "@/lib/spotify";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +37,11 @@ const SECTION_SHORTCUTS = [
     href: "#spotify",
     label: "Spotify",
     eyebrow: "Playlists",
+  },
+  {
+    href: "#mtv",
+    label: "MTV",
+    eyebrow: "Cache",
   },
   {
     href: "#fotos",
@@ -134,6 +141,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
     guitarVideos,
     guitarTopics,
     spotifyPlaylists,
+    mtvVideos,
     videos,
     isUploaderUnlocked,
   ] = await Promise.all([
@@ -168,6 +176,7 @@ export default async function Home(props: { searchParams: SearchParams }) {
         topicValue: guitarThemeValue,
       }),
       getSpotifyPlaylistList(),
+      getRankedYouTubeVideoList(),
       getVideoList({
         filterValue: videoFilterValue,
         categoryValue: videoCategoryValue,
@@ -316,6 +325,15 @@ export default async function Home(props: { searchParams: SearchParams }) {
             topicValue={guitarTopics.topicValue}
             groupOptions={guitarTopics.groupOptions}
             topicOptions={guitarTopics.topicOptions}
+          />
+        </div>
+
+        <div id="mtv" className="scroll-mt-32">
+          <MtvViewer
+            videos={mtvVideos.videos}
+            configured={mtvVideos.configured}
+            error={mtvVideos.error}
+            totalCount={mtvVideos.totalCount}
           />
         </div>
 

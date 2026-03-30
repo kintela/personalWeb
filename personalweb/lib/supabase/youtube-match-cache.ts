@@ -2,7 +2,11 @@ import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import type { YouTubeMatchedVideoAsset } from "@/lib/youtube-types";
+import type {
+  RankedYouTubeVideoAsset,
+  RankedYouTubeVideoListResult,
+  YouTubeMatchedVideoAsset,
+} from "@/lib/youtube-types";
 
 type YouTubeMatchRating = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -17,6 +21,10 @@ type YouTubeMatchCacheLookupResult =
 
 type YouTubeVideoMatchCacheRow = {
   cache_key: string;
+  track_name?: string | null;
+  artists_label?: string | null;
+  album_name?: string | null;
+  album_release_year?: string | null;
   matched_query: string | null;
   has_match: boolean;
   video_id: string | null;
@@ -151,6 +159,87 @@ function mapRowToVideoAsset(
     viewCountLabel: formatViewCountLabel(viewCount),
     matchedQuery: normalizeNullableValue(row.matched_query) ?? "",
   } satisfies YouTubeMatchedVideoAsset;
+}
+
+function mapRowToRankedVideoAsset(
+  row: YouTubeVideoMatchCacheRow,
+): RankedYouTubeVideoAsset | null {
+  const video = mapRowToVideoAsset(row);
+  const cacheKey = row.cache_key.trim();
+  const trackName = normalizeNullableValue(row.track_name) ?? "";
+  const artistsLabel = normalizeNullableValue(row.artists_label) ?? "";
+
+  if (!video || !cacheKey || !trackName || !artistsLabel) {
+    return null;
+  }
+
+  return {
+    cacheKey,
+    trackName,
+    artistsLabel,
+    albumName: normalizeNullableValue(row.album_name),
+    albumReleaseYear: normalizeNullableValue(row.album_release_year),
+    rating: normalizeMatchRating(row.rating),
+    matchedQuery: normalizeNullableValue(row.matched_query),
+    video,
+  } satisfies RankedYouTubeVideoAsset;
+}
+
+export async function getRankedYouTubeVideoList(): Promise<RankedYouTubeVideoListResult> {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      videos: [],
+      configured: false,
+      error: "Falta configurar Supabase para leer el bloque MTV.",
+      totalCount: 0,
+    };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("youtube_video_matches")
+      .select(
+        "cache_key, track_name, artists_label, album_name, album_release_year, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count, rating",
+      )
+      .eq("has_match", true)
+      .gt("rating", 0)
+      .order("rating", { ascending: false })
+      .order("artists_label", { ascending: true })
+      .order("track_name", { ascending: true })
+      .returns<YouTubeVideoMatchCacheRow[]>();
+
+    if (error) {
+      return {
+        videos: [],
+        configured: true,
+        error: `No he podido leer la caché MTV: ${error.message}`,
+        totalCount: 0,
+      };
+    }
+
+    const videos = (data ?? [])
+      .map((row) => mapRowToRankedVideoAsset(row))
+      .filter((video): video is RankedYouTubeVideoAsset => video !== null);
+
+    return {
+      videos,
+      configured: true,
+      error: null,
+      totalCount: videos.length,
+    };
+  } catch (error) {
+    return {
+      videos: [],
+      configured: true,
+      error:
+        error instanceof Error
+          ? `No he podido leer la caché MTV: ${error.message}`
+          : "No he podido leer la caché MTV.",
+      totalCount: 0,
+    };
+  }
 }
 
 export async function readYouTubeMatchCache(
