@@ -1,6 +1,10 @@
 import "server-only";
 
 import {
+  formatYouTubeDurationLabel,
+  parseYouTubeIsoDuration,
+} from "@/lib/youtube-duration";
+import {
   readYouTubeMatchCache,
   upsertYouTubeMatchCache,
   upsertYouTubeMatchRating,
@@ -75,6 +79,9 @@ type YouTubeVideoListResponse = {
     statistics?: {
       viewCount?: string;
     };
+    contentDetails?: {
+      duration?: string;
+    };
   }>;
 };
 
@@ -88,6 +95,7 @@ type SearchCandidate = {
   thumbnailUrl: string | null;
   embeddable: boolean;
   viewCount: number;
+  durationSeconds: number | null;
 };
 
 const POSITIVE_TITLE_HINT_WEIGHTS = [
@@ -325,6 +333,7 @@ function buildMatchedVideoAssetFromVideoItem(
   }
 
   const viewCount = Number.parseInt(item.statistics?.viewCount ?? "0", 10) || 0;
+  const durationSeconds = parseYouTubeIsoDuration(item.contentDetails?.duration);
 
   return {
     id,
@@ -336,6 +345,8 @@ function buildMatchedVideoAssetFromVideoItem(
     embedUrl: buildEmbedUrl(id),
     viewCount,
     viewCountLabel: formatViewCountLabel(viewCount),
+    durationSeconds,
+    durationLabel: formatYouTubeDurationLabel(durationSeconds),
     matchedQuery,
   } satisfies YouTubeMatchedVideoAsset;
 }
@@ -518,7 +529,7 @@ export async function saveManualYouTubeSongVideo(
   const videoResponse = await fetchYouTubeJson<YouTubeVideoListResponse>(
     "/videos",
     new URLSearchParams({
-      part: "snippet,statistics,status",
+      part: "snippet,statistics,status,contentDetails",
       id: videoId,
       maxResults: "1",
     }),
@@ -631,7 +642,7 @@ export async function searchYouTubeSongVideo(
   const videoResponse = await fetchYouTubeJson<YouTubeVideoListResponse>(
     "/videos",
     new URLSearchParams({
-      part: "snippet,statistics,status",
+      part: "snippet,statistics,status,contentDetails",
       id: videoIds.join(","),
       maxResults: String(videoIds.length),
     }),
@@ -655,6 +666,7 @@ export async function searchYouTubeSongVideo(
         thumbnailUrl: getThumbnailUrl(item),
         embeddable: item.status?.embeddable !== false,
         viewCount: Number.parseInt(item.statistics?.viewCount ?? "0", 10) || 0,
+        durationSeconds: parseYouTubeIsoDuration(item.contentDetails?.duration),
       } satisfies SearchCandidate;
     })
     .filter((candidate): candidate is SearchCandidate => candidate !== null);
@@ -713,6 +725,8 @@ export async function searchYouTubeSongVideo(
     embedUrl: buildEmbedUrl(bestCandidate.id),
     viewCount: bestCandidate.viewCount,
     viewCountLabel: formatViewCountLabel(bestCandidate.viewCount),
+    durationSeconds: bestCandidate.durationSeconds,
+    durationLabel: formatYouTubeDurationLabel(bestCandidate.durationSeconds),
     matchedQuery: searchQuery,
   } satisfies YouTubeMatchedVideoAsset;
 

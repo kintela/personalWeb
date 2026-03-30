@@ -41,7 +41,7 @@ const SECTION_SHORTCUTS = [
   {
     href: "#mtv",
     label: "MTV",
-    eyebrow: "Cache",
+    eyebrow: "TV",
   },
   {
     href: "#fotos",

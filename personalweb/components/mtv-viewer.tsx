@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { ShareCardButton } from "@/components/share-card-button";
 import { YouTubeEmbeddedPlayer } from "@/components/youtube-embedded-player";
+import { formatYouTubeDurationTotalLabel } from "@/lib/youtube-duration";
 import type { RankedYouTubeVideoAsset } from "@/lib/youtube-types";
 
 type MtvViewerProps = {
@@ -11,6 +12,11 @@ type MtvViewerProps = {
   configured: boolean;
   error: string | null;
   totalCount: number;
+};
+
+type ShufflePlaybackState = {
+  history: string[];
+  index: number;
 };
 
 const TRACK_RATING_VALUES = [1, 2, 3, 4, 5] as const;
@@ -32,33 +38,6 @@ function buildMtvSearchHaystack(video: RankedYouTubeVideoAsset) {
     .filter(Boolean)
     .join(" \n")
     .toLocaleLowerCase("es-ES");
-}
-
-function shuffleMtvVideoOrder(
-  videos: RankedYouTubeVideoAsset[],
-  selectedCacheKey?: string,
-) {
-  const remainingCacheKeys = videos.map((video) => video.cacheKey);
-  const nextCacheKeys: string[] = [];
-
-  if (selectedCacheKey) {
-    const selectedVideoIndex = remainingCacheKeys.indexOf(selectedCacheKey);
-
-    if (selectedVideoIndex >= 0) {
-      nextCacheKeys.push(selectedCacheKey);
-      remainingCacheKeys.splice(selectedVideoIndex, 1);
-    }
-  }
-
-  for (let index = remainingCacheKeys.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    const currentValue = remainingCacheKeys[index];
-
-    remainingCacheKeys[index] = remainingCacheKeys[randomIndex] ?? currentValue;
-    remainingCacheKeys[randomIndex] = currentValue;
-  }
-
-  return [...nextCacheKeys, ...remainingCacheKeys];
 }
 
 function ShuffleIcon() {
@@ -151,7 +130,10 @@ export function MtvViewer({
   const [selectedTrackName, setSelectedTrackName] = useState("");
   const [selectedCacheKey, setSelectedCacheKey] = useState("");
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
-  const [shuffledCacheKeys, setShuffledCacheKeys] = useState<string[]>([]);
+  const [shufflePlayback, setShufflePlayback] = useState<ShufflePlaybackState>({
+    history: [],
+    index: -1,
+  });
   const artistOptions = [...new Set(videos.map((video) => video.artistsLabel))].sort(
     (left, right) =>
       left.localeCompare(right, "es", {
@@ -188,43 +170,29 @@ export function MtvViewer({
 
     return buildMtvSearchHaystack(video).includes(normalizedSearchValue);
   });
-  const playbackOrderedVideos = (() => {
-    if (!isShuffleEnabled || shuffledCacheKeys.length === 0) {
-      return filteredVideos;
-    }
-
-    const orderedVideos = shuffledCacheKeys
-      .map((cacheKey) =>
-        filteredVideos.find((video) => video.cacheKey === cacheKey) ?? null,
-      )
-      .filter((video): video is RankedYouTubeVideoAsset => video !== null);
-
-    if (orderedVideos.length === filteredVideos.length) {
-      return orderedVideos;
-    }
-
-    const orderedVideoIdSet = new Set(
-      orderedVideos.map((video) => video.cacheKey),
-    );
-    const missingVideos = filteredVideos.filter(
-      (video) => !orderedVideoIdSet.has(video.cacheKey),
-    );
-
-    return [...orderedVideos, ...missingVideos];
-  })();
+  const filteredVideoTotalDurationSeconds = filteredVideos.reduce(
+    (totalDuration, video) =>
+      totalDuration + Math.max(video.video.durationSeconds ?? 0, 0),
+    0,
+  );
+  const filteredVideoTotalDurationLabel = formatYouTubeDurationTotalLabel(
+    filteredVideoTotalDurationSeconds,
+  );
   const selectedVideo =
-    playbackOrderedVideos.find((video) => video.cacheKey === selectedCacheKey) ??
-    playbackOrderedVideos[0] ??
+    filteredVideos.find((video) => video.cacheKey === selectedCacheKey) ??
+    filteredVideos[0] ??
     null;
   const selectedVideoIndex = selectedVideo
-    ? playbackOrderedVideos.findIndex(
+    ? filteredVideos.findIndex(
         (video) => video.cacheKey === selectedVideo.cacheKey,
       )
     : -1;
-  const hasPreviousVideo = selectedVideoIndex > 0;
-  const hasNextVideo =
-    selectedVideoIndex >= 0 &&
-    selectedVideoIndex < playbackOrderedVideos.length - 1;
+  const hasPreviousVideo = isShuffleEnabled
+    ? shufflePlayback.index > 0
+    : selectedVideoIndex > 0;
+  const hasNextVideo = isShuffleEnabled
+    ? filteredVideos.length > 1
+    : selectedVideoIndex >= 0 && selectedVideoIndex < filteredVideos.length - 1;
 
   useEffect(() => {
     if (!selectedTrackName || trackOptions.includes(selectedTrackName)) {
@@ -236,124 +204,218 @@ export function MtvViewer({
 
   useEffect(() => {
     if (!isShuffleEnabled) {
-      setShuffledCacheKeys((currentCacheKeys) =>
-        currentCacheKeys.length === 0 ? currentCacheKeys : [],
-      );
       return;
     }
 
-    setShuffledCacheKeys((currentCacheKeys) => {
-      const visibleVideoIdSet = new Set(
-        filteredVideos.map((video) => video.cacheKey),
+    const visibleCacheKeySet = new Set(
+      filteredVideos.map((video) => video.cacheKey),
+    );
+
+    setShufflePlayback((currentPlayback) => {
+      const nextHistory = currentPlayback.history.filter((cacheKey) =>
+        visibleCacheKeySet.has(cacheKey),
       );
-      const nextCacheKeys = currentCacheKeys.filter((cacheKey) =>
-        visibleVideoIdSet.has(cacheKey),
-      );
-      const missingCacheKeys = filteredVideos
-        .map((video) => video.cacheKey)
-        .filter((cacheKey) => !nextCacheKeys.includes(cacheKey));
+
+      if (nextHistory.length === 0) {
+        const fallbackCacheKey =
+          selectedCacheKey && visibleCacheKeySet.has(selectedCacheKey)
+            ? selectedCacheKey
+            : filteredVideos[0]?.cacheKey ?? "";
+
+        return fallbackCacheKey
+          ? { history: [fallbackCacheKey], index: 0 }
+          : { history: [], index: -1 };
+      }
+
+      const nextIndex = Math.min(currentPlayback.index, nextHistory.length - 1);
+      const nextSelectedCacheKey =
+        selectedCacheKey && visibleCacheKeySet.has(selectedCacheKey)
+          ? selectedCacheKey
+          : nextHistory[Math.max(nextIndex, 0)] ?? "";
+      const selectedHistoryIndex = nextHistory.indexOf(nextSelectedCacheKey);
 
       if (
-        missingCacheKeys.length === 0 &&
-        nextCacheKeys.length === currentCacheKeys.length &&
-        nextCacheKeys.every(
-          (cacheKey, index) => cacheKey === currentCacheKeys[index],
-        )
+        nextHistory.length === currentPlayback.history.length &&
+        nextHistory.every(
+          (cacheKey, index) => cacheKey === currentPlayback.history[index],
+        ) &&
+        selectedHistoryIndex === currentPlayback.index
       ) {
-        return currentCacheKeys;
+        return currentPlayback;
       }
 
-      if (nextCacheKeys.length === filteredVideos.length) {
-        return nextCacheKeys;
+      if (selectedHistoryIndex >= 0) {
+        return {
+          history: nextHistory,
+          index: selectedHistoryIndex,
+        };
       }
 
-      const reorderedCacheKeys = [
-        ...nextCacheKeys,
-        ...shuffleMtvVideoOrder(
-          filteredVideos.filter((video) =>
-            missingCacheKeys.includes(video.cacheKey),
-          ),
-        ),
-      ];
-
-      if (
-        reorderedCacheKeys.length === currentCacheKeys.length &&
-        reorderedCacheKeys.every(
-          (cacheKey, index) => cacheKey === currentCacheKeys[index],
-        )
-      ) {
-        return currentCacheKeys;
-      }
-
-      return reorderedCacheKeys;
+      return {
+        history: [nextSelectedCacheKey],
+        index: nextSelectedCacheKey ? 0 : -1,
+      };
     });
-  }, [filteredVideos, isShuffleEnabled]);
+  }, [filteredVideos, isShuffleEnabled, selectedCacheKey]);
 
   useEffect(() => {
-    if (playbackOrderedVideos.length === 0) {
+    if (filteredVideos.length === 0) {
       setSelectedCacheKey("");
+      setShufflePlayback((currentPlayback) =>
+        currentPlayback.history.length === 0 && currentPlayback.index === -1
+          ? currentPlayback
+          : { history: [], index: -1 },
+      );
       return;
     }
 
-    setSelectedCacheKey((currentCacheKey) => {
-      if (
-        currentCacheKey &&
-        playbackOrderedVideos.some(
-          (video) => video.cacheKey === currentCacheKey,
-        )
-      ) {
-        return currentCacheKey;
-      }
+    if (
+      selectedCacheKey &&
+      filteredVideos.some((video) => video.cacheKey === selectedCacheKey)
+    ) {
+      return;
+    }
 
-      return playbackOrderedVideos[0]?.cacheKey ?? "";
-    });
-  }, [playbackOrderedVideos]);
+    const fallbackCacheKey = filteredVideos[0]?.cacheKey ?? "";
+    setSelectedCacheKey(fallbackCacheKey);
+
+    if (isShuffleEnabled) {
+      setShufflePlayback(fallbackCacheKey ? { history: [fallbackCacheKey], index: 0 } : { history: [], index: -1 });
+    }
+  }, [filteredVideos, isShuffleEnabled, selectedCacheKey]);
 
   function handleResetFilters() {
     setSearchInput("");
     setSelectedArtist("");
     setSelectedTrackName("");
     setIsShuffleEnabled(false);
-    setShuffledCacheKeys([]);
+    setShufflePlayback({ history: [], index: -1 });
   }
 
   function handleToggleShuffle() {
     setIsShuffleEnabled((currentValue) => {
       const nextValue = !currentValue;
+      const baseCacheKey = selectedVideo?.cacheKey ?? filteredVideos[0]?.cacheKey ?? "";
 
       if (nextValue) {
-        setShuffledCacheKeys(
-          shuffleMtvVideoOrder(filteredVideos, selectedVideo?.cacheKey),
+        setShufflePlayback(
+          baseCacheKey ? { history: [baseCacheKey], index: 0 } : { history: [], index: -1 },
         );
       } else {
-        setShuffledCacheKeys([]);
+        setShufflePlayback({ history: [], index: -1 });
       }
 
       return nextValue;
     });
   }
 
+  function handleSelectVideo(cacheKey: string) {
+    setSelectedCacheKey(cacheKey);
+
+    if (!isShuffleEnabled) {
+      return;
+    }
+
+    setShufflePlayback({ history: [cacheKey], index: 0 });
+  }
+
   function handleStepVideo(direction: "previous" | "next") {
-    setSelectedCacheKey((currentCacheKey) => {
-      if (!currentCacheKey || playbackOrderedVideos.length === 0) {
-        return currentCacheKey;
+    if (!selectedVideo || filteredVideos.length === 0) {
+      return;
+    }
+
+    if (isShuffleEnabled) {
+      if (direction === "previous") {
+        if (shufflePlayback.index <= 0) {
+          return;
+        }
+
+        const nextIndex = shufflePlayback.index - 1;
+        const nextCacheKey = shufflePlayback.history[nextIndex] ?? "";
+
+        if (!nextCacheKey) {
+          return;
+        }
+
+        setShufflePlayback((currentPlayback) => ({
+          history: currentPlayback.history,
+          index: nextIndex,
+        }));
+        setSelectedCacheKey(nextCacheKey);
+        return;
       }
 
-      const currentVideoIndex = playbackOrderedVideos.findIndex(
-        (video) => video.cacheKey === currentCacheKey,
+      if (shufflePlayback.index < shufflePlayback.history.length - 1) {
+        const nextIndex = shufflePlayback.index + 1;
+        const nextCacheKey = shufflePlayback.history[nextIndex] ?? "";
+
+        if (!nextCacheKey) {
+          return;
+        }
+
+        setShufflePlayback((currentPlayback) => ({
+          history: currentPlayback.history,
+          index: nextIndex,
+        }));
+        setSelectedCacheKey(nextCacheKey);
+        return;
+      }
+
+      const visibleCacheKeys = filteredVideos.map((video) => video.cacheKey);
+      const currentHistory = shufflePlayback.history.slice(
+        0,
+        shufflePlayback.index + 1,
       );
+      const unseenCacheKeys = visibleCacheKeys.filter(
+        (cacheKey) =>
+          cacheKey !== selectedVideo.cacheKey &&
+          !currentHistory.includes(cacheKey),
+      );
+      const fallbackCacheKeys = visibleCacheKeys.filter(
+        (cacheKey) => cacheKey !== selectedVideo.cacheKey,
+      );
+      const candidateCacheKeys =
+        unseenCacheKeys.length > 0 ? unseenCacheKeys : fallbackCacheKeys;
 
-      if (currentVideoIndex < 0) {
-        return currentCacheKey;
+      if (candidateCacheKeys.length === 0) {
+        return;
       }
 
-      const nextVideo =
-        direction === "next"
-          ? playbackOrderedVideos[currentVideoIndex + 1]
-          : playbackOrderedVideos[currentVideoIndex - 1];
+      const nextCacheKey =
+        candidateCacheKeys[
+          Math.floor(Math.random() * candidateCacheKeys.length)
+        ] ?? "";
 
-      return nextVideo?.cacheKey ?? currentCacheKey;
-    });
+      if (!nextCacheKey) {
+        return;
+      }
+
+      setShufflePlayback({
+        history: [...currentHistory, nextCacheKey],
+        index: currentHistory.length,
+      });
+      setSelectedCacheKey(nextCacheKey);
+      return;
+    }
+
+    const currentVideoIndex = filteredVideos.findIndex(
+      (video) => video.cacheKey === selectedVideo.cacheKey,
+    );
+
+    if (currentVideoIndex < 0) {
+      return;
+    }
+
+    const nextVideo =
+      direction === "next"
+        ? filteredVideos[currentVideoIndex + 1]
+        : filteredVideos[currentVideoIndex - 1];
+
+    if (!nextVideo) {
+      return;
+    }
+
+    setSelectedCacheKey(nextVideo.cacheKey);
   }
 
   return (
@@ -411,8 +473,10 @@ export function MtvViewer({
                         Selección
                       </p>
                       <p className="mt-2 text-[0.62rem] uppercase tracking-[0.22em] text-slate-500">
-                        {getMtvVideoCountLabel(playbackOrderedVideos.length)} en
-                        lista
+                        {getMtvVideoCountLabel(filteredVideos.length)} en lista
+                        {filteredVideoTotalDurationLabel
+                          ? ` · ${filteredVideoTotalDurationLabel}`
+                          : ""}
                       </p>
                     </div>
 
@@ -489,13 +553,13 @@ export function MtvViewer({
                 </div>
 
                 <div className="max-h-[46rem] overflow-y-auto p-3">
-                  {playbackOrderedVideos.length === 0 ? (
+                  {filteredVideos.length === 0 ? (
                     <div className="rounded-[1.35rem] border border-white/10 bg-white/6 px-4 py-6 text-sm leading-7 text-slate-300">
                       No hay vídeos que coincidan con ese filtro.
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {playbackOrderedVideos.map((video) => {
+                      {filteredVideos.map((video) => {
                         const isSelected =
                           selectedVideo?.cacheKey === video.cacheKey;
 
@@ -503,7 +567,7 @@ export function MtvViewer({
                           <button
                             key={video.cacheKey}
                             type="button"
-                            onClick={() => setSelectedCacheKey(video.cacheKey)}
+                            onClick={() => handleSelectVideo(video.cacheKey)}
                             className={`flex w-full flex-col gap-3 rounded-[1.35rem] border px-3 py-3 text-left transition sm:px-4 sm:py-4 ${
                               isSelected
                                 ? "border-amber-300/55 bg-amber-300/12"

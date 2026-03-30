@@ -8,6 +8,8 @@ export type YouTubeMatchedVideoAsset = {
   embedUrl: string;
   viewCount: number;
   viewCountLabel: string;
+  durationSeconds: number | null;
+  durationLabel: string | null;
   matchedQuery: string;
 };
 

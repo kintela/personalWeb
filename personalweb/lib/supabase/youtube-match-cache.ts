@@ -2,12 +2,18 @@ import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  formatYouTubeDurationLabel,
+  normalizeYouTubeDurationSeconds,
+  parseYouTubeIsoDuration,
+} from "@/lib/youtube-duration";
 import type {
   RankedYouTubeVideoAsset,
   RankedYouTubeVideoListResult,
   YouTubeMatchedVideoAsset,
 } from "@/lib/youtube-types";
 
+const YOUTUBE_API_BASE_URL = "https://www.googleapis.com/youtube/v3";
 type YouTubeMatchRating = 0 | 1 | 2 | 3 | 4 | 5;
 
 type YouTubeMatchCacheLookupResult =
@@ -35,6 +41,7 @@ type YouTubeVideoMatchCacheRow = {
   external_url: string | null;
   embed_url: string | null;
   view_count: number | string | null;
+  duration_seconds?: number | string | null;
   rating: number | string | null;
 };
 
@@ -70,6 +77,15 @@ type UpsertYouTubeVideoMatchCacheResult =
       ok: false;
       error: string;
     };
+
+type YouTubeDurationResponse = {
+  items?: Array<{
+    id?: string;
+    contentDetails?: {
+      duration?: string;
+    };
+  }>;
+};
 
 function getSupabaseUrl() {
   return process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -131,8 +147,136 @@ function normalizeMatchRating(
   return normalizedValue as YouTubeMatchRating;
 }
 
+function getYouTubeApiKey() {
+  return process.env.YOUTUBE_API_KEY?.trim() ?? "";
+}
+
 function formatViewCountLabel(viewCount: number) {
   return new Intl.NumberFormat("es-ES").format(viewCount);
+}
+
+function hasStoredDuration(value: number | string | null | undefined) {
+  return normalizeYouTubeDurationSeconds(value) !== null;
+}
+
+async function fetchMissingYouTubeDurations(videoIds: string[]) {
+  const apiKey = getYouTubeApiKey();
+  const normalizedVideoIds = [
+    ...new Set(videoIds.map((videoId) => videoId.trim()).filter(Boolean)),
+  ];
+
+  if (!apiKey || normalizedVideoIds.length === 0) {
+    return new Map<string, number>();
+  }
+
+  const durationByVideoId = new Map<string, number>();
+
+  for (let index = 0; index < normalizedVideoIds.length; index += 50) {
+    const batchVideoIds = normalizedVideoIds.slice(index, index + 50);
+    const params = new URLSearchParams({
+      part: "contentDetails",
+      id: batchVideoIds.join(","),
+      maxResults: String(batchVideoIds.length),
+      key: apiKey,
+    });
+
+    try {
+      const response = await fetch(
+        `${YOUTUBE_API_BASE_URL}/videos?${params.toString()}`,
+        {
+          cache: "no-store",
+        },
+      );
+
+      if (!response.ok) {
+        break;
+      }
+
+      const payload = (await response.json()) as YouTubeDurationResponse;
+
+      for (const item of payload.items ?? []) {
+        const videoId = item.id?.trim() ?? "";
+        const durationSeconds = parseYouTubeIsoDuration(
+          item.contentDetails?.duration,
+        );
+
+        if (!videoId || durationSeconds === null) {
+          continue;
+        }
+
+        durationByVideoId.set(videoId, durationSeconds);
+      }
+    } catch {
+      break;
+    }
+  }
+
+  return durationByVideoId;
+}
+
+async function hydrateRowsWithMissingDurations(
+  rows: YouTubeVideoMatchCacheRow[],
+  supabase: SupabaseClient,
+) {
+  const rowsMissingDuration = rows.filter(
+    (row) =>
+      row.has_match &&
+      typeof row.video_id === "string" &&
+      row.video_id.trim().length > 0 &&
+      !hasStoredDuration(row.duration_seconds),
+  );
+
+  if (rowsMissingDuration.length === 0) {
+    return rows;
+  }
+
+  const durationByVideoId = await fetchMissingYouTubeDurations(
+    rowsMissingDuration
+      .map((row) => row.video_id?.trim() ?? "")
+      .filter(Boolean),
+  );
+
+  if (durationByVideoId.size === 0) {
+    return rows;
+  }
+
+  const hydratedRows = rows.map((row) => {
+    const videoId = row.video_id?.trim() ?? "";
+    const durationSeconds = durationByVideoId.get(videoId);
+
+    if (durationSeconds === undefined) {
+      return row;
+    }
+
+    return {
+      ...row,
+      duration_seconds: durationSeconds,
+    };
+  });
+
+  await Promise.allSettled(
+    rowsMissingDuration.map((row) => {
+      const videoId = row.video_id?.trim() ?? "";
+      const durationSeconds = durationByVideoId.get(videoId);
+
+      if (durationSeconds === undefined) {
+        return Promise.resolve();
+      }
+
+      return supabase
+        .from("youtube_video_matches")
+        .update({
+          duration_seconds: durationSeconds,
+        })
+        .eq("cache_key", row.cache_key);
+    }),
+  );
+
+  return hydratedRows;
+}
+
+function isMissingDurationColumnError(message: string | undefined) {
+  return (message ?? "").includes("duration_seconds");
 }
 
 function mapRowToVideoAsset(
@@ -146,6 +290,7 @@ function mapRowToVideoAsset(
     typeof row.view_count === "number"
       ? row.view_count
       : Number.parseInt(row.view_count ?? "0", 10) || 0;
+  const durationSeconds = normalizeYouTubeDurationSeconds(row.duration_seconds);
 
   return {
     id: row.video_id,
@@ -157,6 +302,8 @@ function mapRowToVideoAsset(
     embedUrl: normalizeNullableValue(row.embed_url) ?? "",
     viewCount,
     viewCountLabel: formatViewCountLabel(viewCount),
+    durationSeconds,
+    durationLabel: formatYouTubeDurationLabel(durationSeconds),
     matchedQuery: normalizeNullableValue(row.matched_query) ?? "",
   } satisfies YouTubeMatchedVideoAsset;
 }
@@ -198,10 +345,10 @@ export async function getRankedYouTubeVideoList(): Promise<RankedYouTubeVideoLis
   }
 
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("youtube_video_matches")
       .select(
-        "cache_key, track_name, artists_label, album_name, album_release_year, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count, rating",
+        "cache_key, track_name, artists_label, album_name, album_release_year, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count, duration_seconds, rating",
       )
       .eq("has_match", true)
       .gt("rating", 0)
@@ -209,6 +356,20 @@ export async function getRankedYouTubeVideoList(): Promise<RankedYouTubeVideoLis
       .order("artists_label", { ascending: true })
       .order("track_name", { ascending: true })
       .returns<YouTubeVideoMatchCacheRow[]>();
+
+    if (error && isMissingDurationColumnError(error.message)) {
+      ({ data, error } = await supabase
+        .from("youtube_video_matches")
+        .select(
+          "cache_key, track_name, artists_label, album_name, album_release_year, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count, rating",
+        )
+        .eq("has_match", true)
+        .gt("rating", 0)
+        .order("rating", { ascending: false })
+        .order("artists_label", { ascending: true })
+        .order("track_name", { ascending: true })
+        .returns<YouTubeVideoMatchCacheRow[]>());
+    }
 
     if (error) {
       return {
@@ -219,7 +380,8 @@ export async function getRankedYouTubeVideoList(): Promise<RankedYouTubeVideoLis
       };
     }
 
-    const videos = (data ?? [])
+    const hydratedRows = await hydrateRowsWithMissingDurations(data ?? [], supabase);
+    const videos = hydratedRows
       .map((row) => mapRowToRankedVideoAsset(row))
       .filter((video): video is RankedYouTubeVideoAsset => video !== null);
 
@@ -252,13 +414,23 @@ export async function readYouTubeMatchCache(
   }
 
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("youtube_video_matches")
       .select(
-        "cache_key, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count, rating",
+        "cache_key, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count, duration_seconds, rating",
       )
       .eq("cache_key", cacheKey)
       .maybeSingle<YouTubeVideoMatchCacheRow>();
+
+    if (error && isMissingDurationColumnError(error.message)) {
+      ({ data, error } = await supabase
+        .from("youtube_video_matches")
+        .select(
+          "cache_key, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count, rating",
+        )
+        .eq("cache_key", cacheKey)
+        .maybeSingle<YouTubeVideoMatchCacheRow>());
+    }
 
     if (error || !data) {
       return { status: "miss" };
@@ -373,6 +545,7 @@ export async function upsertYouTubeMatchCache({
       external_url: normalizeNullableValue(video?.externalUrl),
       embed_url: normalizeNullableValue(video?.embedUrl),
       view_count: video?.viewCount ?? null,
+      duration_seconds: video?.durationSeconds ?? null,
     };
     const { data: existingRow, error: existingRowError } = await supabase
       .from("youtube_video_matches")
@@ -387,7 +560,7 @@ export async function upsertYouTubeMatchCache({
       };
     }
 
-    const { error } = existingRow
+    let { error } = existingRow
       ? await supabase
           .from("youtube_video_matches")
           .update(basePayload)
@@ -396,6 +569,20 @@ export async function upsertYouTubeMatchCache({
           ...basePayload,
           rating: 0,
         });
+
+    if (error && isMissingDurationColumnError(error.message)) {
+      const { duration_seconds, ...legacyPayload } = basePayload;
+
+      ({ error } = existingRow
+        ? await supabase
+            .from("youtube_video_matches")
+            .update(legacyPayload)
+            .eq("cache_key", normalizedCacheKey)
+        : await supabase.from("youtube_video_matches").insert({
+            ...legacyPayload,
+            rating: 0,
+          }));
+    }
 
     if (error) {
       return {
