@@ -3,9 +3,10 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const GUITAR_TOPICS_SELECT_COLUMNS =
-  "id, grupo_id, nombre, observaciones, grupo:grupos!temas_grupo_id_fkey(nombre)";
+  "id, grupo_id, nombre, observaciones, letra_imagen, grupo:grupos!temas_grupo_id_fkey(nombre)";
 const GUITAR_TOPIC_VIDEOS_SELECT_COLUMNS =
   "id, tema_id, enlace, observaciones";
+const GUITAR_LYRICS_BUCKET = "lyrics";
 
 type TopicGroupRelation =
   | {
@@ -22,6 +23,7 @@ type GuitarTopicDatabaseRow = {
   grupo_id: number | string;
   nombre: string;
   observaciones: string | null;
+  letra_imagen: string | null;
   grupo: TopicGroupRelation;
 };
 
@@ -49,6 +51,8 @@ export type GuitarTopicAsset = {
   groupName: string;
   name: string;
   observations: string | null;
+  lyricImagePath: string | null;
+  lyricImageSrc: string | null;
   videos: GuitarTopicVideoAsset[];
 };
 
@@ -85,6 +89,27 @@ type GetGuitarTopicListOptions = {
 
 function getSupabaseUrl() {
   return process.env.NEXT_PUBLIC_SUPABASE_URL;
+}
+
+export function getGuitarTopicLyricImagePublicUrl(imagePath: string | null) {
+  const normalizedPath = imagePath?.trim();
+  const supabaseUrl = getSupabaseUrl()?.trim();
+
+  if (!normalizedPath || !supabaseUrl) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(normalizedPath)) {
+    return normalizedPath;
+  }
+
+  const encodedPath = normalizedPath
+    .replace(/^\/+/, "")
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
+
+  return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(GUITAR_LYRICS_BUCKET)}/${encodedPath}`;
 }
 
 function getSupabasePublicKey() {
@@ -301,6 +326,10 @@ export async function getGuitarTopicList(
         groupName,
         name,
         observations: trimNullableValue(row.observaciones),
+        lyricImagePath: trimNullableValue(row.letra_imagen),
+        lyricImageSrc: getGuitarTopicLyricImagePublicUrl(
+          trimNullableValue(row.letra_imagen),
+        ),
         videos,
       };
     })

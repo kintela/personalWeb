@@ -42,6 +42,12 @@ type SelectedGuitarVideo = {
   platform: "youtube" | "instagram" | "vimeo";
 };
 
+type SelectedGuitarLyric = {
+  title: string;
+  subtitle: string;
+  imageSrc: string;
+};
+
 const GUITAR_VIEWER_GRID_STORAGE_KEY = "guitar-viewer-grid-density";
 
 function getTopicCountLabel(count: number) {
@@ -395,6 +401,8 @@ export function GuitarViewer({
   const [selectedVideo, setSelectedVideo] = useState<SelectedGuitarVideo | null>(
     null,
   );
+  const [selectedLyricImage, setSelectedLyricImage] =
+    useState<SelectedGuitarLyric | null>(null);
   const [selectedGroup, setSelectedGroup] = useState(groupValue);
   const [selectedTopic, setSelectedTopic] = useState(topicValue);
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
@@ -425,6 +433,7 @@ export function GuitarViewer({
         ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
         : "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
   const closeVideoViewer = () => setSelectedVideo(null);
+  const closeLyricViewer = () => setSelectedLyricImage(null);
 
   function applySelection({
     nextGroupValue,
@@ -504,8 +513,16 @@ export function GuitarViewer({
     setSelectedVideo(descriptor);
   }
 
+  function openLyricViewer(imageSrc: string, title: string, subtitle: string) {
+    setSelectedLyricImage({
+      title,
+      subtitle,
+      imageSrc,
+    });
+  }
+
   useEffect(() => {
-    if (selectedVideo === null) {
+    if (selectedVideo === null && selectedLyricImage === null) {
       return;
     }
 
@@ -513,6 +530,7 @@ export function GuitarViewer({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         closeVideoViewer();
+        closeLyricViewer();
       }
     };
 
@@ -523,7 +541,7 @@ export function GuitarViewer({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [selectedVideo]);
+  }, [selectedLyricImage, selectedVideo]);
 
   return (
     <section className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/6 px-6 py-8 shadow-[0_32px_90px_rgba(15,23,42,0.25)] backdrop-blur md:px-10 md:py-10">
@@ -785,12 +803,30 @@ export function GuitarViewer({
                                 </span>
                               </div>
 
-                              <ShareCardButton
-                                anchorId={activeTopicAnchorId}
-                                sectionId="guitarra"
-                                queryKeys={["guitarGroup", "guitarTheme"]}
-                                className="shrink-0"
-                              />
+                              <div className="flex items-center gap-3">
+                                {activeTopic.lyricImageSrc ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openLyricViewer(
+                                        activeTopic.lyricImageSrc ?? "",
+                                        activeTopic.name,
+                                        activeTopic.groupName,
+                                      )
+                                    }
+                                    className="rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
+                                  >
+                                    Ver letra
+                                  </button>
+                                ) : null}
+
+                                <ShareCardButton
+                                  anchorId={activeTopicAnchorId}
+                                  sectionId="guitarra"
+                                  queryKeys={["guitarGroup", "guitarTheme"]}
+                                  className="shrink-0"
+                                />
+                              </div>
                             </div>
                             <div className="space-y-2">
                               <h3 className="text-xl font-semibold text-white">
@@ -930,6 +966,60 @@ export function GuitarViewer({
           </>
         )}
       </div>
+
+      {isClient && selectedLyricImage
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[105] bg-slate-950/94 backdrop-blur-md"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Letra de ${selectedLyricImage.title}`}
+            >
+              <button
+                type="button"
+                aria-label="Cerrar visor de letra"
+                className="absolute inset-0 cursor-default"
+                onClick={closeLyricViewer}
+              />
+
+              <div className="relative z-10 flex min-h-full items-center justify-center p-4 sm:p-6">
+                <div className="w-full max-w-4xl">
+                  <div className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-white">
+                          {selectedLyricImage.title}
+                        </p>
+                        <p className="truncate text-xs uppercase tracking-[0.24em] text-slate-400">
+                          {selectedLyricImage.subtitle} · letra
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={closeLyricViewer}
+                        className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+
+                    <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/45 p-3 sm:p-4">
+                      <div className="flex items-center justify-center">
+                        <img
+                          src={selectedLyricImage.imageSrc}
+                          alt={`Letra de ${selectedLyricImage.title}`}
+                          className="h-auto max-h-[calc(100vh-10rem)] w-auto max-w-full rounded-[1.1rem] object-contain"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {isClient && selectedVideo
         ? createPortal(
