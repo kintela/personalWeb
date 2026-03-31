@@ -30,6 +30,7 @@ export default function Home() {
       (section) => !LANDING_SECTION_ORDER_SET.has(section.href),
     ),
   ];
+  const cdsLandingImageSrc = getLandingAssetPublicUrl("cds.jpg");
   const spotifyLandingImageSrc = getLandingAssetPublicUrl("spotify.jpg");
   const mtvLandingImageSrc = getLandingAssetPublicUrl("mtv.jpg");
 
@@ -186,7 +187,16 @@ export default function Home() {
                           ) : null}
                         </div>
 
-                        {section.href === "/mtv" && mtvLandingImageSrc ? (
+                        {section.href === "/cds" && cdsLandingImageSrc ? (
+                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
+                            <img
+                              src={cdsLandingImageSrc}
+                              alt="Vista de la sección de CDs en la landing"
+                              className="h-44 w-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : section.href === "/mtv" && mtvLandingImageSrc ? (
                           <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
                             <img
                               src={mtvLandingImageSrc}

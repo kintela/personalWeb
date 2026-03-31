@@ -88,18 +88,17 @@ export const SITE_SECTIONS: SiteSection[] = [
     title: "CDs",
     eyebrow: "Discoteca",
     description:
-      "Colección de CDs con filtros por grupo, año y enlaces asociados a Spotify.",
-    summary: "Biblioteca física de discos en formato CD.",
+      "Hubo un tiempo en que esto era lo mas moderno y esta es mi colección que ya no puedo escuchar en el coche...",
+    summary: "",
     details: [
-      "La colección se consulta sola, con sus filtros de grupo, año y relación con Spotify.",
-      "Al entrar aquí ya estás en modo discoteca, no en una home mezclada con otros temas.",
-      "La vista sigue priorizando el inventario físico y la navegación por colección.",
+      "44.1 KHz de calidad que aun son un estandard.",
+      "El cargador del coche cargado de ilusiones y mucha kaña.",
+      "El streaming se lo llevó todo por delante pero aqui siguen conmigo y seguirán.",
     ],
     visual: {
       kicker: "Discoteca física",
-      title: "CDs ordenados como colección, no como una pestaña perdida dentro de la home.",
-      caption:
-        "Un acceso claro para recorrer discos, años y conexiones con playlists.",
+      title: "CDs ordenados como una colección perdida en el tiempo pero siempre presente",
+      caption: "",
       cards: [
         { label: "Filtra", value: "Grupo" },
         { label: "Recorre", value: "Años" },
