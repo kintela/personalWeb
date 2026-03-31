@@ -9,52 +9,48 @@ export default function Home() {
           <div className="absolute -left-12 top-0 h-48 w-48 rounded-full bg-cyan-300/16 blur-3xl" />
           <div className="absolute right-0 top-8 h-56 w-56 rounded-full bg-amber-300/10 blur-3xl" />
 
-          <div className="relative grid gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.8fr)] lg:items-end">
-            <div className="space-y-6">
+          <div className="relative flex min-h-[28rem] flex-col justify-between gap-10 lg:min-h-[34rem]">
+            <div className="space-y-5">
               <p className="text-xs font-medium uppercase tracking-[0.38em] text-cyan-300/85">
                 Personal Web
               </p>
-              <div className="space-y-5">
-                <h1 className="max-w-5xl text-4xl font-semibold tracking-tight text-white md:text-6xl lg:text-7xl">
-                  Una landing larga para entrar por el sitio que te apetezca.
-                </h1>
-                <p className="max-w-3xl text-base leading-7 text-slate-200/88 md:text-lg">
-                  La portada ya no intenta enseñarlo todo a la vez. Ahora baja
-                  como una secuencia de secciones: texto, una pieza visual al
-                  lado y un acceso directo a cada bloque.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href={SITE_SECTIONS[0]?.href ?? "/fotos"}
-                  className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/14 px-5 py-3 text-sm font-medium text-cyan-50 transition hover:border-cyan-200/45 hover:bg-cyan-300/20"
-                >
-                  <span>Empezar a bajar</span>
-                  <span>↓</span>
-                </Link>
-                <p className="self-center text-sm text-slate-400">
-                  Cada bloque abre su propia página y carga solo lo suyo.
-                </p>
-              </div>
+              <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-white md:text-6xl lg:text-7xl">
+                Sumergete en mi universo...
+              </h1>
             </div>
 
-            <div className="relative rounded-[2.4rem] border border-white/10 bg-slate-950/50 p-4 shadow-[0_18px_60px_rgba(2,6,23,0.24)]">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {SITE_SECTIONS.slice(0, 4).map((section) => (
-                  <div
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.3em] text-cyan-300/78">
+                  Menú principal
+                </p>
+                <p className="text-xs text-slate-400">
+                  Abre cualquier sección
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+                {SITE_SECTIONS.map((section) => (
+                  <Link
                     key={section.href}
-                    className="rounded-[1.6rem] border border-white/10 bg-white/6 p-4"
+                    href={section.href}
+                    className="group min-h-[9.75rem] rounded-[1.4rem] border border-white/10 bg-slate-950/42 p-4 shadow-[0_16px_40px_rgba(2,6,23,0.18)] transition hover:border-cyan-300/35 hover:bg-cyan-300/10"
                   >
-                    <p className="text-[0.65rem] font-medium uppercase tracking-[0.28em] text-cyan-300/76">
+                    <p className="text-[0.62rem] font-medium uppercase tracking-[0.26em] text-cyan-300/76">
                       {section.eyebrow}
                     </p>
-                    <p className="mt-2 text-lg font-semibold text-white">
-                      {section.title}
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-slate-300/84">
+                    <div className="mt-2 flex items-start justify-between gap-3">
+                      <p className="text-base font-semibold text-white">
+                        {section.title}
+                      </p>
+                      <span className="text-sm text-cyan-200 transition group-hover:translate-x-0.5">
+                        →
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-slate-300/80">
                       {section.summary}
                     </p>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
