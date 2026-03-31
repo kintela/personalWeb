@@ -206,9 +206,9 @@ export const SITE_SECTIONS: SiteSection[] = [
       "Vídeos generales, temas, letras en imagen y recursos prácticos para tocar.",
     summary: "Repertorio y materiales de guitarra en una sola vista.",
     details: [
-      "Aquí viven juntos los temas, los vídeos y las letras en imagen, pero solo cuando decides entrar.",
-      "La separación le sienta especialmente bien a un bloque con tanto material práctico.",
-      "Queda más claro que esto no es una subsección, sino un área completa de trabajo.",
+      "Si te gusta tocar la guitarra como a mí aquí hay algunos temazos para aprender.",
+      "Con la letra por supuesto, para el karaoke.",
+      "Desenfunda y dispara...",
     ],
     visual: {
       kicker: "Repertorio práctico",
