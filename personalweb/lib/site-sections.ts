@@ -29,12 +29,11 @@ export const SITE_SECTIONS: SiteSection[] = [
     title: "Fotos",
     eyebrow: "PhotoTeka",
     description:
-      "Galería personal con filtros, personas, fechas y acceso a la subida de imágenes.",
+      "Miles de fotos de peña que me mola mucho y seguro a ti también. El Rock en imágenes.",
     summary: "Archivo fotográfico navegable por páginas.",
     details: [
-      "Entrada pensada para navegar por personas, años y contexto sin tragarte toda la web de golpe.",
-      "Mantiene el acceso a subida de imágenes cuando estás autenticado como admin.",
-      "La navegación sigue siendo visual, pero ya no comparte carga con música, libros y vídeos.",
+      "Cuando encuentro fotos que me dicen algo por que sale ese artista al que admiro, esa banda que es leyenda. Pa la saca...",
+      "Algunas son mías disfrutando de esos bolos inolvidables pero que nunca viene mal recordar con nostalgia y orgullo.",
     ],
     visual: {
       kicker: "Archivo vivo",
