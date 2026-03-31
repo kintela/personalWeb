@@ -58,12 +58,12 @@ export const SITE_SECTIONS: SiteSection[] = [
     title: "Conciertos",
     eyebrow: "Directo",
     description:
-      "Listado de conciertos con ciudad, año, grupo y material relacionado cuando existe.",
-    summary: "Memoria de directos con filtros por contexto.",
+      "Toda una vida de bolos da para mucho y aqui hay buena parte de lo mejor de ese camino que espero nunca termine...",
+    summary: "",
     details: [
-      "La ruta separada deja el bloque centrado en fechas, ciudades y grupos sin depender del resto.",
-      "Ideal para entrar directo a un concierto concreto o recorrer el historial por años.",
-      "La sección queda lista para crecer con más material asociado sin penalizar la portada.",
+      "Parte de mis recuerdos en tantos conciertos, tantos festivales rodeado siempre de amigos, la familia rockera, la magia que siempre envuelve un buen bolo.",
+      "Puede que en alguna salgas hasta tú mismo, búscate por si acaso.",
+      "Y si estuviste pero no sales da igual, lo disfrutamos juntos!",
     ],
     visual: {
       kicker: "Memoria en directo",
