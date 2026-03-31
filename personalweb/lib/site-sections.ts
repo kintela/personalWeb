@@ -146,18 +146,17 @@ export const SITE_SECTIONS: SiteSection[] = [
     title: "Libros",
     eyebrow: "Lecturas",
     description:
-      "Listado de libros con filtros por categoría y protagonista principal.",
-    summary: "Estantería navegable de lecturas y temas.",
+      "Cuantas vidas apasionantes, cuantas vidas rotas y cuanta maravillosa música que leer.",
+    summary: "",
     details: [
-      "La biblioteca gana una entrada tranquila, orientada a categorías y nombres propios.",
-      "La navegación separada ayuda a tratar lecturas como un universo propio dentro de la web.",
-      "Permite crecer sin quedar enterrada entre fotos, discos y reproductores.",
+      "Biografías de gente excepcional.",
+      "Las drogas siempre tan presente en sus infiernos.",
+      "Una biblioteca de sueños y horrores.",
     ],
     visual: {
       kicker: "Estantería abierta",
       title: "Lecturas organizadas como recorrido, con sus propios filtros y ritmo.",
-      caption:
-        "Una sección para entrar a leer el mapa de temas, no solo la lista.",
+      caption: "",
       cards: [
         { label: "Ordena", value: "Categorías" },
         { label: "Sigue", value: "Protagonistas" },
