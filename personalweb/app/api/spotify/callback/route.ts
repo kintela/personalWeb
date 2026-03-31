@@ -90,8 +90,8 @@ function renderPage({
                  <li>Añádelo también en las variables de entorno de Vercel.</li>
                  <li>Después reinicia <code>npm run dev</code> o despliega otra vez.</li>
                </ul>
-               <p><a href="/#spotify">Volver a la sección Spotify</a></p>`
-            : `<p><a href="/#spotify">Volver a la sección Spotify</a></p>`
+               <p><a href="/spotify">Volver a Spotify</a></p>`
+            : `<p><a href="/spotify">Volver a Spotify</a></p>`
         }
       </div>
     </main>
