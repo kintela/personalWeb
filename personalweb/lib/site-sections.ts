@@ -291,16 +291,16 @@ export const SITE_SECTIONS: SiteSection[] = [
     title: "Vídeos",
     eyebrow: "Películas",
     description:
-      "Listado general de vídeos con filtros por categoría y plataforma.",
-    summary: "Catálogo audiovisual separado del resto del sitio.",
+      "Aqui tienes un listado de pelis y documentales de todas las plataformas juntos",
+    summary: "",
     details: [
-      "Un catálogo general merece su propia entrada, especialmente si va creciendo por categorías y plataformas.",
-      "Con la ruta separada, los filtros responden dentro de un contexto claro y sin interferencias.",
-      "La portada solo presenta el bloque; la exploración real sucede al entrar.",
+      "Cada vez que me entero de alguno lo apunto para cuando pueda disfrutarlo con calma.",
+      "Palomitas, sofá y a todo volumen...",
+      "Algunos ya los han dejado de emitir pero nunca se sabe...",
     ],
     visual: {
       kicker: "Catálogo audiovisual",
-      title: "Películas, documentales y plataformas dentro de una entrada específica.",
+      title: "Películas, documentales y plataformas dedicadas a la música",
       caption:
         "Una vista hecha para clasificar, filtrar y decidir qué abrir después.",
       cards: [
