@@ -239,18 +239,16 @@ export const SITE_SECTIONS: SiteSection[] = [
     title: "MTV",
     eyebrow: "TV",
     description:
-      "Selección de vídeos musicales enlazados y valorados como bloque independiente.",
-    summary: "Vídeos musicales cacheados y ordenados.",
+      "Saca las palomitas y sintoniza todos los vídeos para una sesión infinita...",
+    summary: "",
     details: [
-      "La sección gana identidad propia como acceso directo a vídeos musicales y rankings.",
-      "Separa bien el consumo rápido de clips del resto de contenido más denso.",
-      "Es una ruta perfecta para entrar, ver y salir sin cargar todo lo demás.",
+      "Si solo quieres ver vídeos pásate por aquí, que están todos los vídeos enlazados previamente de las listas de Spotify.",
+      "La lista crece cada día más así que tienes horas, días y meses para pegarte a la pantalla sin dejar de bailar.",
     ],
     visual: {
       kicker: "Canal musical",
-      title: "Una entrada corta y eléctrica para vídeos musicales y cache compartida.",
-      caption:
-        "Pensada para descubrir, ordenar y lanzar vídeos sin peso extra.",
+      title: "Yo recuerdo cuando la MTV valía la pena....",
+      caption: "",
       cards: [
         { label: "Mira", value: "Clips" },
         { label: "Ordena", value: "Valoración" },

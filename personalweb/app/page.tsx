@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { SITE_SECTIONS } from "@/lib/site-sections";
 
@@ -32,6 +31,7 @@ export default function Home() {
     ),
   ];
   const spotifyLandingImageSrc = getLandingAssetPublicUrl("spotify.jpg");
+  const mtvLandingImageSrc = getLandingAssetPublicUrl("mtv.jpg");
 
   return (
     <main className="min-h-screen">
@@ -176,35 +176,44 @@ export default function Home() {
                           </div>
                           {section.href === "/spotify" && spotifyLandingImageSrc ? (
                             <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                              <Image
+                              <img
                                 src={spotifyLandingImageSrc}
                                 alt="Vista de la sección de Spotify en la landing"
-                                width={1200}
-                                height={900}
                                 className="h-52 w-full object-cover"
-                                sizes="(max-width: 768px) 100vw, 40vw"
+                                loading="lazy"
                               />
                             </div>
                           ) : null}
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          {section.visual.cards.map((card) => (
-                            <div
-                              key={`${section.sectionId}-${card.label}`}
-                              className="rounded-[1.5rem] border border-white/10 bg-white/7 px-4 py-4"
-                            >
-                              <p className="text-[0.64rem] font-medium uppercase tracking-[0.26em] text-slate-300/72">
-                                {card.label}
-                              </p>
-                              <p
-                                className={`mt-2 text-lg font-semibold ${section.visual.valueClass}`}
+                        {section.href === "/mtv" && mtvLandingImageSrc ? (
+                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
+                            <img
+                              src={mtvLandingImageSrc}
+                              alt="Vista de la sección MTV en la landing"
+                              className="h-44 w-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : (
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            {section.visual.cards.map((card) => (
+                              <div
+                                key={`${section.sectionId}-${card.label}`}
+                                className="rounded-[1.5rem] border border-white/10 bg-white/7 px-4 py-4"
                               >
-                                {card.value}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
+                                <p className="text-[0.64rem] font-medium uppercase tracking-[0.26em] text-slate-300/72">
+                                  {card.label}
+                                </p>
+                                <p
+                                  className={`mt-2 text-lg font-semibold ${section.visual.valueClass}`}
+                                >
+                                  {card.value}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
