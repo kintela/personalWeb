@@ -264,6 +264,15 @@ export default function Home() {
             </article>
           ))}
         </section>
+
+        <footer className="border-t border-white/10 py-8 text-center">
+          <a
+            href="mailto:info@kintela.es"
+            className="text-sm text-slate-300 transition hover:text-white"
+          >
+            info@kintela.es
+          </a>
+        </footer>
       </div>
     </main>
   );
