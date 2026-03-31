@@ -174,19 +174,17 @@ export const SITE_SECTIONS: SiteSection[] = [
     sectionId: "historia",
     title: "Historia",
     eyebrow: "Archivo",
-    description:
-      "Vídeos y material histórico organizados como una sección específica del sitio.",
+    description: "Contenido para recordar y nunca volver a repetir...",
     summary: "Selección temática de historia audiovisual.",
     details: [
-      "Entra aquí quien quiera archivo histórico, sin tener que pasar antes por música o fotos.",
-      "La página separada favorece una lectura más temática y menos dispersa.",
-      "Te deja espacio para seguir ampliando el bloque con contexto y curaduría.",
+      "Todo lo que voy encontrando sobre la guerra civil española.",
+      "También sobre la II guerra mundial.",
+      "Y lo que vaya surgiendo...",
     ],
     visual: {
       kicker: "Archivo temático",
-      title: "Una ruta pensada para bucear en historia sin cambiar de tono a cada scroll.",
-      caption:
-        "Vídeos, temas y contexto histórico dentro de un bloque coherente.",
+      title: "Nunca aprendemos de nuestros errores...",
+      caption: "",
       cards: [
         { label: "Tema", value: "Archivo" },
         { label: "Mirada", value: "Contexto" },
