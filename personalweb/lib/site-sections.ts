@@ -117,18 +117,17 @@ export const SITE_SECTIONS: SiteSection[] = [
     title: "Vinilos",
     eyebrow: "Portadas",
     description:
-      "Selección de vinilos con sus portadas y el inventario correspondiente.",
-    summary: "Colección visual de discos en formato grande.",
+      "Ahora si compro algo es un Vinilo y que me lo firmen....",
+    summary: "",
     details: [
-      "Una ruta más contemplativa y visual, centrada en portadas y piezas de colección.",
-      "El cambio ayuda a que el inventario no compita por atención con bloques más densos.",
-      "Sirve como sección autónoma para seguir ampliando la colección de portadas.",
+      "Me sigue haciendo ilusión perder la noción del tiempo descubriendo los secretos de algunas de sus portadas.",
+      "No me importa perder el tiempo dándoles la vuelta por la cara.",
+      "Aún me falta uno con mi música.",
     ],
     visual: {
       kicker: "Portadas grandes",
-      title: "Vinilos para mirar despacio, con una entrada propia y visual.",
-      caption:
-        "Más espacio para la portada, menos ruido del resto de contenidos.",
+      title: "Algunos son tan viejos como yo...",
+      caption: "",
       cards: [
         { label: "Formato", value: "LP" },
         { label: "Foco", value: "Portadas" },

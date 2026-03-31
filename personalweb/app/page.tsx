@@ -31,6 +31,7 @@ export default function Home() {
     ),
   ];
   const cdsLandingImageSrc = getLandingAssetPublicUrl("cds.jpg");
+  const vinilosLandingImageSrc = getLandingAssetPublicUrl("vinilos.jpg");
   const spotifyLandingImageSrc = getLandingAssetPublicUrl("spotify.jpg");
   const mtvLandingImageSrc = getLandingAssetPublicUrl("mtv.jpg");
 
@@ -184,6 +185,15 @@ export default function Home() {
                                 loading="lazy"
                               />
                             </div>
+                          ) : section.href === "/vinilos" && vinilosLandingImageSrc ? (
+                            <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
+                              <img
+                                src={vinilosLandingImageSrc}
+                                alt="Vista de la sección de Vinilos en la landing"
+                                className="h-52 w-full object-cover"
+                                loading="lazy"
+                              />
+                            </div>
                           ) : null}
                         </div>
 
@@ -205,7 +215,7 @@ export default function Home() {
                               loading="lazy"
                             />
                           </div>
-                        ) : (
+                        ) : section.href === "/vinilos" ? null : (
                           <div className="grid gap-3 sm:grid-cols-3">
                             {section.visual.cards.map((card) => (
                               <div
