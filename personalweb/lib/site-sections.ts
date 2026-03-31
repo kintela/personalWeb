@@ -269,18 +269,18 @@ export const SITE_SECTIONS: SiteSection[] = [
     title: "Spotify",
     eyebrow: "Playlists",
     description:
-      "Playlists, accesos rápidos, pistas y emparejamiento con vídeos cuando existe.",
-    summary: "Entrada dedicada a música, listas y descubrimiento.",
+      "Echa un vistazo a mis listas, hay de todo y lo más divertido... puedes ver los vídeos de los temas para montar un buen karaoke en casa, en el bar o donde te apetezca bailar.",
+    summary: "",
     details: [
-      "Spotify necesitaba una puerta propia porque mezcla listas, pistas, acceso rápido y matching con vídeos.",
-      "La navegación en una ruta separada mejora la sensación de aplicación dedicada.",
-      "También deja más limpio el flujo de autenticación y vuelta desde la callback.",
+      "Si te apetece ver los vídeos de cada tema puedes bucear por cada una de mis listas y ver cómo se escoge el que mejor le pega, pero aunque ya sé que puede resultar adictivo llegará un punto en que YouTube dice basta.",
+      "Hay una cuota de peticiones diaria a la que te tienes que ajustar. No es culpa mía, es YouTube, que no da abasto.",
+      "Pero una vez que ya se ha asociado un vídeo al tema se queda grabado para siempre y puedes verlo una y otra vez sin ninguna restricción.",
+      "Es el cacheo, amigo...",
     ],
     visual: {
-      kicker: "Música y matching",
-      title: "Playlists y pistas como centro de mando, no como bloque embutido en la home.",
-      caption:
-        "Una entrada orientada a escuchar, filtrar y enlazar con vídeo cuando toca.",
+      kicker: "Música y Videos",
+      title: "Ni una mala...preparate para bailar, gritar, llorar y soñar...",
+      caption: "",
       cards: [
         { label: "Abre", value: "Playlists" },
         { label: "Salta", value: "Pistas" },

@@ -83,9 +83,11 @@ export function SectionPageShell({
                 <p className="mt-2 text-lg font-semibold text-white">
                   {section.title}
                 </p>
-                <p className="mt-2 text-sm leading-6 text-slate-300/84">
-                  {section.summary}
-                </p>
+                {section.summary ? (
+                  <p className="mt-2 text-sm leading-6 text-slate-300/84">
+                    {section.summary}
+                  </p>
+                ) : null}
                 <p className="mt-4 text-sm font-medium text-cyan-200">
                   Abrir
                 </p>

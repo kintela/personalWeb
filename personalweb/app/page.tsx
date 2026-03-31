@@ -1,7 +1,38 @@
+import Image from "next/image";
 import Link from "next/link";
 import { SITE_SECTIONS } from "@/lib/site-sections";
 
+const LANDING_SECTION_ORDER = ["/spotify", "/mtv"] as const;
+const LANDING_SECTION_ORDER_SET = new Set<string>(LANDING_SECTION_ORDER);
+const LANDING_IMAGE_BUCKET = "landing";
+
+function getLandingAssetPublicUrl(path: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+
+  if (!supabaseUrl) {
+    return null;
+  }
+
+  const encodedPath = path
+    .replace(/^\/+/, "")
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
+
+  return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(LANDING_IMAGE_BUCKET)}/${encodedPath}`;
+}
+
 export default function Home() {
+  const landingSections = [
+    ...LANDING_SECTION_ORDER.flatMap((href) =>
+      SITE_SECTIONS.filter((section) => section.href === href),
+    ),
+    ...SITE_SECTIONS.filter(
+      (section) => !LANDING_SECTION_ORDER_SET.has(section.href),
+    ),
+  ];
+  const spotifyLandingImageSrc = getLandingAssetPublicUrl("spotify.jpg");
+
   return (
     <main className="min-h-screen">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-16 px-6 py-8 sm:px-10 lg:gap-24 lg:px-12 lg:py-12">
@@ -47,9 +78,11 @@ export default function Home() {
                         →
                       </span>
                     </div>
-                    <p className="mt-2 text-xs leading-5 text-slate-300/80">
-                      {section.summary}
-                    </p>
+                    {section.summary ? (
+                      <p className="mt-2 text-xs leading-5 text-slate-300/80">
+                        {section.summary}
+                      </p>
+                    ) : null}
                   </Link>
                 ))}
               </div>
@@ -58,7 +91,7 @@ export default function Home() {
         </section>
 
         <section className="space-y-8">
-          {SITE_SECTIONS.map((section, index) => (
+          {landingSections.map((section, index) => (
             <article
               key={section.href}
               className="border-t border-white/10 py-10 first:border-t-0 first:pt-0 lg:py-16"
@@ -79,9 +112,11 @@ export default function Home() {
                       <p className="max-w-2xl text-base leading-7 text-slate-200/88 md:text-lg">
                         {section.description}
                       </p>
-                      <p className="max-w-2xl text-sm leading-7 text-slate-400 md:text-base">
-                        {section.summary}
-                      </p>
+                      {section.summary ? (
+                        <p className="max-w-2xl text-sm leading-7 text-slate-400 md:text-base">
+                          {section.summary}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="grid gap-3">
@@ -106,9 +141,6 @@ export default function Home() {
                         <span>Abrir {section.title}</span>
                         <span>→</span>
                       </Link>
-                      <p className="text-sm text-slate-400">
-                        Se abre como página independiente.
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -136,10 +168,24 @@ export default function Home() {
                             <h3 className="max-w-md text-2xl font-semibold leading-tight tracking-tight text-white md:text-3xl">
                               {section.visual.title}
                             </h3>
-                            <p className="max-w-md text-sm leading-6 text-slate-200/82">
-                              {section.visual.caption}
-                            </p>
+                            {section.visual.caption ? (
+                              <p className="max-w-md text-sm leading-6 text-slate-200/82">
+                                {section.visual.caption}
+                              </p>
+                            ) : null}
                           </div>
+                          {section.href === "/spotify" && spotifyLandingImageSrc ? (
+                            <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
+                              <Image
+                                src={spotifyLandingImageSrc}
+                                alt="Vista de la sección de Spotify en la landing"
+                                width={1200}
+                                height={900}
+                                className="h-52 w-full object-cover"
+                                sizes="(max-width: 768px) 100vw, 40vw"
+                              />
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="grid gap-3 sm:grid-cols-3">
