@@ -603,7 +603,12 @@ export function SpotifyViewer({
       await fullscreenTarget.requestFullscreen();
       setIsNativeFullscreen(true);
     } catch {
-      setIsNativeFullscreen(Boolean(document.fullscreenElement));
+      const hasFullscreenElement = Boolean(document.fullscreenElement);
+      setIsNativeFullscreen(hasFullscreenElement);
+
+      if (!hasFullscreenElement) {
+        setIsVideoExtendedMode(false);
+      }
     }
   }
 
@@ -809,8 +814,8 @@ export function SpotifyViewer({
     setIsTrackShuffleEnabled(false);
     setVideoCacheFilterMode("all");
     setShuffledTrackIds([]);
-    setIsVideoExtendedMode(true);
-    setShouldAutoEnterFullscreen(true);
+    setIsVideoExtendedMode(false);
+    setShouldAutoEnterFullscreen(false);
   }, [playlists, sharedSpotifyPlaylistId]);
 
   useEffect(() => {
