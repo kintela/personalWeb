@@ -752,18 +752,6 @@ export function SpotifyViewer({
   }, [isVideoExtendedMode, requestNativeFullscreen, selectedPlaylist, shouldAutoEnterFullscreen]);
 
   useEffect(() => {
-    if (
-      !selectedTrackId ||
-      !normalizedTrackFilterValue ||
-      filteredPlaylistTracks.some((track) => track.id === selectedTrackId)
-    ) {
-      return;
-    }
-
-    setTrackFilterInput("");
-  }, [filteredPlaylistTracks, normalizedTrackFilterValue, selectedTrackId]);
-
-  useEffect(() => {
     if (videoCacheFilterMode === "all" || !selectedTrackId) {
       return;
     }
@@ -1003,7 +991,7 @@ export function SpotifyViewer({
       }
     }
 
-    if (playbackOrderedTracks.length === 0) {
+    if (playlistTracks.length === 0) {
       setSelectedTrackId("");
       return;
     }
@@ -1011,14 +999,19 @@ export function SpotifyViewer({
     setSelectedTrackId((currentTrackId) => {
       if (
         currentTrackId &&
-        playbackOrderedTracks.some((track) => track.id === currentTrackId)
+        playlistTracks.some((track) => track.id === currentTrackId)
       ) {
         return currentTrackId;
       }
 
-      return playbackOrderedTracks[0]?.id ?? "";
+      return playbackOrderedTracks[0]?.id ?? playlistTracks[0]?.id ?? "";
     });
-  }, [playbackOrderedTracks, selectedPlaylist, sharedSpotifyTrackId]);
+  }, [
+    playbackOrderedTracks,
+    playlistTracks,
+    selectedPlaylist,
+    sharedSpotifyTrackId,
+  ]);
 
   useEffect(() => {
     if (!selectedTrack) {
