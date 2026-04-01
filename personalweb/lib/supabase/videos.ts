@@ -3,7 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const VIDEOS_SELECT_COLUMNS =
-  "id, imagen, enlace, texto, categoria, subcategoria, plataforma, info, created_at, updated_at";
+  "id, imagen, enlace, texto, categoria, subcategoria, plataforma, info, disponible, created_at, updated_at";
 const VIDEO_IMAGE_BUCKET = "caratulas";
 const VIDEO_IMAGE_FOLDER = "pelis";
 export const HISTORY_VIDEO_CATEGORIES = [
@@ -21,6 +21,7 @@ type VideoDatabaseRow = {
   subcategoria: string | null;
   plataforma: string | null;
   info: string | null;
+  disponible: boolean | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -35,6 +36,7 @@ export type VideoAsset = {
   subcategory: string | null;
   platform: string | null;
   info: string | null;
+  available: boolean;
 };
 
 export type VideoListResult = {
@@ -45,6 +47,7 @@ export type VideoListResult = {
   filterValue: string;
   categoryValue: string;
   platformValue: string;
+  availabilityValue: string;
   categoryOptions: string[];
   platformOptions: string[];
 };
@@ -67,6 +70,7 @@ type GetVideoListOptions = {
   filterValue?: string | null;
   categoryValue?: string | null;
   platformValue?: string | null;
+  availabilityValue?: string | null;
   allowedCategories?: readonly string[] | null;
   excludedCategories?: readonly string[] | null;
 };
@@ -156,6 +160,16 @@ function normalizeVideoFilterValue(value: string | null | undefined) {
   return value?.trim() ?? "";
 }
 
+function normalizeVideoAvailabilityValue(value: string | null | undefined) {
+  const normalizedValue = value?.trim().toLocaleLowerCase("es-ES") ?? "";
+
+  if (normalizedValue === "available" || normalizedValue === "unavailable") {
+    return normalizedValue;
+  }
+
+  return "";
+}
+
 function normalizeVideoCategoryList(values: readonly string[] | null | undefined) {
   return values
     ?.map((value) => value.trim())
@@ -230,6 +244,50 @@ function mapVideo(video: VideoDatabaseRow): VideoAsset {
     subcategory: video.subcategoria?.trim() || null,
     platform: normalizeVideoPlatformValue(video.plataforma),
     info: video.info?.trim() || null,
+    available: video.disponible !== false,
+  };
+}
+
+export async function updateVideoAvailability(options: {
+  id: number;
+  available: boolean;
+}) {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      ok: false as const,
+      error:
+        "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("videos")
+    .update({
+      disponible: options.available,
+    })
+    .eq("id", options.id)
+    .select("id, disponible")
+    .maybeSingle();
+
+  if (error) {
+    return {
+      ok: false as const,
+      error: `No he podido actualizar la disponibilidad: ${error.message}`,
+    };
+  }
+
+  if (!data) {
+    return {
+      ok: false as const,
+      error: "No he encontrado el vídeo que querías actualizar.",
+    };
+  }
+
+  return {
+    ok: true as const,
+    available: (data as { disponible?: boolean | null }).disponible !== false,
   };
 }
 
@@ -240,6 +298,9 @@ async function getScopedVideoList(
   const requestedFilterValue = normalizeVideoFilterValue(options.filterValue);
   const requestedCategoryValue = normalizeVideoFilterValue(options.categoryValue);
   const requestedPlatformValue = normalizeVideoFilterValue(options.platformValue);
+  const requestedAvailabilityValue = normalizeVideoAvailabilityValue(
+    options.availabilityValue,
+  );
   const allowedCategories = normalizeVideoCategoryList(options.allowedCategories);
   const excludedCategories = normalizeVideoCategoryList(
     options.excludedCategories,
@@ -255,6 +316,7 @@ async function getScopedVideoList(
       filterValue: requestedFilterValue,
       categoryValue: requestedCategoryValue,
       platformValue: requestedPlatformValue,
+      availabilityValue: requestedAvailabilityValue,
       categoryOptions: [],
       platformOptions: [],
     };
@@ -274,6 +336,7 @@ async function getScopedVideoList(
       filterValue: requestedFilterValue,
       categoryValue: requestedCategoryValue,
       platformValue: requestedPlatformValue,
+      availabilityValue: requestedAvailabilityValue,
       categoryOptions: [],
       platformOptions: [],
     };
@@ -318,6 +381,7 @@ async function getScopedVideoList(
   )
     ? (normalizedRequestedPlatformValue ?? "")
     : "";
+  const normalizedAvailabilityValue = requestedAvailabilityValue;
   const normalizedFilterValue = requestedFilterValue.toLocaleLowerCase("es-ES");
   const filteredRows = scopedRows.filter((video) => {
     const matchesCategory =
@@ -329,8 +393,18 @@ async function getScopedVideoList(
     const matchesSearch =
       !normalizedFilterValue ||
       buildVideoSearchHaystack(video).includes(normalizedFilterValue);
+    const matchesAvailability =
+      !normalizedAvailabilityValue ||
+      (normalizedAvailabilityValue === "available"
+        ? video.disponible !== false
+        : video.disponible === false);
 
-    return matchesCategory && matchesPlatform && matchesSearch;
+    return (
+      matchesCategory &&
+      matchesPlatform &&
+      matchesSearch &&
+      matchesAvailability
+    );
   });
 
   return {
@@ -341,6 +415,7 @@ async function getScopedVideoList(
     filterValue: requestedFilterValue,
     categoryValue: normalizedCategoryValue,
     platformValue: normalizedPlatformValue,
+    availabilityValue: normalizedAvailabilityValue,
     categoryOptions,
     platformOptions,
   };

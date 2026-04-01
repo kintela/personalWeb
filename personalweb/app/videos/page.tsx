@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { VideosViewer } from "@/components/videos-viewer";
 import { SectionPageShell } from "@/components/section-page-shell";
+import { isAdminAuthenticated } from "@/lib/admin/auth";
 import { buildPageMetadata } from "@/lib/page-metadata";
 import {
   getSingleSearchParam,
@@ -15,11 +16,17 @@ export default async function VideosPage(props: {
   searchParams: RouteSearchParams;
 }) {
   const searchParams = await props.searchParams;
-  const videos = await getVideoList({
-    filterValue: getSingleSearchParam(searchParams.videoFilter).trim(),
-    categoryValue: getSingleSearchParam(searchParams.videoCategory).trim(),
-    platformValue: getSingleSearchParam(searchParams.videoPlatform).trim(),
-  });
+  const [videos, isAdminUnlocked] = await Promise.all([
+    getVideoList({
+      filterValue: getSingleSearchParam(searchParams.videoFilter).trim(),
+      categoryValue: getSingleSearchParam(searchParams.videoCategory).trim(),
+      platformValue: getSingleSearchParam(searchParams.videoPlatform).trim(),
+      availabilityValue: getSingleSearchParam(
+        searchParams.videoAvailability,
+      ).trim(),
+    }),
+    isAdminAuthenticated(),
+  ]);
 
   return (
     <SectionPageShell currentHref="/videos">
@@ -31,8 +38,10 @@ export default async function VideosPage(props: {
         filterValue={videos.filterValue}
         categoryValue={videos.categoryValue}
         platformValue={videos.platformValue}
+        availabilityValue={videos.availabilityValue}
         categoryOptions={videos.categoryOptions}
         platformOptions={videos.platformOptions}
+        initiallyAdminUnlocked={isAdminUnlocked}
       />
     </SectionPageShell>
   );
