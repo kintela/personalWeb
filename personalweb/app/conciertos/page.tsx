@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import { ConcertsViewer } from "@/components/concerts-viewer";
 import { SectionPageShell } from "@/components/section-page-shell";
+import { buildPageMetadata } from "@/lib/page-metadata";
 import {
   getSingleSearchParam,
   type RouteSearchParams,
@@ -7,6 +9,7 @@ import {
 import { getConcertList } from "@/lib/supabase/concerts";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = buildPageMetadata("/conciertos");
 
 export default async function ConciertosPage(props: {
   searchParams: RouteSearchParams;

@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { SpotifyViewer } from "@/components/spotify-viewer";
 import { SectionPageShell } from "@/components/section-page-shell";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
+import { buildPageMetadata } from "@/lib/page-metadata";
 import {
   getSingleSearchParam,
   type RouteSearchParams,
@@ -8,6 +10,7 @@ import {
 import { getSpotifyPlaylistList } from "@/lib/spotify";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = buildPageMetadata("/spotify");
 
 export default async function SpotifyPage(props: {
   searchParams: RouteSearchParams;

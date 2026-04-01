@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { SectionPageShell } from "@/components/section-page-shell";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
+import { buildPageMetadata } from "@/lib/page-metadata";
 import {
   normalizePhotoFilterValue,
   normalizePhotoPeopleGroup,
@@ -13,6 +15,7 @@ import {
 import { getPhotoGallery } from "@/lib/supabase/photos";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = buildPageMetadata("/fotos");
 
 export default async function FotosPage(props: {
   searchParams: RouteSearchParams;

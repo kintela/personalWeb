@@ -15,27 +15,33 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.kintela.es"),
-  title: "Personal Web",
-  description: "Aquí se encuentra mucho de lo que me apasiona.",
+  title: {
+    default: "kintela.es",
+    template: "%s | kintela.es",
+  },
+  description:
+    "Música, playlists, fotos, conciertos, guitarra y colecciones personales en kintela.es.",
   openGraph: {
     type: "website",
-    url: "https://www.kintela.es",
+    url: "/",
     siteName: "kintela.es",
-    title: "Personal Web",
-    description: "Aquí se encuentra mucho de lo que me apasiona.",
+    title: "kintela.es",
+    description:
+      "Música, playlists, fotos, conciertos, guitarra y colecciones personales en kintela.es.",
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "Vista previa de kintela.es con un diseño oscuro y el texto Personal Web.",
+        alt: "Vista previa de kintela.es con un diseño oscuro y una selección de secciones musicales y personales.",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Personal Web",
-    description: "Aquí se encuentra mucho de lo que me apasiona.",
+    title: "kintela.es",
+    description:
+      "Música, playlists, fotos, conciertos, guitarra y colecciones personales en kintela.es.",
     images: ["/opengraph-image"],
   },
 };

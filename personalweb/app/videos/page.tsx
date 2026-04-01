@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import { VideosViewer } from "@/components/videos-viewer";
 import { SectionPageShell } from "@/components/section-page-shell";
+import { buildPageMetadata } from "@/lib/page-metadata";
 import {
   getSingleSearchParam,
   type RouteSearchParams,
@@ -7,6 +9,7 @@ import {
 import { getVideoList } from "@/lib/supabase/videos";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = buildPageMetadata("/videos");
 
 export default async function VideosPage(props: {
   searchParams: RouteSearchParams;

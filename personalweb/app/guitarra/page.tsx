@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import { GuitarViewer } from "@/components/guitar-viewer";
 import { SectionPageShell } from "@/components/section-page-shell";
+import { buildPageMetadata } from "@/lib/page-metadata";
 import {
   getSingleSearchParam,
   type RouteSearchParams,
@@ -8,6 +10,7 @@ import { getGuitarTopicList } from "@/lib/supabase/guitar-topics";
 import { getGuitarVideoList } from "@/lib/supabase/videos";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = buildPageMetadata("/guitarra");
 
 export default async function GuitarraPage(props: {
   searchParams: RouteSearchParams;

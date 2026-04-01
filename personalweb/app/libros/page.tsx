@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import { BooksViewer } from "@/components/books-viewer";
 import { SectionPageShell } from "@/components/section-page-shell";
+import { buildPageMetadata } from "@/lib/page-metadata";
 import {
   getSingleSearchParam,
   type RouteSearchParams,
@@ -7,6 +9,7 @@ import {
 import { getBookList } from "@/lib/supabase/books";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = buildPageMetadata("/libros");
 
 export default async function LibrosPage(props: {
   searchParams: RouteSearchParams;

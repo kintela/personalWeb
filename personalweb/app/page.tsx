@@ -1,5 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { buildPageMetadata } from "@/lib/page-metadata";
 import { SITE_SECTIONS } from "@/lib/site-sections";
+
+export const metadata: Metadata = buildPageMetadata("/");
 
 const LANDING_SECTION_ORDER = ["/spotify", "/mtv"] as const;
 const LANDING_SECTION_ORDER_SET = new Set<string>(LANDING_SECTION_ORDER);

@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import { CdsViewer } from "@/components/cds-viewer";
 import { SectionPageShell } from "@/components/section-page-shell";
+import { buildPageMetadata } from "@/lib/page-metadata";
 import {
   getSingleSearchParam,
   type RouteSearchParams,
@@ -7,6 +9,7 @@ import {
 import { getCdList } from "@/lib/supabase/cds";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = buildPageMetadata("/cds");
 
 export default async function CdsPage(props: {
   searchParams: RouteSearchParams;
