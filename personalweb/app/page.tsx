@@ -236,7 +236,12 @@ export default function Home() {
                               loading="lazy"
                             />
                           </div>
-                        ) : section.href === "/vinilos" ||
+                        ) : section.href === "/spotify" ||
+                          section.href === "/fotos" ||
+                          section.href === "/conciertos" ||
+                          section.href === "/guitarra" ||
+                          section.href === "/videos" ||
+                          section.href === "/vinilos" ||
                           section.href === "/historia" ? null : (
                           <div className="grid gap-3 sm:grid-cols-3">
                             {section.visual.cards.map((card) => (
