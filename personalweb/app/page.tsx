@@ -31,8 +31,12 @@ export default function Home() {
     ),
   ];
   const cdsLandingImageSrc = getLandingAssetPublicUrl("cds.jpg");
+  const conciertosLandingImageSrc = getLandingAssetPublicUrl("conciertos.jpg");
+  const fotosLandingImageSrc = getLandingAssetPublicUrl("fotos.jpg");
+  const guitarraLandingImageSrc = getLandingAssetPublicUrl("guitarra.jpg");
   const historiaLandingImageSrc = getLandingAssetPublicUrl("historia.jpeg");
   const librosLandingImageSrc = getLandingAssetPublicUrl("libros.jpg");
+  const videosLandingImageSrc = getLandingAssetPublicUrl("videos.jpg");
   const vinilosLandingImageSrc = getLandingAssetPublicUrl("vinilos.jpg");
   const spotifyLandingImageSrc = getLandingAssetPublicUrl("spotify.jpg");
   const mtvLandingImageSrc = getLandingAssetPublicUrl("mtv.jpg");
@@ -222,6 +226,44 @@ export default function Home() {
                             <img
                               src={librosLandingImageSrc}
                               alt="Vista de la sección de Libros en la landing"
+                              className="h-44 w-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : section.href === "/conciertos" &&
+                          conciertosLandingImageSrc ? (
+                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
+                            <img
+                              src={conciertosLandingImageSrc}
+                              alt="Vista de la sección de Conciertos en la landing"
+                              className="h-44 w-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : section.href === "/fotos" && fotosLandingImageSrc ? (
+                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
+                            <img
+                              src={fotosLandingImageSrc}
+                              alt="Vista de la sección de Fotos en la landing"
+                              className="h-44 w-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : section.href === "/guitarra" &&
+                          guitarraLandingImageSrc ? (
+                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
+                            <img
+                              src={guitarraLandingImageSrc}
+                              alt="Vista de la sección de Guitarra en la landing"
+                              className="h-44 w-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : section.href === "/videos" && videosLandingImageSrc ? (
+                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
+                            <img
+                              src={videosLandingImageSrc}
+                              alt="Vista de la sección de Videos en la landing"
                               className="h-44 w-full object-cover"
                               loading="lazy"
                             />
