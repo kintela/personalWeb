@@ -1352,6 +1352,64 @@ export function SpotifyViewer({
     }
   }
 
+  async function handleSaveTrackWithoutVideo() {
+    if (!selectedTrack) {
+      setManualVideoError("Selecciona primero una canción.");
+      return;
+    }
+
+    setIsManualVideoSaving(true);
+    setManualVideoError("");
+    setManualVideoSuccess("");
+
+    try {
+      const response = await fetch("/api/youtube/match", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          track: selectedTrack.name,
+          artists: selectedTrack.artistsLabel,
+          album: selectedTrack.albumName ?? "",
+          year: selectedTrackYear ?? "",
+          action: "without-video",
+        }),
+      });
+      const payload = (await response.json()) as YouTubeMatchPayload;
+
+      if (!response.ok || !payload.ok) {
+        if (response.status === 401) {
+          setIsAdminUnlocked(false);
+        }
+
+        throw new Error(
+          payload.error ?? "No he podido guardar la canción sin vídeo.",
+        );
+      }
+
+      setVideoCache((currentCache) => ({
+        ...currentCache,
+        [selectedTrack.id]: null,
+      }));
+      markTrackVideoAsCached(selectedTrack.id);
+      updateTrackRatingLocally(selectedTrack.id, 0);
+      setSelectedVideo(null);
+      setVideoStatus("ready");
+      setVideoError(null);
+      setManualVideoUrl("");
+      setManualVideoSuccess("La canción se ha guardado explícitamente sin vídeo.");
+    } catch (error) {
+      setManualVideoError(
+        error instanceof Error
+          ? error.message
+          : "No he podido guardar la canción sin vídeo.",
+      );
+    } finally {
+      setIsManualVideoSaving(false);
+    }
+  }
+
   async function handleSetTrackRating(
     track: SpotifyPlaylistTrackAsset,
     nextRating: number,
@@ -2126,7 +2184,7 @@ export function SpotifyViewer({
                                     </p>
                                     <p className="text-sm text-slate-300">
                                       Introduce la contraseña admin para
-                                      sustituir el vídeo cacheado de{" "}
+                                      sustituir o dejar sin vídeo la canción{" "}
                                       <span className="font-medium text-white">
                                         {selectedTrack.name}
                                       </span>
@@ -2178,8 +2236,8 @@ export function SpotifyViewer({
                                       <span className="font-medium text-white">
                                         {selectedTrack.name}
                                       </span>
-                                      . Acepta enlaces de YouTube o el ID del
-                                      vídeo.
+                                      . Si no te convence ninguno, también
+                                      puedes dejar esta canción sin vídeo.
                                     </p>
                                   </div>
 
@@ -2203,6 +2261,14 @@ export function SpotifyViewer({
                                       {isManualVideoSaving
                                         ? "Guardando..."
                                         : "Guardar vídeo"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleSaveTrackWithoutVideo()}
+                                      disabled={isManualVideoSaving}
+                                      className="rounded-2xl border border-white/12 bg-white/6 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/35 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      Sin vídeo
                                     </button>
                                   </div>
 
@@ -2295,11 +2361,11 @@ export function SpotifyViewer({
                                   Sin resultado sólido
                                 </p>
                                 <h3 className="mt-3 text-2xl font-semibold text-white">
-                                  No he encontrado un vídeo convincente
+                                  No hay ningún vídeo asignado a esta canción
                                 </h3>
                                 <p className="mt-4 text-sm leading-7 text-slate-300">
-                                  Prueba con otra canción de la lista. Si hace
-                                  falta, luego afinamos el criterio de búsqueda.
+                                  Si ninguno convence, puedes dejarla así o
+                                  abrir el panel manual para probar otro enlace.
                                 </p>
                               </div>
                             </div>

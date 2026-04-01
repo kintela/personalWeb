@@ -570,6 +570,26 @@ export async function saveManualYouTubeSongVideo(
   return matchedVideo;
 }
 
+export async function saveYouTubeSongWithoutVideo(input: SearchSongVideoInput) {
+  const cacheKey = getSearchCacheKey(input);
+  const saveResult = await upsertYouTubeMatchCache({
+    cacheKey,
+    trackName: input.trackName,
+    artistsLabel: input.artistsLabel,
+    albumName: input.albumName,
+    albumReleaseYear: input.albumReleaseYear,
+    matchedQuery: "manual:no-video",
+    video: null,
+    rating: 0,
+  });
+
+  if (!saveResult.ok) {
+    throw new Error(saveResult.error);
+  }
+
+  return null;
+}
+
 export async function saveYouTubeSongVideoRating(
   input: SaveYouTubeSongVideoRatingInput,
 ) {

@@ -58,6 +58,7 @@ type UpsertYouTubeVideoMatchCacheInput = {
   albumReleaseYear?: string | null;
   matchedQuery: string;
   video: YouTubeMatchedVideoAsset | null;
+  rating?: YouTubeMatchRating;
 };
 
 type UpsertYouTubeMatchRatingInput = {
@@ -515,6 +516,7 @@ export async function upsertYouTubeMatchCache({
   albumReleaseYear,
   matchedQuery,
   video,
+  rating,
 }: UpsertYouTubeVideoMatchCacheInput): Promise<UpsertYouTubeVideoMatchCacheResult> {
   const supabase = createSupabaseServerClient();
 
@@ -529,6 +531,8 @@ export async function upsertYouTubeMatchCache({
     const normalizedCacheKey = cacheKey.trim();
     const normalizedTrackName = trackName.trim();
     const normalizedArtistsLabel = artistsLabel.trim();
+    const normalizedRating =
+      rating === undefined ? undefined : normalizeMatchRating(rating);
     const basePayload = {
       cache_key: normalizedCacheKey,
       track_name: normalizedTrackName,
@@ -546,6 +550,7 @@ export async function upsertYouTubeMatchCache({
       embed_url: normalizeNullableValue(video?.embedUrl),
       view_count: video?.viewCount ?? null,
       duration_seconds: video?.durationSeconds ?? null,
+      ...(normalizedRating === undefined ? {} : { rating: normalizedRating }),
     };
     const { data: existingRow, error: existingRowError } = await supabase
       .from("youtube_video_matches")
@@ -565,10 +570,14 @@ export async function upsertYouTubeMatchCache({
           .from("youtube_video_matches")
           .update(basePayload)
           .eq("cache_key", normalizedCacheKey)
-      : await supabase.from("youtube_video_matches").insert({
-          ...basePayload,
-          rating: 0,
-        });
+      : await supabase.from("youtube_video_matches").insert(
+          normalizedRating === undefined
+            ? {
+                ...basePayload,
+                rating: 0,
+              }
+            : basePayload,
+        );
 
     if (error && isMissingDurationColumnError(error.message)) {
       const { duration_seconds, ...legacyPayload } = basePayload;
@@ -578,10 +587,14 @@ export async function upsertYouTubeMatchCache({
             .from("youtube_video_matches")
             .update(legacyPayload)
             .eq("cache_key", normalizedCacheKey)
-        : await supabase.from("youtube_video_matches").insert({
-            ...legacyPayload,
-            rating: 0,
-          }));
+        : await supabase.from("youtube_video_matches").insert(
+            normalizedRating === undefined
+              ? {
+                  ...legacyPayload,
+                  rating: 0,
+                }
+              : legacyPayload,
+          ));
     }
 
     if (error) {

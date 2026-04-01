@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
 import {
   saveManualYouTubeSongVideo,
+  saveYouTubeSongWithoutVideo,
   saveYouTubeSongVideoRating,
   searchYouTubeSongVideo,
 } from "@/lib/youtube";
@@ -57,12 +58,14 @@ export async function POST(request: Request) {
     artists,
     album,
     year,
+    action,
     youtubeUrl,
   } = (await request.json().catch(() => ({}))) as {
     track?: string;
     artists?: string;
     album?: string;
     year?: string;
+    action?: string;
     youtubeUrl?: string;
   };
 
@@ -70,19 +73,41 @@ export async function POST(request: Request) {
   const artistsLabel = String(artists ?? "").trim();
   const albumName = String(album ?? "").trim();
   const albumReleaseYear = String(year ?? "").trim();
+  const requestedAction = String(action ?? "").trim();
   const manualYoutubeUrl = String(youtubeUrl ?? "").trim();
+  const shouldSaveWithoutVideo = requestedAction === "without-video";
 
-  if (!trackName || !artistsLabel || !manualYoutubeUrl) {
+  if (
+    !trackName ||
+    !artistsLabel ||
+    (!shouldSaveWithoutVideo && !manualYoutubeUrl)
+  ) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Necesito tema, artistas y enlace de YouTube para guardar el vídeo manual.",
+        error: shouldSaveWithoutVideo
+          ? "Necesito tema y artistas para guardar la canción sin vídeo."
+          : "Necesito tema, artistas y enlace de YouTube para guardar el vídeo manual.",
       },
       { status: 400 },
     );
   }
 
   try {
+    if (shouldSaveWithoutVideo) {
+      await saveYouTubeSongWithoutVideo({
+        trackName,
+        artistsLabel,
+        albumName: albumName || null,
+        albumReleaseYear: albumReleaseYear || null,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        video: null,
+      });
+    }
+
     const video = await saveManualYouTubeSongVideo({
       trackName,
       artistsLabel,
