@@ -160,6 +160,24 @@ function hasStoredDuration(value: number | string | null | undefined) {
   return normalizeYouTubeDurationSeconds(value) !== null;
 }
 
+function chunkValues<T>(values: T[], chunkSize: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < values.length; index += chunkSize) {
+    chunks.push(values.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+}
+
+function logYouTubeCacheReadWarning(scope: string, detail: string) {
+  if (process.env.NODE_ENV !== "development") {
+    return;
+  }
+
+  console.warn(`[youtube-match-cache:${scope}] ${detail}`);
+}
+
 async function fetchMissingYouTubeDurations(videoIds: string[]) {
   const apiKey = getYouTubeApiKey();
   const normalizedVideoIds = [
@@ -433,7 +451,12 @@ export async function readYouTubeMatchCache(
         .maybeSingle<YouTubeVideoMatchCacheRow>());
     }
 
-    if (error || !data) {
+    if (error) {
+      logYouTubeCacheReadWarning("single", error.message);
+      return { status: "miss" };
+    }
+
+    if (!data) {
       return { status: "miss" };
     }
 
@@ -441,7 +464,11 @@ export async function readYouTubeMatchCache(
       status: "hit",
       video: mapRowToVideoAsset(data),
     };
-  } catch {
+  } catch (error) {
+    logYouTubeCacheReadWarning(
+      "single",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "miss" };
   }
 }
@@ -451,24 +478,34 @@ export async function readYouTubeMatchCacheTrackMetadata(cacheKeys: string[]) {
   const normalizedCacheKeys = [
     ...new Set(cacheKeys.map((key) => key.trim()).filter(Boolean)),
   ];
+  const cacheKeyChunks = chunkValues(normalizedCacheKeys, 50);
 
   if (!supabase || normalizedCacheKeys.length === 0) {
     return {} as Record<string, { cached: boolean; rating: YouTubeMatchRating }>;
   }
 
   try {
-    const { data, error } = await supabase
-      .from("youtube_video_matches")
-      .select("cache_key, rating")
-      .in("cache_key", normalizedCacheKeys)
-      .returns<YouTubeVideoMatchCacheSummaryRow[]>();
+    const summaryRows: YouTubeVideoMatchCacheSummaryRow[] = [];
 
-    if (error || !data) {
-      return {} as Record<string, { cached: boolean; rating: YouTubeMatchRating }>;
+    for (const cacheKeyChunk of cacheKeyChunks) {
+      const { data, error } = await supabase
+        .from("youtube_video_matches")
+        .select("cache_key, rating")
+        .in("cache_key", cacheKeyChunk)
+        .returns<YouTubeVideoMatchCacheSummaryRow[]>();
+
+      if (error) {
+        logYouTubeCacheReadWarning("summary", error.message);
+        return {} as Record<string, { cached: boolean; rating: YouTubeMatchRating }>;
+      }
+
+      if (data?.length) {
+        summaryRows.push(...data);
+      }
     }
 
     const summaryByKey = new Map(
-      data
+      summaryRows
         .map((row) => {
           const cacheKey = row.cache_key.trim();
 
@@ -503,7 +540,11 @@ export async function readYouTubeMatchCacheTrackMetadata(cacheKeys: string[]) {
       };
       return statusMap;
     }, {});
-  } catch {
+  } catch (error) {
+    logYouTubeCacheReadWarning(
+      "summary",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return {} as Record<string, { cached: boolean; rating: YouTubeMatchRating }>;
   }
 }
