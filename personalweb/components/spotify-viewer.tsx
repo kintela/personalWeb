@@ -59,6 +59,7 @@ type VideoCacheFilterMode = "all" | "uncached" | "cached" | "ranked";
 
 const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
 const TRACK_RATING_VALUES = [1, 2, 3, 4, 5] as const;
+const UNCACHED_YOUTUBE_LOOKUP_DEBOUNCE_MS = 900;
 
 function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
@@ -691,6 +692,9 @@ export function SpotifyViewer({
   const handleClosePlaylistViewerEffect = useEffectEvent(() => {
     handleClosePlaylistViewer();
   });
+  const markTrackVideoAsCachedEffect = useEffectEvent((trackId: string) => {
+    markTrackVideoAsCached(trackId);
+  });
 
   useEffect(() => {
     setIsClient(true);
@@ -1034,55 +1038,73 @@ export function SpotifyViewer({
     }
 
     const abortController = new AbortController();
+    const shouldDelayLookup =
+      selectedTrack.youtubeCacheStatus === "uncached";
     setSelectedVideo(null);
     setVideoStatus("loading");
     setVideoError(null);
 
-    void (async () => {
-      try {
-        const query = new URLSearchParams({
-          track: selectedTrack.name,
-          artists: selectedTrack.artistsLabel,
-          album: selectedTrack.albumName ?? "",
-          year: selectedTrack.albumReleaseDate?.slice(0, 4) ?? "",
-        });
-        const response = await fetch(`/api/youtube/match?${query.toString()}`, {
-          method: "GET",
-          signal: abortController.signal,
-          cache: "no-store",
-        });
-        const payload = (await response.json()) as YouTubeMatchPayload;
+    const runLookup = () => {
+      void (async () => {
+        try {
+          const query = new URLSearchParams({
+            track: selectedTrack.name,
+            artists: selectedTrack.artistsLabel,
+            album: selectedTrack.albumName ?? "",
+            year: selectedTrack.albumReleaseDate?.slice(0, 4) ?? "",
+          });
+          const response = await fetch(`/api/youtube/match?${query.toString()}`, {
+            method: "GET",
+            signal: abortController.signal,
+            cache: "no-store",
+          });
+          const payload = (await response.json()) as YouTubeMatchPayload;
 
-        if (!response.ok) {
-          throw new Error(
-            payload.error || "No he podido buscar el vídeo en YouTube.",
+          if (!response.ok) {
+            throw new Error(
+              payload.error || "No he podido buscar el vídeo en YouTube.",
+            );
+          }
+
+          const nextVideo = payload.video ?? null;
+
+          setVideoCache((currentCache) => ({
+            ...currentCache,
+            [selectedTrack.id]: nextVideo,
+          }));
+          markTrackVideoAsCachedEffect(selectedTrack.id);
+          setSelectedVideo(nextVideo);
+          setVideoStatus("ready");
+        } catch (error) {
+          if (abortController.signal.aborted) {
+            return;
+          }
+
+          setVideoError(
+            error instanceof Error
+              ? error.message
+              : "No he podido buscar el vídeo en YouTube.",
           );
+          setVideoStatus("error");
         }
+      })();
+    };
 
-        const nextVideo = payload.video ?? null;
+    const timeoutId = shouldDelayLookup
+      ? window.setTimeout(runLookup, UNCACHED_YOUTUBE_LOOKUP_DEBOUNCE_MS)
+      : null;
 
-        setVideoCache((currentCache) => ({
-          ...currentCache,
-          [selectedTrack.id]: nextVideo,
-        }));
-        markTrackVideoAsCached(selectedTrack.id);
-        setSelectedVideo(nextVideo);
-        setVideoStatus("ready");
-      } catch (error) {
-        if (abortController.signal.aborted) {
-          return;
-        }
+    if (!shouldDelayLookup) {
+      runLookup();
+    }
 
-        setVideoError(
-          error instanceof Error
-            ? error.message
-            : "No he podido buscar el vídeo en YouTube.",
-        );
-        setVideoStatus("error");
+    return () => {
+      abortController.abort();
+
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
       }
-    })();
-
-    return () => abortController.abort();
+    };
   }, [selectedTrack, videoCache]);
 
   function handleReset() {

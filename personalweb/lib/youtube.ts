@@ -98,6 +98,17 @@ type SearchCandidate = {
   durationSeconds: number | null;
 };
 
+type YouTubeSearchExecutionResult = {
+  video: YouTubeMatchedVideoAsset | null;
+  performedLookup: boolean;
+};
+
+type YouTubeSearchSchedulerState = {
+  inFlightByCacheKey: Map<string, Promise<YouTubeMatchedVideoAsset | null>>;
+  queue: Promise<void>;
+  nextAllowedAt: number;
+};
+
 const POSITIVE_TITLE_HINT_WEIGHTS = [
   ["official music video", 72],
   ["official video", 60],
@@ -147,6 +158,13 @@ const POSITIVE_CHANNEL_HINT_WEIGHTS = [
 ] as const;
 
 const NEGATIVE_CHANNEL_HINT_WEIGHTS = [["topic", -120]] as const;
+const UNCACHED_YOUTUBE_SEARCH_MIN_INTERVAL_MS = 1200;
+
+declare global {
+  var __personalwebYouTubeSearchScheduler:
+    | YouTubeSearchSchedulerState
+    | undefined;
+}
 
 function normalizeEnvValue(value: string | undefined | null) {
   return value?.trim() ?? "";
@@ -318,6 +336,74 @@ function buildExternalUrl(videoId: string) {
   url.searchParams.set("v", videoId);
 
   return url.toString();
+}
+
+function delay(ms: number) {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function getYouTubeSearchSchedulerState(): YouTubeSearchSchedulerState {
+  if (!globalThis.__personalwebYouTubeSearchScheduler) {
+    globalThis.__personalwebYouTubeSearchScheduler = {
+      inFlightByCacheKey: new Map(),
+      queue: Promise.resolve(),
+      nextAllowedAt: 0,
+    };
+  }
+
+  return globalThis.__personalwebYouTubeSearchScheduler;
+}
+
+function scheduleUncachedYouTubeSearch(
+  cacheKey: string,
+  task: () => Promise<YouTubeSearchExecutionResult>,
+) {
+  const schedulerState = getYouTubeSearchSchedulerState();
+  const existingPromise = schedulerState.inFlightByCacheKey.get(cacheKey);
+
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const scheduledPromise = schedulerState.queue
+    .catch(() => undefined)
+    .then(async () => {
+      const waitDurationMs = Math.max(
+        0,
+        schedulerState.nextAllowedAt - Date.now(),
+      );
+
+      if (waitDurationMs > 0) {
+        await delay(waitDurationMs);
+      }
+
+      const result = await task();
+
+      if (result.performedLookup) {
+        schedulerState.nextAllowedAt =
+          Date.now() + UNCACHED_YOUTUBE_SEARCH_MIN_INTERVAL_MS;
+      }
+
+      return result.video;
+    });
+
+  schedulerState.queue = scheduledPromise.then(
+    () => undefined,
+    () => undefined,
+  );
+  schedulerState.inFlightByCacheKey.set(cacheKey, scheduledPromise);
+
+  return scheduledPromise.finally(() => {
+    if (schedulerState.inFlightByCacheKey.get(cacheKey) === scheduledPromise) {
+      schedulerState.inFlightByCacheKey.delete(cacheKey);
+    }
+  });
 }
 
 function buildMatchedVideoAssetFromVideoItem(
@@ -611,24 +697,19 @@ export async function saveYouTubeSongVideoRating(
   return normalizedRating;
 }
 
-export async function searchYouTubeSongVideo(
+async function searchYouTubeSongVideoOnCacheMiss(
   input: SearchSongVideoInput,
-): Promise<YouTubeMatchedVideoAsset | null> {
-  if (!isYouTubeConfigured()) {
-    throw new Error("Falta YOUTUBE_API_KEY para buscar vídeos en YouTube.");
-  }
-
-  const searchQuery = getSearchQuery(input);
+): Promise<YouTubeSearchExecutionResult> {
   const cacheKey = getSearchCacheKey(input);
-
-  if (!searchQuery) {
-    return null;
-  }
+  const searchQuery = getSearchQuery(input);
 
   const cachedResult = await readYouTubeMatchCache(cacheKey);
 
   if (cachedResult.status === "hit") {
-    return cachedResult.video;
+    return {
+      video: cachedResult.video,
+      performedLookup: false,
+    } satisfies YouTubeSearchExecutionResult;
   }
 
   const searchResponse = await fetchYouTubeJson<YouTubeSearchResponse>(
@@ -656,7 +737,10 @@ export async function searchYouTubeSongVideo(
       matchedQuery: searchQuery,
       video: null,
     });
-    return null;
+    return {
+      video: null,
+      performedLookup: true,
+    } satisfies YouTubeSearchExecutionResult;
   }
 
   const videoResponse = await fetchYouTubeJson<YouTubeVideoListResponse>(
@@ -701,7 +785,10 @@ export async function searchYouTubeSongVideo(
       matchedQuery: searchQuery,
       video: null,
     });
-    return null;
+    return {
+      video: null,
+      performedLookup: true,
+    } satisfies YouTubeSearchExecutionResult;
   }
 
   const bestCandidate = [...candidates]
@@ -732,7 +819,10 @@ export async function searchYouTubeSongVideo(
       matchedQuery: searchQuery,
       video: null,
     });
-    return null;
+    return {
+      video: null,
+      performedLookup: true,
+    } satisfies YouTubeSearchExecutionResult;
   }
 
   const matchedVideo = {
@@ -760,5 +850,33 @@ export async function searchYouTubeSongVideo(
     video: matchedVideo,
   });
 
-  return matchedVideo;
+  return {
+    video: matchedVideo,
+    performedLookup: true,
+  } satisfies YouTubeSearchExecutionResult;
+}
+
+export async function searchYouTubeSongVideo(
+  input: SearchSongVideoInput,
+): Promise<YouTubeMatchedVideoAsset | null> {
+  if (!isYouTubeConfigured()) {
+    throw new Error("Falta YOUTUBE_API_KEY para buscar vídeos en YouTube.");
+  }
+
+  const searchQuery = getSearchQuery(input);
+  const cacheKey = getSearchCacheKey(input);
+
+  if (!searchQuery) {
+    return null;
+  }
+
+  const cachedResult = await readYouTubeMatchCache(cacheKey);
+
+  if (cachedResult.status === "hit") {
+    return cachedResult.video;
+  }
+
+  return scheduleUncachedYouTubeSearch(cacheKey, () =>
+    searchYouTubeSongVideoOnCacheMiss(input),
+  );
 }
