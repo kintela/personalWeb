@@ -511,6 +511,9 @@ export function SpotifyViewer({
                 });
               })
         : textFilteredPlaylistTracks;
+  const visibleCachedTrackCount = filteredPlaylistTracks.filter(
+    (track) => track.youtubeCacheStatus === "cached",
+  ).length;
   const playbackOrderedTracks = (() => {
     if (videoCacheFilterMode === "ranked") {
       return filteredPlaylistTracks;
@@ -1882,6 +1885,12 @@ export function SpotifyViewer({
                                 {filteredPlaylistTracks.length === 1
                                   ? "canción"
                                   : "canciones"}
+                              </p>
+                              <p className="mt-1 text-[0.62rem] uppercase tracking-[0.22em] text-slate-500">
+                                {visibleCachedTrackCount}{" "}
+                                {visibleCachedTrackCount === 1
+                                  ? "cacheada"
+                                  : "cacheadas"}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
