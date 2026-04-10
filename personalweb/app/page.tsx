@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { buildPageMetadata } from "@/lib/page-metadata";
-import { SITE_SECTIONS } from "@/lib/site-sections";
+import { getVisibleSiteSections } from "@/lib/site-sections";
 
 export const metadata: Metadata = buildPageMetadata("/");
 
-const LANDING_SECTION_ORDER = ["/instagram", "/spotify", "/mtv"] as const;
+const LANDING_SECTION_ORDER = ["/spotify", "/mtv"] as const;
 const LANDING_SECTION_ORDER_SET = new Set<string>(LANDING_SECTION_ORDER);
 const LANDING_IMAGE_BUCKET = "landing";
 
@@ -26,11 +26,12 @@ function getLandingAssetPublicUrl(path: string) {
 }
 
 export default function Home() {
+  const visibleSections = getVisibleSiteSections();
   const landingSections = [
     ...LANDING_SECTION_ORDER.flatMap((href) =>
-      SITE_SECTIONS.filter((section) => section.href === href),
+      visibleSections.filter((section) => section.href === href),
     ),
-    ...SITE_SECTIONS.filter(
+    ...visibleSections.filter(
       (section) => !LANDING_SECTION_ORDER_SET.has(section.href),
     ),
   ];
@@ -73,7 +74,7 @@ export default function Home() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-                {SITE_SECTIONS.map((section) => (
+                {visibleSections.map((section) => (
                   <Link
                     key={section.href}
                     href={section.href}

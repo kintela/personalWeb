@@ -5,6 +5,7 @@ export type SiteSection = {
   eyebrow: string;
   description: string;
   summary: string;
+  isVisibleInNavigation?: boolean;
   details: string[];
   visual: {
     kicker: string;
@@ -28,6 +29,7 @@ export const SITE_SECTIONS: SiteSection[] = [
     sectionId: "instagram",
     title: "Instagram",
     eyebrow: "InstaFeed",
+    isVisibleInNavigation: false,
     description:
       "Mis publicaciones de Instagram dentro de la web, con búsqueda directa para encontrar fotos, carruseles y vídeos sin salir a ciegas.",
     summary: "Feed propio conectado por API y filtrable por texto.",
@@ -349,4 +351,10 @@ export const SITE_SECTIONS: SiteSection[] = [
 
 export function getSiteSection(href: string) {
   return SITE_SECTIONS.find((section) => section.href === href) ?? null;
+}
+
+export function getVisibleSiteSections() {
+  return SITE_SECTIONS.filter(
+    (section) => section.isVisibleInNavigation !== false,
+  );
 }

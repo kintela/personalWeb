@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { DeepLinkFocus } from "@/components/deep-link-focus";
-import { getSiteSection, SITE_SECTIONS } from "@/lib/site-sections";
+import { getSiteSection, getVisibleSiteSections } from "@/lib/site-sections";
 
 type SectionPageShellProps = {
   currentHref: string;
@@ -18,7 +18,7 @@ export function SectionPageShell({
     throw new Error(`Seccion no registrada: ${currentHref}`);
   }
 
-  const relatedSections = SITE_SECTIONS.filter(
+  const relatedSections = getVisibleSiteSections().filter(
     (section) => section.href !== currentHref,
   );
 
