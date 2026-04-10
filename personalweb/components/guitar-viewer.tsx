@@ -16,6 +16,7 @@ import type {
   GuitarTopicAsset,
   GuitarTopicGroupOption,
   GuitarTopicOption,
+  GuitarTopicTablatureAsset,
 } from "@/lib/supabase/guitar-topics";
 import type { VideoAsset } from "@/lib/supabase/videos";
 
@@ -48,6 +49,13 @@ type SelectedGuitarLyric = {
   imageSrc: string;
 };
 
+type SelectedGuitarTablature = {
+  title: string;
+  subtitle: string;
+  images: GuitarTopicTablatureAsset[];
+  activeIndex: number;
+};
+
 const GUITAR_VIEWER_GRID_STORAGE_KEY = "guitar-viewer-grid-density";
 
 function getTopicCountLabel(count: number) {
@@ -56,6 +64,10 @@ function getTopicCountLabel(count: number) {
 
 function getVideoCountLabel(count: number) {
   return `${count} vídeo${count === 1 ? "" : "s"}`;
+}
+
+function getTablatureCountLabel(count: number) {
+  return `${count} tablatura${count === 1 ? "" : "s"}`;
 }
 
 function formatPlatformLabel(platform: string | null) {
@@ -403,6 +415,8 @@ export function GuitarViewer({
   );
   const [selectedLyricImage, setSelectedLyricImage] =
     useState<SelectedGuitarLyric | null>(null);
+  const [selectedTablature, setSelectedTablature] =
+    useState<SelectedGuitarTablature | null>(null);
   const [selectedGroup, setSelectedGroup] = useState(groupValue);
   const [selectedTopic, setSelectedTopic] = useState(topicValue);
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
@@ -434,6 +448,7 @@ export function GuitarViewer({
         : "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
   const closeVideoViewer = () => setSelectedVideo(null);
   const closeLyricViewer = () => setSelectedLyricImage(null);
+  const closeTablatureViewer = () => setSelectedTablature(null);
 
   function applySelection({
     nextGroupValue,
@@ -521,8 +536,47 @@ export function GuitarViewer({
     });
   }
 
+  function openTablatureViewer(
+    images: GuitarTopicTablatureAsset[],
+    title: string,
+    subtitle: string,
+    activeIndex = 0,
+  ) {
+    if (images.length === 0) {
+      return;
+    }
+
+    setSelectedTablature({
+      title,
+      subtitle,
+      images,
+      activeIndex,
+    });
+  }
+
+  function setActiveTablatureIndex(nextIndex: number) {
+    setSelectedTablature((currentValue) => {
+      if (!currentValue) {
+        return currentValue;
+      }
+
+      if (nextIndex < 0 || nextIndex >= currentValue.images.length) {
+        return currentValue;
+      }
+
+      return {
+        ...currentValue,
+        activeIndex: nextIndex,
+      };
+    });
+  }
+
   useEffect(() => {
-    if (selectedVideo === null && selectedLyricImage === null) {
+    if (
+      selectedVideo === null &&
+      selectedLyricImage === null &&
+      selectedTablature === null
+    ) {
       return;
     }
 
@@ -531,6 +585,22 @@ export function GuitarViewer({
       if (event.key === "Escape") {
         closeVideoViewer();
         closeLyricViewer();
+        closeTablatureViewer();
+        return;
+      }
+
+      if (!selectedTablature) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setActiveTablatureIndex(selectedTablature.activeIndex - 1);
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setActiveTablatureIndex(selectedTablature.activeIndex + 1);
       }
     };
 
@@ -541,7 +611,11 @@ export function GuitarViewer({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [selectedLyricImage, selectedVideo]);
+  }, [selectedLyricImage, selectedTablature, selectedVideo]);
+
+  const activeTablatureImage = selectedTablature
+    ? selectedTablature.images[selectedTablature.activeIndex] ?? null
+    : null;
 
   return (
     <section className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/6 px-6 py-8 shadow-[0_32px_90px_rgba(15,23,42,0.25)] backdrop-blur md:px-10 md:py-10">
@@ -556,8 +630,8 @@ export function GuitarViewer({
                 Mástiles, riffs y seis cuerdas...
               </h2>
               <p className="max-w-3xl text-base leading-8 text-slate-300 md:text-lg">
-                Selecciona un grupo, elige un tema y abre los vídeos que lo
-                explican.
+                Selecciona un grupo, elige un tema y abre sus vídeos,
+                tablaturas o la letra asociada cuando existan.
               </p>
             </div>
           </div>
@@ -801,9 +875,34 @@ export function GuitarViewer({
                                 <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
                                   {getVideoCountLabel(activeTopic.videos.length)}
                                 </span>
+                                {activeTopic.tablatureImages.length > 0 ? (
+                                  <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
+                                    {getTablatureCountLabel(
+                                      activeTopic.tablatureImages.length,
+                                    )}
+                                  </span>
+                                ) : null}
                               </div>
 
                               <div className="flex items-center gap-3">
+                                {activeTopic.tablatureImages.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openTablatureViewer(
+                                        activeTopic.tablatureImages,
+                                        activeTopic.name,
+                                        activeTopic.groupName,
+                                      )
+                                    }
+                                    className="rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
+                                  >
+                                    {activeTopic.tablatureImages.length === 1
+                                      ? "Ver tablatura"
+                                      : "Ver tablaturas"}
+                                  </button>
+                                ) : null}
+
                                 {activeTopic.lyricImageSrc ? (
                                   <button
                                     type="button"
@@ -1006,6 +1105,7 @@ export function GuitarViewer({
 
                     <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/45 p-3 sm:p-4">
                       <div className="flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={selectedLyricImage.imageSrc}
                           alt={`Letra de ${selectedLyricImage.title}`}
@@ -1013,6 +1113,121 @@ export function GuitarViewer({
                         />
                       </div>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {isClient && selectedTablature && activeTablatureImage
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[106] bg-slate-950/94 backdrop-blur-md"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Tablatura de ${selectedTablature.title}`}
+            >
+              <button
+                type="button"
+                aria-label="Cerrar visor de tablatura"
+                className="absolute inset-0 cursor-default"
+                onClick={closeTablatureViewer}
+              />
+
+              <div className="relative z-10 flex min-h-full items-center justify-center p-4 sm:p-6">
+                <div className="w-full max-w-6xl">
+                  <div className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-white">
+                          {selectedTablature.title}
+                        </p>
+                        <p className="truncate text-xs uppercase tracking-[0.24em] text-slate-400">
+                          {selectedTablature.subtitle} · tablatura{" "}
+                          {selectedTablature.activeIndex + 1} de{" "}
+                          {selectedTablature.images.length}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveTablatureIndex(
+                              selectedTablature.activeIndex - 1,
+                            )
+                          }
+                          disabled={selectedTablature.activeIndex === 0}
+                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6 disabled:cursor-not-allowed disabled:border-white/8 disabled:text-slate-500"
+                        >
+                          Anterior
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveTablatureIndex(
+                              selectedTablature.activeIndex + 1,
+                            )
+                          }
+                          disabled={
+                            selectedTablature.activeIndex >=
+                            selectedTablature.images.length - 1
+                          }
+                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6 disabled:cursor-not-allowed disabled:border-white/8 disabled:text-slate-500"
+                        >
+                          Siguiente
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeTablatureViewer}
+                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/45 p-3 sm:p-4">
+                      <div className="flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={activeTablatureImage.signedUrl}
+                          alt={`Tablatura ${activeTablatureImage.pageNumber} de ${selectedTablature.title}`}
+                          className="h-auto max-h-[calc(100vh-14rem)] w-auto max-w-full rounded-[1.1rem] object-contain"
+                        />
+                      </div>
+                    </div>
+
+                    {selectedTablature.images.length > 1 ? (
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                        {selectedTablature.images.map((image, index) => (
+                          <button
+                            key={image.id}
+                            type="button"
+                            onClick={() => setActiveTablatureIndex(index)}
+                            className={`overflow-hidden rounded-[1.2rem] border p-2 text-left transition ${
+                              index === selectedTablature.activeIndex
+                                ? "border-cyan-300/60 bg-cyan-300/10"
+                                : "border-white/10 bg-black/20 hover:border-white/30"
+                            }`}
+                          >
+                            <div className="aspect-[3/4] overflow-hidden rounded-[0.9rem] bg-black/40">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={image.signedUrl}
+                                alt={`Miniatura de la tablatura ${image.pageNumber}`}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                            <p className="mt-2 text-[0.68rem] uppercase tracking-[0.18em] text-slate-300">
+                              Página {image.pageNumber}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>

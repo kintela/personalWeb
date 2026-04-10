@@ -7,6 +7,8 @@ const GUITAR_TOPICS_SELECT_COLUMNS =
 const GUITAR_TOPIC_VIDEOS_SELECT_COLUMNS =
   "id, tema_id, enlace, observaciones";
 const GUITAR_LYRICS_BUCKET = "lyrics";
+const GUITAR_TABLATURES_BUCKET = "tablaturas";
+const GUITAR_TABLATURE_SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 type TopicGroupRelation =
   | {
@@ -45,6 +47,14 @@ export type GuitarTopicVideoAsset = {
   title: string;
 };
 
+export type GuitarTopicTablatureAsset = {
+  id: string;
+  fileName: string;
+  path: string;
+  signedUrl: string;
+  pageNumber: number;
+};
+
 export type GuitarTopicAsset = {
   id: string;
   groupId: string;
@@ -53,6 +63,7 @@ export type GuitarTopicAsset = {
   observations: string | null;
   lyricImagePath: string | null;
   lyricImageSrc: string | null;
+  tablatureImages: GuitarTopicTablatureAsset[];
   videos: GuitarTopicVideoAsset[];
 };
 
@@ -242,6 +253,131 @@ function mapTopicVideo(
   };
 }
 
+function getNumericPrefix(value: string) {
+  const match = value.match(/^(\d+)/);
+
+  return match ? Number.parseInt(match[1] ?? "", 10) : Number.NaN;
+}
+
+function compareTablatureFileNames(left: string, right: string) {
+  const leftName = left.trim();
+  const rightName = right.trim();
+  const leftBaseName = leftName.replace(/\.[^.]+$/, "");
+  const rightBaseName = rightName.replace(/\.[^.]+$/, "");
+  const leftNumericPrefix = getNumericPrefix(leftBaseName);
+  const rightNumericPrefix = getNumericPrefix(rightBaseName);
+
+  if (!Number.isNaN(leftNumericPrefix) && !Number.isNaN(rightNumericPrefix)) {
+    if (leftNumericPrefix !== rightNumericPrefix) {
+      return leftNumericPrefix - rightNumericPrefix;
+    }
+  }
+
+  return leftName.localeCompare(rightName, "es", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function isImageFileName(fileName: string) {
+  return /\.(avif|gif|jpe?g|png|webp)$/i.test(fileName);
+}
+
+async function getTopicTablatureImages(
+  supabase: SupabaseClient,
+  topicId: string,
+): Promise<{
+  images: GuitarTopicTablatureAsset[];
+  error: string | null;
+}> {
+  const normalizedTopicId = topicId.trim();
+
+  if (!normalizedTopicId) {
+    return {
+      images: [],
+      error: null,
+    };
+  }
+
+  const { data, error } = await supabase.storage
+    .from(GUITAR_TABLATURES_BUCKET)
+    .list(normalizedTopicId, {
+      limit: 100,
+      offset: 0,
+      sortBy: { column: "name", order: "asc" },
+    });
+
+  if (error) {
+    return {
+      images: [],
+      error: `No he podido leer las tablaturas privadas del tema ${normalizedTopicId}: ${error.message}`,
+    };
+  }
+
+  const fileNames = (data ?? [])
+    .map((item) => item.name?.trim() ?? "")
+    .filter((fileName) => fileName && isImageFileName(fileName))
+    .sort(compareTablatureFileNames);
+
+  if (fileNames.length === 0) {
+    return {
+      images: [],
+      error: null,
+    };
+  }
+
+  const signedUrlResults = await Promise.all(
+    fileNames.map(async (fileName) => {
+      const path = `${normalizedTopicId}/${fileName}`;
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from(GUITAR_TABLATURES_BUCKET)
+        .createSignedUrl(path, GUITAR_TABLATURE_SIGNED_URL_TTL_SECONDS);
+
+      if (signedUrlError || !signedUrlData?.signedUrl) {
+        return {
+          fileName,
+          path,
+          signedUrl: null,
+          error: signedUrlError?.message ?? "No se ha generado la URL firmada.",
+        };
+      }
+
+      return {
+        fileName,
+        path,
+        signedUrl: signedUrlData.signedUrl,
+        error: null,
+      };
+    }),
+  );
+
+  const failedSignedUrlResult = signedUrlResults.find((result) => result.error);
+
+  if (failedSignedUrlResult) {
+    return {
+      images: [],
+      error: `No he podido firmar las tablaturas privadas del tema ${normalizedTopicId}: ${failedSignedUrlResult.error}`,
+    };
+  }
+
+  return {
+    images: signedUrlResults.flatMap((result, index) =>
+      result.signedUrl
+        ? [
+            {
+              id: `${normalizedTopicId}-${index + 1}`,
+              fileName: result.fileName,
+              path: result.path,
+              signedUrl: result.signedUrl,
+              pageNumber: index + 1,
+            },
+          ]
+        : [],
+    ),
+    error: null,
+  };
+}
+
 export async function getGuitarTopicList(
   options: GetGuitarTopicListOptions = {},
 ): Promise<GuitarTopicListResult> {
@@ -308,7 +444,7 @@ export async function getGuitarTopicList(
     videosByTopicId.set(topicId, currentRows);
   }
 
-  const topics = topicRows
+  let topics: GuitarTopicAsset[] = topicRows
     .map((row) => {
       const id = String(row.id);
       const groupId = String(row.grupo_id);
@@ -330,6 +466,7 @@ export async function getGuitarTopicList(
         lyricImageSrc: getGuitarTopicLyricImagePublicUrl(
           trimNullableValue(row.letra_imagen),
         ),
+        tablatureImages: [],
         videos,
       };
     })
@@ -392,10 +529,27 @@ export async function getGuitarTopicList(
     topicValue = "";
   }
 
+  let tablatureError: string | null = null;
+
+  if (topicValue) {
+    const activeTopicIndex = topics.findIndex((topic) => topic.id === topicValue);
+
+    if (activeTopicIndex >= 0) {
+      const tablatureResult = await getTopicTablatureImages(supabase, topicValue);
+
+      tablatureError = tablatureResult.error;
+      topics = topics.map((topic, index) =>
+        index === activeTopicIndex
+          ? { ...topic, tablatureImages: tablatureResult.images }
+          : topic,
+      );
+    }
+  }
+
   return {
     topics,
     configured: true,
-    error: null,
+    error: tablatureError,
     totalVideoCount: topics.reduce(
       (accumulator, topic) => accumulator + topic.videos.length,
       0,
