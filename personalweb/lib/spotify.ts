@@ -6,6 +6,7 @@ import type {
   SpotifyPlaylistListResult,
   SpotifyQuickAccessAsset,
   SpotifyPlaylistTrackAsset,
+  SpotifyTopicMatchAsset,
 } from "@/lib/spotify-types";
 import { readYouTubeMatchCacheTrackMetadata } from "@/lib/supabase/youtube-match-cache";
 import { getYouTubeSongVideoCacheKey } from "@/lib/youtube";
@@ -279,6 +280,17 @@ async function fetchSpotifyJson<T>(
   return (await response.json()) as T;
 }
 
+function isSpotifyExpiredTokenError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.includes("Spotify devolvió 401") &&
+    error.message.includes("The access token expired")
+  );
+}
+
 function decodeHtmlEntities(value: string) {
   return value
     .replaceAll("&amp;", "&")
@@ -477,6 +489,234 @@ function mapSpotifyPlaylistTrack(
     youtubeCacheStatus: "uncached",
     rating: 0,
   } satisfies SpotifyPlaylistTrackAsset;
+}
+
+function normalizeSpotifyMatchValue(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es-ES")
+    .replace(/^the\s+/i, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function shouldStripSpotifyTrackSuffix(value: string) {
+  const normalizedValue = normalizeSpotifyMatchValue(value);
+
+  if (!normalizedValue) {
+    return false;
+  }
+
+  return /(remaster|remastered|remix|mix|live|acoustic|demo|edit|version|radio|mono|stereo|deluxe|edition|session|take|alternate|bonus|soundtrack|from|explicit|clean|\b19\d{2}\b|\b20\d{2}\b)/.test(
+    normalizedValue,
+  );
+}
+
+function canonicalizeSpotifyTrackNameForMatch(value: string) {
+  let candidate = value.trim();
+
+  if (!candidate) {
+    return "";
+  }
+
+  for (const separator of [" - ", " – ", " — ", ": "]) {
+    const separatorIndex = candidate.indexOf(separator);
+
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const suffix = candidate.slice(separatorIndex + separator.length);
+
+    if (shouldStripSpotifyTrackSuffix(suffix)) {
+      candidate = candidate.slice(0, separatorIndex).trim();
+      break;
+    }
+  }
+
+  candidate = candidate.replace(/\s*[\(\[\{]([^\)\]\}]*)[\)\]\}]\s*$/g, (_match, suffix) =>
+    shouldStripSpotifyTrackSuffix(String(suffix ?? ""))
+      ? " "
+      : ` (${String(suffix ?? "").trim()}) `,
+  );
+
+  return normalizeSpotifyMatchValue(candidate);
+}
+
+function buildSpotifyTrackExternalUrl(trackId: string) {
+  return `https://open.spotify.com/track/${encodeURIComponent(trackId)}`;
+}
+
+function buildSpotifyHighlightedPlaylistUrl(
+  playlistExternalUrl: string,
+  trackId: string,
+) {
+  const highlightedUrl = new URL(playlistExternalUrl);
+  highlightedUrl.searchParams.set("highlight", `spotify:track:${trackId}`);
+
+  return highlightedUrl.toString();
+}
+
+function matchesSpotifyTopicTrack(
+  track: SpotifyTrackResponse | null,
+  expectedTrackName: string,
+  expectedArtistName: string,
+) {
+  if (!track || track.is_local) {
+    return false;
+  }
+
+  const normalizedExpectedTrackName =
+    canonicalizeSpotifyTrackNameForMatch(expectedTrackName);
+  const normalizedExpectedArtistName = normalizeSpotifyMatchValue(expectedArtistName);
+  const normalizedTrackName = canonicalizeSpotifyTrackNameForMatch(track.name);
+
+  if (
+    !normalizedExpectedTrackName ||
+    !normalizedExpectedArtistName ||
+    !normalizedTrackName ||
+    normalizedTrackName !== normalizedExpectedTrackName
+  ) {
+    return false;
+  }
+
+  const normalizedArtists = (track.artists ?? [])
+    .map((artist) => normalizeSpotifyMatchValue(artist.name))
+    .filter(Boolean);
+
+  return normalizedArtists.some(
+    (artistName) =>
+      artistName === normalizedExpectedArtistName ||
+      artistName.includes(normalizedExpectedArtistName) ||
+      normalizedExpectedArtistName.includes(artistName),
+  );
+}
+
+export async function findSpotifyTopicMatchInOwnedPlaylists({
+  topicName,
+  groupName,
+}: {
+  topicName: string;
+  groupName: string;
+}): Promise<SpotifyTopicMatchAsset | null> {
+  if (!isSpotifyConfigured() || !isSpotifyConnected()) {
+    return null;
+  }
+
+  const normalizedTopicName = topicName.trim();
+  const normalizedGroupName = groupName.trim();
+
+  if (!normalizedTopicName || !normalizedGroupName) {
+    return null;
+  }
+
+  try {
+    let accessToken = await getSpotifyAccessToken();
+    const fetchSpotifyJsonWithRetry = async <T>(input: string) => {
+      try {
+        return await fetchSpotifyJson<T>(input, accessToken);
+      } catch (error) {
+        if (!isSpotifyExpiredTokenError(error)) {
+          throw error;
+        }
+
+        accessToken = await getSpotifyAccessToken();
+
+        return fetchSpotifyJson<T>(input, accessToken);
+      }
+    };
+    const profile = await fetchSpotifyJsonWithRetry<SpotifyProfileResponse>(
+      `${SPOTIFY_API_BASE_URL}/me`,
+    );
+    const playlists: SpotifyPlaylistResponse[] = [];
+    let nextPlaylistUrl: string | null = `${SPOTIFY_API_BASE_URL}/me/playlists?limit=50`;
+    let playlistPageCount = 0;
+
+    while (nextPlaylistUrl && playlistPageCount < 6) {
+      const playlistPage: SpotifyPlaylistPageResponse =
+        await fetchSpotifyJsonWithRetry<SpotifyPlaylistPageResponse>(
+          nextPlaylistUrl,
+        );
+
+      playlists.push(...playlistPage.items);
+      nextPlaylistUrl = playlistPage.next;
+      playlistPageCount += 1;
+    }
+
+    const candidatePlaylists = playlists
+      .map((playlist) => ({
+        playlist: mapSpotifyPlaylist(playlist),
+        isOwnedByCurrentUser: playlist.owner.id === profile.id,
+      }))
+      .sort((left, right) => {
+        if (left.isOwnedByCurrentUser !== right.isOwnedByCurrentUser) {
+          return left.isOwnedByCurrentUser ? -1 : 1;
+        }
+
+        return left.playlist.name.localeCompare(right.playlist.name, "es", {
+          sensitivity: "base",
+        });
+      });
+
+    for (const { playlist } of candidatePlaylists) {
+      let nextTrackUrl: string | null =
+        `${SPOTIFY_API_BASE_URL}/playlists/${encodeURIComponent(playlist.id)}/tracks?limit=100&fields=items(track(id,name,artists(name),is_local)),next`;
+      let trackPageCount = 0;
+
+      while (nextTrackUrl && trackPageCount < 10) {
+        const trackPage: SpotifyPlaylistTrackPageResponse =
+          await fetchSpotifyJsonWithRetry<SpotifyPlaylistTrackPageResponse>(
+          nextTrackUrl,
+          );
+        const matchedTrack = trackPage.items
+          .map((item) => item.track)
+          .find((track) =>
+            matchesSpotifyTopicTrack(
+              track,
+              normalizedTopicName,
+              normalizedGroupName,
+            ),
+          );
+
+        if (matchedTrack?.id) {
+          const trackArtistsLabel =
+            matchedTrack.artists
+              ?.map((artist) => artist.name.trim())
+              .filter(Boolean)
+              .join(" · ") || normalizedGroupName;
+
+          return {
+            playlistId: playlist.id,
+            playlistName: playlist.name,
+            playlistExternalUrl: playlist.externalUrl,
+            highlightedPlaylistUrl: buildSpotifyHighlightedPlaylistUrl(
+              playlist.externalUrl,
+              matchedTrack.id,
+            ),
+            trackId: matchedTrack.id,
+            trackName: matchedTrack.name.trim(),
+            trackArtistsLabel,
+            trackExternalUrl: buildSpotifyTrackExternalUrl(matchedTrack.id),
+          } satisfies SpotifyTopicMatchAsset;
+        }
+
+        nextTrackUrl = trackPage.next;
+        trackPageCount += 1;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.warn(
+      `[spotify-topic-match] No he podido buscar "${normalizedTopicName}" en Spotify: ${
+        error instanceof Error ? error.message : "Error desconocido."
+      }`,
+    );
+
+    return null;
+  }
 }
 
 export async function getSpotifyPlaylistList(): Promise<SpotifyPlaylistListResult> {

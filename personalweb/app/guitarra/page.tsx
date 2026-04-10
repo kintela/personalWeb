@@ -6,6 +6,7 @@ import {
   getSingleSearchParam,
   type RouteSearchParams,
 } from "@/lib/route-search-params";
+import { findSpotifyTopicMatchInOwnedPlaylists } from "@/lib/spotify";
 import { getGuitarTopicList } from "@/lib/supabase/guitar-topics";
 import { getGuitarVideoList } from "@/lib/supabase/videos";
 
@@ -23,6 +24,15 @@ export default async function GuitarraPage(props: {
       topicValue: getSingleSearchParam(searchParams.guitarTheme).trim(),
     }),
   ]);
+  const activeTopic =
+    guitarTopics.topics.find((topic) => topic.id === guitarTopics.topicValue) ??
+    null;
+  const spotifyTopicMatch = activeTopic
+    ? await findSpotifyTopicMatchInOwnedPlaylists({
+        topicName: activeTopic.name,
+        groupName: activeTopic.groupName,
+      })
+    : null;
 
   return (
     <SectionPageShell currentHref="/guitarra">
@@ -39,6 +49,7 @@ export default async function GuitarraPage(props: {
         topicValue={guitarTopics.topicValue}
         groupOptions={guitarTopics.groupOptions}
         topicOptions={guitarTopics.topicOptions}
+        spotifyTopicMatch={spotifyTopicMatch}
       />
     </SectionPageShell>
   );

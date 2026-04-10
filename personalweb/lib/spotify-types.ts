@@ -33,6 +33,17 @@ export type SpotifyPlaylistTrackAsset = {
   rating: number;
 };
 
+export type SpotifyTopicMatchAsset = {
+  playlistId: string;
+  playlistName: string;
+  playlistExternalUrl: string;
+  highlightedPlaylistUrl: string;
+  trackId: string;
+  trackName: string;
+  trackArtistsLabel: string;
+  trackExternalUrl: string;
+};
+
 export type SpotifyPlaylistListResult = {
   playlists: SpotifyPlaylistAsset[];
   quickAccess: SpotifyQuickAccessAsset[];

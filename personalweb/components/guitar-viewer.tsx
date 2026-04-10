@@ -12,6 +12,7 @@ import {
 } from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
 import { VideoInfoHover } from "@/components/video-info-hover";
+import type { SpotifyTopicMatchAsset } from "@/lib/spotify-types";
 import type {
   GuitarTopicAsset,
   GuitarTopicGroupOption,
@@ -33,6 +34,7 @@ type GuitarViewerProps = {
   topicValue: string;
   groupOptions: GuitarTopicGroupOption[];
   topicOptions: GuitarTopicOption[];
+  spotifyTopicMatch: SpotifyTopicMatchAsset | null;
 };
 
 type SelectedGuitarVideo = {
@@ -405,6 +407,7 @@ export function GuitarViewer({
   topicValue,
   groupOptions,
   topicOptions,
+  spotifyTopicMatch,
 }: GuitarViewerProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -885,6 +888,17 @@ export function GuitarViewer({
                               </div>
 
                               <div className="flex items-center gap-3">
+                                {spotifyTopicMatch ? (
+                                  <a
+                                    href={spotifyTopicMatch.trackExternalUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-full border border-emerald-300/35 bg-emerald-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-300/65 hover:bg-emerald-300/18 hover:text-white"
+                                  >
+                                    Abrir tema en Spotify
+                                  </a>
+                                ) : null}
+
                                 {activeTopic.tablatureImages.length > 0 ? (
                                   <button
                                     type="button"
