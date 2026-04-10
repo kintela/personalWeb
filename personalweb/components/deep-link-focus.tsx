@@ -11,6 +11,7 @@ const SECTION_IDS = new Set([
   "libros",
   "historia",
   "guitarra",
+  "instagram",
   "spotify",
   "videos",
 ]);
@@ -25,6 +26,7 @@ const TARGET_SECTION_PREFIXES = [
   { prefix: "guitarra-video-", sectionId: "guitarra" },
   { prefix: "guitarra-tema-", sectionId: "guitarra" },
   { prefix: "guitarra-tema-video-", sectionId: "guitarra" },
+  { prefix: "instagram-media-", sectionId: "instagram" },
   { prefix: "spotify-playlist-", sectionId: "spotify" },
   { prefix: "spotify-playlist-viewer-", sectionId: "spotify" },
   { prefix: "spotify-track-", sectionId: "spotify" },

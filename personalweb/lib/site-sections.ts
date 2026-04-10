@@ -24,6 +24,36 @@ export type SiteSection = {
 
 export const SITE_SECTIONS: SiteSection[] = [
   {
+    href: "/instagram",
+    sectionId: "instagram",
+    title: "Instagram",
+    eyebrow: "InstaFeed",
+    description:
+      "Mis publicaciones de Instagram dentro de la web, con búsqueda directa para encontrar fotos, carruseles y vídeos sin salir a ciegas.",
+    summary: "Feed propio conectado por API y filtrable por texto.",
+    details: [
+      "Las publicaciones se cargan desde mi cuenta de Instagram Creator con su enlace original.",
+      "Puedes buscar por texto de la publicación, tipo de contenido y fecha visible.",
+      "Si alguna te interesa, se abre directamente en Instagram para verla completa.",
+    ],
+    visual: {
+      kicker: "Feed conectado",
+      title: "Instagram integrado como un bloque más, con filtro y acceso directo.",
+      caption:
+        "Un escaparate propio para mis fotos y publicaciones sin depender del scroll infinito.",
+      cards: [
+        { label: "Busca", value: "Texto" },
+        { label: "Abre", value: "Posts" },
+        { label: "Ordena", value: "Feed" },
+      ],
+      gradientClass: "from-pink-400/24 via-orange-400/12 to-amber-300/18",
+      glowPrimaryClass: "bg-pink-300/24",
+      glowSecondaryClass: "bg-amber-300/20",
+      badgeClass: "border-pink-200/28 bg-pink-300/12 text-pink-50",
+      valueClass: "text-pink-50",
+    },
+  },
+  {
     href: "/fotos",
     sectionId: "fotos",
     title: "Fotos",

@@ -4,6 +4,7 @@ const SITE_URL = "https://www.kintela.es";
 
 const routes = [
   { path: "", changeFrequency: "weekly", priority: 1 },
+  { path: "/instagram", changeFrequency: "weekly", priority: 0.9 },
   { path: "/spotify", changeFrequency: "weekly", priority: 0.9 },
   { path: "/fotos", changeFrequency: "weekly", priority: 0.9 },
   { path: "/conciertos", changeFrequency: "weekly", priority: 0.9 },

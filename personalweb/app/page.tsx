@@ -5,7 +5,7 @@ import { SITE_SECTIONS } from "@/lib/site-sections";
 
 export const metadata: Metadata = buildPageMetadata("/");
 
-const LANDING_SECTION_ORDER = ["/spotify", "/mtv"] as const;
+const LANDING_SECTION_ORDER = ["/instagram", "/spotify", "/mtv"] as const;
 const LANDING_SECTION_ORDER_SET = new Set<string>(LANDING_SECTION_ORDER);
 const LANDING_IMAGE_BUCKET = "landing";
 

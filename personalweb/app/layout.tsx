@@ -20,14 +20,14 @@ export const metadata: Metadata = {
     template: "%s | kintela.es",
   },
   description:
-    "Música, playlists, fotos, conciertos, guitarra y colecciones personales en kintela.es.",
+    "Música, playlists, Instagram, fotos, conciertos, guitarra y colecciones personales en kintela.es.",
   openGraph: {
     type: "website",
     url: "/",
     siteName: "kintela.es",
     title: "kintela.es",
     description:
-      "Música, playlists, fotos, conciertos, guitarra y colecciones personales en kintela.es.",
+      "Música, playlists, Instagram, fotos, conciertos, guitarra y colecciones personales en kintela.es.",
     images: [
       {
         url: "/opengraph-image",
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "kintela.es",
     description:
-      "Música, playlists, fotos, conciertos, guitarra y colecciones personales en kintela.es.",
+      "Música, playlists, Instagram, fotos, conciertos, guitarra y colecciones personales en kintela.es.",
     images: ["/opengraph-image"],
   },
 };

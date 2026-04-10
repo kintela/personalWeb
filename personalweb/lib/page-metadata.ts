@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 type PublicPagePath =
   | "/"
+  | "/instagram"
   | "/spotify"
   | "/fotos"
   | "/conciertos"
@@ -30,6 +31,11 @@ const PAGE_METADATA: Record<PublicPagePath, PublicPageMetadata> = {
     title: "Música, fotos, conciertos y vídeos",
     description:
       "kintela.es reúne playlists, vídeos, fotos, conciertos, guitarra y colecciones personales en una sola web.",
+  },
+  "/instagram": {
+    title: "Instagram y publicaciones propias",
+    description:
+      "Explora mis publicaciones de Instagram, filtra por texto y abre cada foto o vídeo directamente desde kintela.es.",
   },
   "/spotify": {
     title: "Spotify y playlists con vídeos",
