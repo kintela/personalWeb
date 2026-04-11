@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   startTransition,
   useEffect,
+  useRef,
   useState,
   useEffectEvent,
 } from "react";
@@ -36,6 +37,7 @@ type PhotoViewerProps = {
 };
 
 const PHOTO_VIEWER_GRID_STORAGE_KEY = "photo-viewer-compact-grid";
+const PHOTO_SLIDESHOW_INTERVAL_MS = 5000;
 type PhotoGridDensity = "default" | "compact" | "dense";
 
 function buildPhotoMeta(photo: PhotoAsset) {
@@ -90,6 +92,20 @@ function buildVisiblePages(currentPage: number, totalPages: number) {
     .sort((left, right) => left - right);
 }
 
+function buildRandomPhotoOrder(length: number) {
+  const order = Array.from({ length }, (_, index) => index);
+
+  for (let index = order.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    const currentValue = order[index];
+
+    order[index] = order[randomIndex] ?? currentValue;
+    order[randomIndex] = currentValue;
+  }
+
+  return order;
+}
+
 function GridDensityIcon({
   active,
   columns,
@@ -131,11 +147,18 @@ export function PhotoViewer({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const viewerViewportRef = useRef<HTMLDivElement | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [filterInput, setFilterInput] = useState(filterValue);
   const [selectedPeopleGroup, setSelectedPeopleGroup] =
     useState<PhotoPeopleGroup>(peopleGroup);
   const [gridDensity, setGridDensity] = useState<PhotoGridDensity>("default");
+  const [slideshowOrder, setSlideshowOrder] = useState<number[]>([]);
+  const [slideshowCursor, setSlideshowCursor] = useState<number | null>(null);
+  const [isSlideshowPlaying, setIsSlideshowPlaying] = useState(false);
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+  const [shouldAutoEnterFullscreen, setShouldAutoEnterFullscreen] =
+    useState(false);
   const visiblePages = buildVisiblePages(currentPage, totalPages);
   const firstPosition = (currentPage - 1) * pageSize + 1;
   const lastPosition =
@@ -145,8 +168,63 @@ export function PhotoViewer({
 
   const selectedPhoto =
     selectedIndex === null ? null : photos.at(selectedIndex) ?? null;
+  const isSlideshowMode =
+    selectedIndex !== null &&
+    slideshowCursor !== null &&
+    slideshowOrder.length > 0;
 
-  const closeViewer = () => setSelectedIndex(null);
+  async function requestNativeFullscreen() {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const fullscreenTarget = viewerViewportRef.current;
+
+    if (!fullscreenTarget) {
+      return;
+    }
+
+    if (document.fullscreenElement === fullscreenTarget) {
+      setIsNativeFullscreen(true);
+      return;
+    }
+
+    try {
+      await fullscreenTarget.requestFullscreen();
+      setIsNativeFullscreen(true);
+    } catch {
+      setIsNativeFullscreen(document.fullscreenElement === fullscreenTarget);
+    }
+  }
+
+  async function exitNativeFullscreen() {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (document.fullscreenElement !== viewerViewportRef.current) {
+      return;
+    }
+
+    try {
+      await document.exitFullscreen();
+    } catch {
+      return;
+    }
+  }
+
+  const resetSlideshowState = () => {
+    setSlideshowOrder([]);
+    setSlideshowCursor(null);
+    setIsSlideshowPlaying(false);
+    setShouldAutoEnterFullscreen(false);
+  };
+
+  const closeViewer = () => {
+    void exitNativeFullscreen();
+    resetSlideshowState();
+    setSelectedIndex(null);
+  };
 
   const applyFilter = (
     nextFilterValue: string,
@@ -179,6 +257,22 @@ export function PhotoViewer({
   };
 
   const showPreviousPhoto = () => {
+    if (slideshowCursor !== null && slideshowOrder.length > 0) {
+      setSlideshowCursor((current) => {
+        if (current === null) {
+          return current;
+        }
+
+        const nextCursor =
+          (current - 1 + slideshowOrder.length) % slideshowOrder.length;
+
+        setSelectedIndex(slideshowOrder[nextCursor] ?? null);
+
+        return nextCursor;
+      });
+      return;
+    }
+
     setSelectedIndex((current) => {
       if (current === null) {
         return current;
@@ -189,6 +283,21 @@ export function PhotoViewer({
   };
 
   const showNextPhoto = () => {
+    if (slideshowCursor !== null && slideshowOrder.length > 0) {
+      setSlideshowCursor((current) => {
+        if (current === null) {
+          return current;
+        }
+
+        const nextCursor = (current + 1) % slideshowOrder.length;
+
+        setSelectedIndex(slideshowOrder[nextCursor] ?? null);
+
+        return nextCursor;
+      });
+      return;
+    }
+
     setSelectedIndex((current) => {
       if (current === null) {
         return current;
@@ -215,6 +324,23 @@ export function PhotoViewer({
       showNextPhoto();
     }
   });
+  const requestNativeFullscreenEffect = useEffectEvent(() => {
+    void requestNativeFullscreen();
+  });
+
+  const startRandomSlideshow = () => {
+    if (photos.length === 0) {
+      return;
+    }
+
+    const randomOrder = buildRandomPhotoOrder(photos.length);
+
+    setSlideshowOrder(randomOrder);
+    setSlideshowCursor(0);
+    setSelectedIndex(randomOrder[0] ?? null);
+    setIsSlideshowPlaying(randomOrder.length > 1);
+    setShouldAutoEnterFullscreen(true);
+  };
 
   useEffect(() => {
     if (selectedIndex === null) {
@@ -231,6 +357,63 @@ export function PhotoViewer({
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [selectedIndex]);
+
+  useEffect(() => {
+    function handleFullscreenChange() {
+      setIsNativeFullscreen(
+        document.fullscreenElement === viewerViewportRef.current,
+      );
+    }
+
+    handleFullscreenChange();
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    return () =>
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!shouldAutoEnterFullscreen || selectedIndex === null) {
+      return;
+    }
+
+    if (!viewerViewportRef.current) {
+      return;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      requestNativeFullscreenEffect();
+      setShouldAutoEnterFullscreen(false);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [selectedIndex, shouldAutoEnterFullscreen]);
+
+  useEffect(() => {
+    if (
+      !isSlideshowPlaying ||
+      slideshowCursor === null ||
+      slideshowOrder.length <= 1
+    ) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setSlideshowCursor((current) => {
+        if (current === null) {
+          return current;
+        }
+
+        const nextCursor = (current + 1) % slideshowOrder.length;
+
+        setSelectedIndex(slideshowOrder[nextCursor] ?? null);
+
+        return nextCursor;
+      });
+    }, PHOTO_SLIDESHOW_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [isSlideshowPlaying, slideshowCursor, slideshowOrder]);
 
   useEffect(() => {
     setFilterInput(filterValue);
@@ -263,6 +446,15 @@ export function PhotoViewer({
       gridDensity,
     );
   }, [gridDensity]);
+
+  useEffect(() => {
+    if (selectedIndex === null || selectedPhoto) {
+      return;
+    }
+
+    resetSlideshowState();
+    setSelectedIndex(null);
+  }, [selectedIndex, selectedPhoto]);
 
   const renderPagination = () => {
     if (totalPages <= 1) {
@@ -366,6 +558,15 @@ export function PhotoViewer({
             </div>
           </div>
           <div className="flex items-center gap-3 self-start">
+            {photos.length > 1 ? (
+              <button
+                type="button"
+                onClick={startRandomSlideshow}
+                className="rounded-full border border-cyan-300/35 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-200/60 hover:bg-cyan-300/18"
+              >
+                Aleatorio
+              </button>
+            ) : null}
             <PhotoUploadPanel initiallyUnlocked={initiallyUnlocked} />
             <ShareCardButton
               anchorId="fotos"
@@ -640,7 +841,10 @@ export function PhotoViewer({
 
       {selectedPhoto ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/92 px-4 py-8 backdrop-blur-sm"
+          ref={viewerViewportRef}
+          className={`fixed inset-0 z-50 flex bg-slate-950/96 backdrop-blur-sm ${
+            isSlideshowMode ? "items-stretch justify-stretch px-0 py-0" : "items-center justify-center px-4 py-8"
+          }`}
           role="dialog"
           aria-modal="true"
         >
@@ -650,84 +854,227 @@ export function PhotoViewer({
             className="absolute inset-0 cursor-default"
             onClick={closeViewer}
           />
-          <div className="relative z-10 flex w-full max-w-6xl flex-col gap-4">
-            <div className="flex items-center justify-between gap-4 rounded-full border border-white/10 bg-white/6 px-5 py-3 text-sm text-slate-200">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-white">
-                  {selectedPhoto.title}
-                </p>
-                <p className="truncate text-xs text-slate-400">
-                  {selectedPhoto.name}
-                </p>
-                {buildPhotoMeta(selectedPhoto) ? (
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-                    {buildPhotoMeta(selectedPhoto)}
-                  </p>
-                ) : null}
-                {selectedPhoto.groupName ? (
-                  <p className="truncate text-xs text-cyan-200/90">
-                    {selectedPhoto.groupName}
-                  </p>
-                ) : null}
-                {selectedPhoto.people.length > 0 ? (
-                  <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
-                    {buildPhotoPeopleLabel(selectedPhoto)}
-                  </p>
-                ) : null}
-                {selectedPhoto.description ? (
-                  <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
-                    {selectedPhoto.description}
-                  </p>
-                ) : null}
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
-                  {selectedIndex !== null
-                    ? `${firstPosition + selectedIndex} / ${totalCount}`
-                    : ""}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeViewer}
-                className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
-              >
-                Cerrar
-              </button>
-            </div>
+          <div
+            className={`relative z-10 flex w-full flex-col ${
+              isSlideshowMode
+                ? "h-full max-w-none"
+                : "max-w-6xl gap-4"
+            }`}
+          >
+            {isSlideshowMode ? (
+              <div className="relative h-full min-h-screen w-full overflow-hidden bg-black">
+                <div className="absolute inset-0">
+                  <Image
+                    src={selectedPhoto.src}
+                    alt=""
+                    fill
+                    priority
+                    unoptimized
+                    sizes="100vw"
+                    className="scale-110 object-cover opacity-25 blur-3xl"
+                  />
+                  <div className="absolute inset-0 bg-black/45" />
+                </div>
 
-            <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-              <div className="relative aspect-[16/11] min-h-[55vh]">
-                <Image
-                  src={selectedPhoto.src}
-                  alt={selectedPhoto.name}
-                  fill
-                  priority
-                  unoptimized
-                  sizes="100vw"
-                  className="object-contain"
-                />
-              </div>
+                <div className="absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-black/70 via-black/25 to-transparent px-5 pb-16 pt-5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-cyan-300/40 bg-cyan-300/12 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-cyan-100">
+                          Aleatorio · {slideshowCursor + 1} / {slideshowOrder.length}
+                        </span>
+                        <span className="rounded-full border border-white/15 bg-black/30 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-slate-300">
+                          {selectedIndex !== null
+                            ? `${firstPosition + selectedIndex} / ${totalCount}`
+                            : ""}
+                        </span>
+                      </div>
+                      <p className="mt-3 truncate text-2xl font-semibold text-white md:text-3xl">
+                        {selectedPhoto.title}
+                      </p>
+                      <p className="mt-1 truncate text-sm text-slate-300">
+                        {selectedPhoto.name}
+                      </p>
+                      {buildPhotoMeta(selectedPhoto) ? (
+                        <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-400">
+                          {buildPhotoMeta(selectedPhoto)}
+                        </p>
+                      ) : null}
+                    </div>
 
-              {photos.length > 1 ? (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Foto anterior"
-                    onClick={showPreviousPhoto}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Foto siguiente"
-                    onClick={showNextPhoto}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90"
-                  >
-                    Next
-                  </button>
-                </>
-              ) : null}
-            </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {slideshowOrder.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setIsSlideshowPlaying((current) => !current)
+                          }
+                          className="rounded-full border border-white/15 bg-black/35 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                        >
+                          {isSlideshowPlaying ? "Pausar" : "Reanudar"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isNativeFullscreen) {
+                            void exitNativeFullscreen();
+                            return;
+                          }
+
+                          void requestNativeFullscreen();
+                        }}
+                        className="rounded-full border border-white/15 bg-black/35 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                      >
+                        {isNativeFullscreen
+                          ? "Salir pantalla completa"
+                          : "Pantalla completa"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeViewer}
+                        className="rounded-full border border-white/15 bg-black/35 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="relative z-10 h-full min-h-screen w-full">
+                  <Image
+                    src={selectedPhoto.src}
+                    alt={selectedPhoto.name}
+                    fill
+                    priority
+                    unoptimized
+                    sizes="100vw"
+                    className="object-contain"
+                  />
+                </div>
+
+                {photos.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Foto anterior"
+                      onClick={showPreviousPhoto}
+                      className="absolute left-4 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Foto siguiente"
+                      onClick={showNextPhoto}
+                      className="absolute right-4 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90"
+                    >
+                      Next
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-4 rounded-[1.75rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-white">
+                      {selectedPhoto.title}
+                    </p>
+                    <p className="truncate text-xs text-slate-400">
+                      {selectedPhoto.name}
+                    </p>
+                    {buildPhotoMeta(selectedPhoto) ? (
+                      <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
+                        {buildPhotoMeta(selectedPhoto)}
+                      </p>
+                    ) : null}
+                    {selectedPhoto.groupName ? (
+                      <p className="truncate text-xs text-cyan-200/90">
+                        {selectedPhoto.groupName}
+                      </p>
+                    ) : null}
+                    {selectedPhoto.people.length > 0 ? (
+                      <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
+                        {buildPhotoPeopleLabel(selectedPhoto)}
+                      </p>
+                    ) : null}
+                    {selectedPhoto.description ? (
+                      <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
+                        {selectedPhoto.description}
+                      </p>
+                    ) : null}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
+                        {selectedIndex !== null
+                          ? `${firstPosition + selectedIndex} / ${totalCount}`
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isNativeFullscreen) {
+                          void exitNativeFullscreen();
+                          return;
+                        }
+
+                        void requestNativeFullscreen();
+                      }}
+                      className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                    >
+                      {isNativeFullscreen
+                        ? "Salir pantalla completa"
+                        : "Pantalla completa"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={closeViewer}
+                      className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+                  <div className="relative aspect-[16/11] min-h-[55vh]">
+                    <Image
+                      src={selectedPhoto.src}
+                      alt={selectedPhoto.name}
+                      fill
+                      priority
+                      unoptimized
+                      sizes="100vw"
+                      className="object-contain"
+                    />
+                  </div>
+
+                  {photos.length > 1 ? (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Foto anterior"
+                        onClick={showPreviousPhoto}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Foto siguiente"
+                        onClick={showNextPhoto}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90"
+                      >
+                        Next
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : null}
