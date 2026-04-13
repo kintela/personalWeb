@@ -1024,7 +1024,7 @@ export function ConcertsViewer({
 
       {selectedPhotoViewer && selectedConcertPhoto ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/92 px-4 py-8 backdrop-blur-sm"
+          className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/92 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
         >
@@ -1035,86 +1035,84 @@ export function ConcertsViewer({
             onClick={closePhotoViewer}
           />
 
-          <div className="relative z-10 flex w-full max-w-6xl flex-col gap-4">
-            <div className="flex items-center justify-between gap-4 rounded-full border border-white/10 bg-white/6 px-5 py-3 text-sm text-slate-200">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-white">
-                  {selectedPhotoViewer.concertName}
-                </p>
-                <p className="truncate text-xs text-slate-400">
-                  {selectedConcertPhoto.title}
-                </p>
-                <p className="truncate text-xs text-slate-500">
-                  {selectedConcertPhoto.name}
-                </p>
-                {buildConcertPhotoMeta(selectedConcertPhoto) ? (
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-                    {buildConcertPhotoMeta(selectedConcertPhoto)}
+          <div className="relative z-10 flex min-h-full items-center justify-center p-4 sm:p-6">
+            <div className="flex w-full max-w-6xl flex-col gap-4">
+              <div className="flex flex-col gap-4 rounded-[1.75rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-slate-200 sm:rounded-full sm:px-5 sm:py-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-white">
+                    {selectedPhotoViewer.concertName}
                   </p>
-                ) : null}
-                {selectedConcertPhoto.groupName ? (
-                  <p className="truncate text-xs text-cyan-200/90">
-                    {selectedConcertPhoto.groupName}
+                  <p className="truncate text-xs text-slate-400">
+                    {selectedConcertPhoto.title}
                   </p>
-                ) : null}
-                {selectedConcertPhoto.people.length > 0 ? (
-                  <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
-                    {buildConcertPhotoPeopleLabel(selectedConcertPhoto)}
+                  <p className="truncate text-xs text-slate-500">
+                    {selectedConcertPhoto.name}
                   </p>
-                ) : null}
-                {selectedConcertPhoto.description ? (
-                  <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
-                    {selectedConcertPhoto.description}
+                  {buildConcertPhotoMeta(selectedConcertPhoto) ? (
+                    <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
+                      {buildConcertPhotoMeta(selectedConcertPhoto)}
+                    </p>
+                  ) : null}
+                  {selectedConcertPhoto.groupName ? (
+                    <p className="truncate text-xs text-cyan-200/90">
+                      {selectedConcertPhoto.groupName}
+                    </p>
+                  ) : null}
+                  {selectedConcertPhoto.people.length > 0 ? (
+                    <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
+                      {buildConcertPhotoPeopleLabel(selectedConcertPhoto)}
+                    </p>
+                  ) : null}
+                  {selectedConcertPhoto.description ? (
+                    <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-300">
+                      {selectedConcertPhoto.description}
+                    </p>
+                  ) : null}
+                  <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
+                    {selectedPhotoViewer.selectedIndex + 1} /{" "}
+                    {selectedPhotoViewer.photos.length}
                   </p>
-                ) : null}
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
-                  {selectedPhotoViewer.selectedIndex + 1} /{" "}
-                  {selectedPhotoViewer.photos.length}
-                </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closePhotoViewer}
+                  className="self-start rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6 md:self-auto"
+                >
+                  Cerrar
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={closePhotoViewer}
-                className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
-              >
-                Cerrar
-              </button>
-            </div>
-
-            <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-              <div className="relative aspect-[16/11] min-h-[55vh]">
-                <Image
-                  src={selectedConcertPhoto.src}
-                  alt={selectedConcertPhoto.name}
-                  fill
-                  priority
-                  unoptimized
-                  sizes="100vw"
-                  className="object-contain"
-                />
+              <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:p-3">
+                <div className="flex min-h-[40vh] items-center justify-center sm:min-h-[55vh]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={selectedConcertPhoto.src}
+                    alt={selectedConcertPhoto.name}
+                    className="block h-auto max-h-[calc(100dvh-16rem)] w-auto max-w-full rounded-[1.4rem] object-contain sm:max-h-[calc(100dvh-13rem)]"
+                  />
+                </div>
+                {selectedPhotoViewer.photos.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Foto anterior del concierto"
+                      onClick={showPreviousConcertPhoto}
+                      className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-3 py-2 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90 sm:left-4 sm:px-4 sm:py-3"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Foto siguiente del concierto"
+                      onClick={showNextConcertPhoto}
+                      className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-3 py-2 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90 sm:right-4 sm:px-4 sm:py-3"
+                    >
+                      Next
+                    </button>
+                  </>
+                ) : null}
               </div>
-
-              {selectedPhotoViewer.photos.length > 1 ? (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Foto anterior del concierto"
-                    onClick={showPreviousConcertPhoto}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Foto siguiente del concierto"
-                    onClick={showNextConcertPhoto}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/60 hover:bg-slate-900/90"
-                  >
-                    Next
-                  </button>
-                </>
-              ) : null}
             </div>
           </div>
         </div>
