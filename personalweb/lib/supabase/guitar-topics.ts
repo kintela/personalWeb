@@ -8,7 +8,6 @@ const GUITAR_TOPIC_VIDEOS_SELECT_COLUMNS =
   "id, tema_id, enlace, observaciones";
 const GUITAR_LYRICS_BUCKET = "lyrics";
 const GUITAR_TABLATURES_BUCKET = "tablaturas";
-const GUITAR_TABLATURE_SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 type TopicGroupRelation =
   | {
@@ -51,7 +50,7 @@ export type GuitarTopicTablatureAsset = {
   id: string;
   fileName: string;
   path: string;
-  signedUrl: string;
+  imageSrc: string;
   pageNumber: number;
 };
 
@@ -121,6 +120,27 @@ export function getGuitarTopicLyricImagePublicUrl(imagePath: string | null) {
     .join("/");
 
   return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(GUITAR_LYRICS_BUCKET)}/${encodedPath}`;
+}
+
+export function getGuitarTopicTablaturePublicUrl(path: string | null) {
+  const normalizedPath = path?.trim();
+  const supabaseUrl = getSupabaseUrl()?.trim();
+
+  if (!normalizedPath || !supabaseUrl) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(normalizedPath)) {
+    return normalizedPath;
+  }
+
+  const encodedPath = normalizedPath
+    .replace(/^\/+/, "")
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
+
+  return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(GUITAR_TABLATURES_BUCKET)}/${encodedPath}`;
 }
 
 function getSupabasePublicKey() {
@@ -310,7 +330,7 @@ async function getTopicTablatureImages(
   if (error) {
     return {
       images: [],
-      error: `No he podido leer las tablaturas privadas del tema ${normalizedTopicId}: ${error.message}`,
+      error: `No he podido leer las tablaturas del tema ${normalizedTopicId}: ${error.message}`,
     };
   }
 
@@ -326,56 +346,50 @@ async function getTopicTablatureImages(
     };
   }
 
-  const signedUrlResults = await Promise.all(
-    fileNames.map(async (fileName) => {
-      const path = `${normalizedTopicId}/${fileName}`;
-      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-        .from(GUITAR_TABLATURES_BUCKET)
-        .createSignedUrl(path, GUITAR_TABLATURE_SIGNED_URL_TTL_SECONDS);
+  const images = fileNames.flatMap((fileName, index) => {
+    const path = `${normalizedTopicId}/${fileName}`;
+    const imageSrc = getGuitarTopicTablaturePublicUrl(path);
 
-      if (signedUrlError || !signedUrlData?.signedUrl) {
-        return {
-          fileName,
-          path,
-          signedUrl: null,
-          error: signedUrlError?.message ?? "No se ha generado la URL firmada.",
-        };
-      }
+    if (!imageSrc) {
+      return [];
+    }
 
-      return {
+    return [
+      {
+        id: `${normalizedTopicId}-${index + 1}`,
         fileName,
         path,
-        signedUrl: signedUrlData.signedUrl,
-        error: null,
-      };
-    }),
-  );
+        imageSrc,
+        pageNumber: index + 1,
+      },
+    ];
+  });
 
-  const failedSignedUrlResult = signedUrlResults.find((result) => result.error);
-
-  if (failedSignedUrlResult) {
+  if (images.length !== fileNames.length) {
     return {
       images: [],
-      error: `No he podido firmar las tablaturas privadas del tema ${normalizedTopicId}: ${failedSignedUrlResult.error}`,
+      error: `No he podido preparar las URLs públicas de las tablaturas del tema ${normalizedTopicId}.`,
     };
   }
 
   return {
-    images: signedUrlResults.flatMap((result, index) =>
-      result.signedUrl
-        ? [
-            {
-              id: `${normalizedTopicId}-${index + 1}`,
-              fileName: result.fileName,
-              path: result.path,
-              signedUrl: result.signedUrl,
-              pageNumber: index + 1,
-            },
-          ]
-        : [],
-    ),
+    images,
     error: null,
   };
+}
+
+export async function getGuitarTopicTablatureImages(topicId: string) {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      images: [],
+      error:
+        "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
+    };
+  }
+
+  return getTopicTablatureImages(supabase, topicId);
 }
 
 export async function getGuitarTopicList(

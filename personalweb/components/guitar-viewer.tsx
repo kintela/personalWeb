@@ -1,9 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ChangeEvent } from "react";
-import { startTransition, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -56,6 +55,13 @@ type SelectedGuitarTablature = {
   subtitle: string;
   images: GuitarTopicTablatureAsset[];
   activeIndex: number;
+};
+
+type TopicContextState = {
+  tablatureImages: GuitarTopicTablatureAsset[];
+  hasLoadedTablatures: boolean;
+  spotifyTopicMatch: SpotifyTopicMatchAsset | null;
+  hasLoadedSpotify: boolean;
 };
 
 const GUITAR_VIEWER_GRID_STORAGE_KEY = "guitar-viewer-grid-density";
@@ -409,9 +415,6 @@ export function GuitarViewer({
   topicOptions,
   spotifyTopicMatch,
 }: GuitarViewerProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [isClient, setIsClient] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<SelectedGuitarVideo | null>(
     null,
@@ -425,6 +428,29 @@ export function GuitarViewer({
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
     GUITAR_VIEWER_GRID_STORAGE_KEY,
   );
+  const [topicContextById, setTopicContextById] = useState<
+    Record<string, TopicContextState>
+  >(() => {
+    const initialTopic = topics.find((topic) => topic.id === topicValue);
+
+    if (!topicValue || !initialTopic) {
+      return {};
+    }
+
+    return {
+      [topicValue]: {
+        tablatureImages: initialTopic.tablatureImages,
+        hasLoadedTablatures: true,
+        spotifyTopicMatch,
+        hasLoadedSpotify: Boolean(spotifyTopicMatch),
+      },
+    };
+  });
+  const [tablatureLoadingTopicId, setTablatureLoadingTopicId] =
+    useState<string | null>(null);
+  const [spotifyLoadingTopicId, setSpotifyLoadingTopicId] =
+    useState<string | null>(null);
+  const [topicContextError, setTopicContextError] = useState<string | null>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -438,10 +464,69 @@ export function GuitarViewer({
     setSelectedTopic(topicValue);
   }, [topicValue]);
 
+  useEffect(() => {
+    if (!topicValue) {
+      return;
+    }
+
+    const initialTopic = topics.find((topic) => topic.id === topicValue);
+
+    if (!initialTopic) {
+      return;
+    }
+
+    setTopicContextById((currentValue) => ({
+      ...currentValue,
+      [topicValue]: {
+        tablatureImages: initialTopic.tablatureImages,
+        hasLoadedTablatures: true,
+        spotifyTopicMatch:
+          currentValue[topicValue]?.hasLoadedSpotify === true
+            ? currentValue[topicValue]?.spotifyTopicMatch ?? null
+            : spotifyTopicMatch,
+        hasLoadedSpotify:
+          currentValue[topicValue]?.hasLoadedSpotify ?? Boolean(spotifyTopicMatch),
+      },
+    }));
+  }, [spotifyTopicMatch, topicValue, topics]);
+
+  useEffect(() => {
+    if (!isClient) {
+      return;
+    }
+
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+
+      setSelectedGroup(params.get("guitarGroup")?.trim() ?? "");
+      setSelectedTopic(params.get("guitarTheme")?.trim() ?? "");
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isClient]);
+
   const filteredTopicOptions = selectedGroup
     ? topicOptions.filter((option) => option.groupId === selectedGroup)
     : [];
-  const activeTopic = topics.find((topic) => topic.id === selectedTopic) ?? null;
+  const baseActiveTopic = topics.find((topic) => topic.id === selectedTopic) ?? null;
+  const activeTopicContext = baseActiveTopic
+    ? topicContextById[baseActiveTopic.id] ?? null
+    : null;
+  const activeTopic = baseActiveTopic
+    ? {
+        ...baseActiveTopic,
+        tablatureImages:
+          activeTopicContext?.tablatureImages ?? baseActiveTopic.tablatureImages,
+      }
+    : null;
+  const activeSpotifyTopicMatch = activeTopicContext?.spotifyTopicMatch ?? null;
+  const activeTopicId = activeTopic?.id ?? "";
+  const activeTopicName = activeTopic?.name ?? "";
+  const activeTopicGroupName = activeTopic?.groupName ?? "";
   const activeTopicAnchorId = activeTopic ? `guitarra-tema-${activeTopic.id}` : "";
   const gridClassName =
     gridDensity === "dense"
@@ -460,7 +545,11 @@ export function GuitarViewer({
     nextGroupValue: string;
     nextTopicValue: string;
   }) {
-    const params = new URLSearchParams(searchParams.toString());
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
     const normalizedGroupValue = nextGroupValue.trim();
     const normalizedTopicValue = nextTopicValue.trim();
 
@@ -476,12 +565,12 @@ export function GuitarViewer({
       params.delete("guitarTheme");
     }
 
-    startTransition(() => {
-      router.replace(
-        params.toString() ? `${pathname}?${params.toString()}` : pathname,
-        { scroll: false },
-      );
-    });
+    const query = params.toString();
+    const href = query
+      ? `${window.location.pathname}?${query}`
+      : window.location.pathname;
+
+    window.history.replaceState(window.history.state, "", href);
   }
 
   function handleGroupChange(event: ChangeEvent<HTMLSelectElement>) {
@@ -619,6 +708,178 @@ export function GuitarViewer({
   const activeTablatureImage = selectedTablature
     ? selectedTablature.images[selectedTablature.activeIndex] ?? null
     : null;
+
+  useEffect(() => {
+    setTopicContextError(null);
+  }, [selectedTopic]);
+
+  useEffect(() => {
+    if (!activeTopicId || activeTopicContext?.hasLoadedTablatures) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const params = new URLSearchParams({ topicId: activeTopicId });
+
+    setTablatureLoadingTopicId(activeTopicId);
+    setTopicContextError(null);
+
+    void fetch(`/api/guitar/tablatures?${params.toString()}`, {
+      signal: controller.signal,
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        const result = (await response.json()) as {
+          error?: string | null;
+          images?: GuitarTopicTablatureAsset[];
+        };
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "No he podido leer las tablaturas.");
+        }
+
+        setTopicContextById((currentValue) => {
+          const currentTopicContext = currentValue[activeTopicId];
+
+          return {
+            ...currentValue,
+            [activeTopicId]: {
+              tablatureImages: Array.isArray(result.images) ? result.images : [],
+              hasLoadedTablatures: true,
+              spotifyTopicMatch: currentTopicContext?.spotifyTopicMatch ?? null,
+              hasLoadedSpotify: currentTopicContext?.hasLoadedSpotify ?? false,
+            },
+          };
+        });
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setTopicContextById((currentValue) => {
+          const currentTopicContext = currentValue[activeTopicId];
+
+          return {
+            ...currentValue,
+            [activeTopicId]: {
+              tablatureImages: currentTopicContext?.tablatureImages ?? [],
+              hasLoadedTablatures: true,
+              spotifyTopicMatch: currentTopicContext?.spotifyTopicMatch ?? null,
+              hasLoadedSpotify: currentTopicContext?.hasLoadedSpotify ?? false,
+            },
+          };
+        });
+        setTopicContextError(
+          error instanceof Error
+            ? error.message
+            : "No he podido cargar las tablaturas del tema.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setTablatureLoadingTopicId((currentValue) =>
+            currentValue === activeTopicId ? null : currentValue,
+          );
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [activeTopicContext?.hasLoadedTablatures, activeTopicId]);
+
+  useEffect(() => {
+    if (
+      !activeTopicId ||
+      !activeTopicName ||
+      !activeTopicGroupName ||
+      activeTopicContext?.hasLoadedSpotify
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      topicName: activeTopicName,
+      groupName: activeTopicGroupName,
+    });
+
+    setSpotifyLoadingTopicId(activeTopicId);
+
+    void fetch(`/api/spotify/topic-match?${params.toString()}`, {
+      signal: controller.signal,
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        const result = (await response.json()) as {
+          error?: string | null;
+          match?: SpotifyTopicMatchAsset | null;
+        };
+
+        if (!response.ok) {
+          throw new Error(
+            result.error ?? "No he podido buscar el tema en Spotify.",
+          );
+        }
+
+        setTopicContextById((currentValue) => {
+          const currentTopicContext = currentValue[activeTopicId];
+
+          return {
+            ...currentValue,
+            [activeTopicId]: {
+              tablatureImages: currentTopicContext?.tablatureImages ?? [],
+              hasLoadedTablatures:
+                currentTopicContext?.hasLoadedTablatures ?? false,
+              spotifyTopicMatch: result.match ?? null,
+              hasLoadedSpotify: true,
+            },
+          };
+        });
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setTopicContextById((currentValue) => {
+          const currentTopicContext = currentValue[activeTopicId];
+
+          return {
+            ...currentValue,
+            [activeTopicId]: {
+              tablatureImages: currentTopicContext?.tablatureImages ?? [],
+              hasLoadedTablatures:
+                currentTopicContext?.hasLoadedTablatures ?? false,
+              spotifyTopicMatch: null,
+              hasLoadedSpotify: true,
+            },
+          };
+        });
+        setTopicContextError(
+          error instanceof Error
+            ? error.message
+            : "No he podido buscar el tema en Spotify.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setSpotifyLoadingTopicId((currentValue) =>
+            currentValue === activeTopicId ? null : currentValue,
+          );
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    activeTopicContext?.hasLoadedSpotify,
+    activeTopicGroupName,
+    activeTopicId,
+    activeTopicName,
+  ]);
 
   return (
     <section className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/6 px-6 py-8 shadow-[0_32px_90px_rgba(15,23,42,0.25)] backdrop-blur md:px-10 md:py-10">
@@ -888,15 +1149,19 @@ export function GuitarViewer({
                               </div>
 
                               <div className="flex items-center gap-3">
-                                {spotifyTopicMatch ? (
+                                {activeSpotifyTopicMatch ? (
                                   <a
-                                    href={spotifyTopicMatch.trackExternalUrl}
+                                    href={activeSpotifyTopicMatch.trackExternalUrl}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="rounded-full border border-emerald-300/35 bg-emerald-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-300/65 hover:bg-emerald-300/18 hover:text-white"
                                   >
                                     Abrir tema en Spotify
                                   </a>
+                                ) : spotifyLoadingTopicId === activeTopic.id ? (
+                                  <span className="rounded-full border border-emerald-300/20 bg-emerald-300/8 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-100/80">
+                                    Buscando Spotify...
+                                  </span>
                                 ) : null}
 
                                 {activeTopic.tablatureImages.length > 0 ? (
@@ -915,6 +1180,10 @@ export function GuitarViewer({
                                       ? "Ver tablatura"
                                       : "Ver tablaturas"}
                                   </button>
+                                ) : tablatureLoadingTopicId === activeTopic.id ? (
+                                  <span className="rounded-full border border-cyan-300/20 bg-cyan-300/8 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100/80">
+                                    Cargando tablaturas...
+                                  </span>
                                 ) : null}
 
                                 {activeTopic.lyricImageSrc ? (
@@ -949,6 +1218,11 @@ export function GuitarViewer({
                                 {activeTopic.observations ??
                                   "Sin observaciones añadidas para este tema."}
                               </p>
+                              {topicContextError ? (
+                                <p className="text-xs leading-6 text-rose-200/85">
+                                  {topicContextError}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                         ) : (
@@ -1207,7 +1481,7 @@ export function GuitarViewer({
                       <div className="flex items-center justify-center">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={activeTablatureImage.signedUrl}
+                          src={activeTablatureImage.imageSrc}
                           alt={`Tablatura ${activeTablatureImage.pageNumber} de ${selectedTablature.title}`}
                           className="h-auto max-h-[calc(100vh-14rem)] w-auto max-w-full rounded-[1.1rem] object-contain"
                         />
@@ -1230,7 +1504,7 @@ export function GuitarViewer({
                             <div className="aspect-[3/4] overflow-hidden rounded-[0.9rem] bg-black/40">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
-                                src={image.signedUrl}
+                                src={image.imageSrc}
                                 alt={`Miniatura de la tablatura ${image.pageNumber}`}
                                 className="h-full w-full object-cover"
                               />
