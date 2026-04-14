@@ -1,7 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type FormEvent,
+} from "react";
 
 const MAX_UPLOAD_BYTES = 500 * 1024;
 const ORIGIN_OPTIONS = ["Facebook", "Spotify", "Propia", "Instagram"] as const;
@@ -154,6 +161,7 @@ export function PhotoUploadPanel({
 }: PhotoUploadPanelProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const fileDragDepthRef = useRef(0);
   const [isOpen, setIsOpen] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(initiallyUnlocked);
   const [unlockPassword, setUnlockPassword] = useState("");
@@ -166,6 +174,7 @@ export function PhotoUploadPanel({
   const [uploadSuccess, setUploadSuccess] = useState("");
   const [uploadInfo, setUploadInfo] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -184,13 +193,75 @@ export function PhotoUploadPanel({
   function resetUploadForm() {
     setFormState(INITIAL_FORM_STATE);
     setSelectedFile(null);
+    setIsDraggingFile(false);
+    fileDragDepthRef.current = 0;
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   }
 
-  const handleUnlock = async (event: React.FormEvent<HTMLFormElement>) => {
+  function handleSelectedFile(nextFile: File | null) {
+    setSelectedFile(nextFile);
+    setUploadError("");
+    setIsDraggingFile(false);
+    fileDragDepthRef.current = 0;
+  }
+
+  function hasDraggedFiles(dataTransfer: DataTransfer | null) {
+    if (!dataTransfer) {
+      return false;
+    }
+
+    return Array.from(dataTransfer.types).includes("Files");
+  }
+
+  function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
+    handleSelectedFile(event.target.files?.[0] ?? null);
+  }
+
+  function handleFileDragEnter(event: DragEvent<HTMLDivElement>) {
+    if (!hasDraggedFiles(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    fileDragDepthRef.current += 1;
+    setIsDraggingFile(true);
+  }
+
+  function handleFileDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!hasDraggedFiles(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleFileDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (!hasDraggedFiles(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    fileDragDepthRef.current = Math.max(0, fileDragDepthRef.current - 1);
+
+    if (fileDragDepthRef.current === 0) {
+      setIsDraggingFile(false);
+    }
+  }
+
+  function handleFileDrop(event: DragEvent<HTMLDivElement>) {
+    if (!hasDraggedFiles(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    handleSelectedFile(event.dataTransfer.files?.[0] ?? null);
+  }
+
+  const handleUnlock = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsUnlocking(true);
     setUnlockError("");
@@ -218,7 +289,7 @@ export function PhotoUploadPanel({
     }
   };
 
-  const handleUpload = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleUpload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!selectedFile) {
@@ -345,44 +416,58 @@ export function PhotoUploadPanel({
               <div className="grid gap-4 lg:grid-cols-2">
                 <label className="space-y-2">
                   <span className="text-sm text-slate-200">Imagen</span>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-                    onChange={(event) =>
-                      setSelectedFile(event.target.files?.[0] ?? null)
-                    }
-                    className="block w-full rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white file:mr-4 file:rounded-full file:border-0 file:bg-cyan-300 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-950"
-                    required
-                  />
-                  <p className="text-xs text-slate-500">
-                    Limite final: 500 KB. Si hace falta, la imagen se comprimira antes de subir.
-                  </p>
-                  {selectedFile && selectedFilePreviewUrl ? (
-                    <div className="rounded-[1.35rem] border border-white/10 bg-slate-950/55 p-3">
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[1rem] border border-white/10 bg-black/35">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={selectedFilePreviewUrl}
-                            alt={`Vista previa de ${selectedFile.name}`}
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
-                        <div className="min-w-0 space-y-1">
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
-                            Vista previa
-                          </p>
-                          <p className="truncate text-sm text-slate-200">
-                            {selectedFile.name}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {formatBytes(selectedFile.size)}
-                          </p>
+                  <div
+                    onDragEnter={handleFileDragEnter}
+                    onDragOver={handleFileDragOver}
+                    onDragLeave={handleFileDragLeave}
+                    onDrop={handleFileDrop}
+                    className={`space-y-3 rounded-[1.35rem] border border-dashed p-3 transition ${
+                      isDraggingFile
+                        ? "border-cyan-300/65 bg-cyan-300/8"
+                        : "border-white/12 bg-slate-950/35"
+                    }`}
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
+                      {isDraggingFile
+                        ? "Suelta la imagen aqui"
+                        : "Arrastra una foto aqui o seleccionala"}
+                    </p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                      onChange={handleFileInputChange}
+                      className="block w-full rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white file:mr-4 file:rounded-full file:border-0 file:bg-cyan-300 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-950"
+                    />
+                    <p className="text-xs text-slate-500">
+                      Limite final: 500 KB. Si hace falta, la imagen se comprimira antes de subir.
+                    </p>
+                    {selectedFile && selectedFilePreviewUrl ? (
+                      <div className="rounded-[1.35rem] border border-white/10 bg-slate-950/55 p-3">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[1rem] border border-white/10 bg-black/35">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={selectedFilePreviewUrl}
+                              alt={`Vista previa de ${selectedFile.name}`}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                              Vista previa
+                            </p>
+                            <p className="truncate text-sm text-slate-200">
+                              {selectedFile.name}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {formatBytes(selectedFile.size)}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </label>
 
                 <label className="space-y-2">
