@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const MAX_UPLOAD_BYTES = 500 * 1024;
 const ORIGIN_OPTIONS = ["Facebook", "Spotify", "Propia", "Instagram"] as const;
@@ -153,6 +153,7 @@ export function PhotoUploadPanel({
   initiallyUnlocked,
 }: PhotoUploadPanelProps) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(initiallyUnlocked);
   const [unlockPassword, setUnlockPassword] = useState("");
@@ -160,10 +161,34 @@ export function PhotoUploadPanel({
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [formState, setFormState] = useState(INITIAL_FORM_STATE);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
   const [uploadInfo, setUploadInfo] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedFile) {
+      setSelectedFilePreviewUrl("");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(selectedFile);
+    setSelectedFilePreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [selectedFile]);
+
+  function resetUploadForm() {
+    setFormState(INITIAL_FORM_STATE);
+    setSelectedFile(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
 
   const handleUnlock = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -245,8 +270,7 @@ export function PhotoUploadPanel({
           ? `La imagen se ha comprimido a ${formatBytes(preparedImage.file.size)}.`
           : `La imagen ya cumplia el limite de ${formatBytes(preparedImage.file.size)}.`,
       );
-      setFormState(INITIAL_FORM_STATE);
-      setSelectedFile(null);
+      resetUploadForm();
       router.refresh();
     } catch (error) {
       setUploadError(
@@ -322,6 +346,7 @@ export function PhotoUploadPanel({
                 <label className="space-y-2">
                   <span className="text-sm text-slate-200">Imagen</span>
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
                     onChange={(event) =>
@@ -333,6 +358,31 @@ export function PhotoUploadPanel({
                   <p className="text-xs text-slate-500">
                     Limite final: 500 KB. Si hace falta, la imagen se comprimira antes de subir.
                   </p>
+                  {selectedFile && selectedFilePreviewUrl ? (
+                    <div className="rounded-[1.35rem] border border-white/10 bg-slate-950/55 p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[1rem] border border-white/10 bg-black/35">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={selectedFilePreviewUrl}
+                            alt={`Vista previa de ${selectedFile.name}`}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                            Vista previa
+                          </p>
+                          <p className="truncate text-sm text-slate-200">
+                            {selectedFile.name}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {formatBytes(selectedFile.size)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </label>
 
                 <label className="space-y-2">
@@ -404,7 +454,7 @@ export function PhotoUploadPanel({
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm text-slate-200">Anio</span>
+                  <span className="text-sm text-slate-200">Año</span>
                   <input
                     type="number"
                     value={formState.year}
