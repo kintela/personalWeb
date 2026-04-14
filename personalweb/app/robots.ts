@@ -19,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
           "/historia",
           "/mtv",
           "/cds",
+          "/discos",
           "/libros",
         ],
         disallow: ["/admin", "/api"],

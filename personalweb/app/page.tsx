@@ -37,6 +37,7 @@ export default function Home() {
   ];
   const cdsLandingImageSrc = getLandingAssetPublicUrl("cds.jpg");
   const conciertosLandingImageSrc = getLandingAssetPublicUrl("conciertos.jpg");
+  const discosLandingImageSrc = getLandingAssetPublicUrl("ama.jpg");
   const fotosLandingImageSrc = getLandingAssetPublicUrl("fotos.jpg");
   const guitarraLandingImageSrc = getLandingAssetPublicUrl("guitarra.jpg");
   const historiaLandingImageSrc = getLandingAssetPublicUrl("historia.jpeg");
@@ -172,15 +173,19 @@ export default function Home() {
                     <div className="relative rounded-[2rem] border border-white/12 bg-slate-950/58 p-5 backdrop-blur sm:p-7">
                       <div className="flex min-h-[22rem] flex-col justify-between gap-8">
                         <div className="space-y-5">
-                          <div
-                            className={`inline-flex rounded-full border px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.28em] ${section.visual.badgeClass}`}
-                          >
-                            {section.visual.kicker}
-                          </div>
+                          {section.visual.kicker ? (
+                            <div
+                              className={`inline-flex rounded-full border px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.28em] ${section.visual.badgeClass}`}
+                            >
+                              {section.visual.kicker}
+                            </div>
+                          ) : null}
                           <div className="space-y-3">
-                            <h3 className="max-w-md text-2xl font-semibold leading-tight tracking-tight text-white md:text-3xl">
-                              {section.visual.title}
-                            </h3>
+                            {section.visual.title ? (
+                              <h3 className="max-w-md text-2xl font-semibold leading-tight tracking-tight text-white md:text-3xl">
+                                {section.visual.title}
+                              </h3>
+                            ) : null}
                             {section.visual.caption ? (
                               <p className="max-w-md text-sm leading-6 text-slate-200/82">
                                 {section.visual.caption}
@@ -223,6 +228,15 @@ export default function Home() {
                               src={mtvLandingImageSrc}
                               alt="Vista de la sección MTV en la landing"
                               className="h-44 w-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : section.href === "/discos" && discosLandingImageSrc ? (
+                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
+                            <img
+                              src={discosLandingImageSrc}
+                              alt="Vista de la sección Aquellos maravillosos años en la landing"
+                              className="h-44 w-full bg-slate-950 object-contain object-top"
                               loading="lazy"
                             />
                           </div>
@@ -286,6 +300,7 @@ export default function Home() {
                         ) : section.href === "/spotify" ||
                           section.href === "/fotos" ||
                           section.href === "/conciertos" ||
+                          section.href === "/discos" ||
                           section.href === "/guitarra" ||
                           section.href === "/videos" ||
                           section.href === "/vinilos" ||

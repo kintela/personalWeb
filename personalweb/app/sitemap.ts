@@ -11,6 +11,7 @@ const routes = [
   { path: "/guitarra", changeFrequency: "weekly", priority: 0.9 },
   { path: "/videos", changeFrequency: "weekly", priority: 0.9 },
   { path: "/vinilos", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/discos", changeFrequency: "monthly", priority: 0.8 },
   { path: "/historia", changeFrequency: "monthly", priority: 0.8 },
   { path: "/mtv", changeFrequency: "monthly", priority: 0.7 },
   { path: "/cds", changeFrequency: "monthly", priority: 0.7 },

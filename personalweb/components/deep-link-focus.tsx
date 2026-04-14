@@ -6,6 +6,7 @@ import { useEffect } from "react";
 const SECTION_IDS = new Set([
   "fotos",
   "conciertos",
+  "discos",
   "cds",
   "vinilos",
   "libros",
@@ -19,6 +20,7 @@ const SECTION_IDS = new Set([
 const TARGET_SECTION_PREFIXES = [
   { prefix: "foto-", sectionId: "fotos" },
   { prefix: "concierto-", sectionId: "conciertos" },
+  { prefix: "disco-", sectionId: "discos" },
   { prefix: "cd-", sectionId: "cds" },
   { prefix: "vinilo-", sectionId: "vinilos" },
   { prefix: "libro-", sectionId: "libros" },

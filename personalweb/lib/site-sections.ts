@@ -115,6 +115,31 @@ export const SITE_SECTIONS: SiteSection[] = [
     },
   },
   {
+    href: "/discos",
+    sectionId: "discos",
+    title: "Aquellos maravillosos años",
+    eyebrow: "Discos",
+    description:
+      "Una línea temporal por años para recorrer discos clave, ver sus portadas y seguir la historia de cada grupo sin perder el hilo.",
+    summary: "Cronología visual de grupos, discos y carátulas.",
+    details: [
+      "Cada año reúne debajo las carátulas que tocaron en ese momento y permite leer de un vistazo qué grupo publicó qué disco.",
+      "La idea no es buscar por un formulario, sino entrar en la cronología y dejar que las portadas y los nombres cuenten la historia.",
+      "Un bloque pensado para seguir trayectorias y épocas completas con una lectura visual mucho más directa.",
+    ],
+    visual: {
+      kicker: "Línea temporal",
+      title: "Recorre aquí historia de tu vida",
+      caption: "Repasa la música que cambio el mundo y escoge tu año",
+      cards: [],
+      gradientClass: "from-violet-300/22 via-cyan-300/10 to-amber-300/18",
+      glowPrimaryClass: "bg-violet-300/22",
+      glowSecondaryClass: "bg-amber-300/20",
+      badgeClass: "border-violet-200/30 bg-violet-300/12 text-violet-50",
+      valueClass: "text-violet-50",
+    },
+  },
+  {
     href: "/cds",
     sectionId: "cds",
     title: "CDs",

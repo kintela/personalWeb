@@ -12,6 +12,7 @@ type PublicPagePath =
   | "/historia"
   | "/mtv"
   | "/cds"
+  | "/discos"
   | "/libros";
 
 type PublicPageMetadata = {
@@ -81,6 +82,11 @@ const PAGE_METADATA: Record<PublicPagePath, PublicPageMetadata> = {
     title: "Colección de CDs",
     description:
       "Colección de CDs con filtros por grupo, año y relación con Spotify dentro de kintela.es.",
+  },
+  "/discos": {
+    title: "Aquellos maravillosos años",
+    description:
+      "Línea temporal de discos por años con carátulas, grupos y álbumes destacados dentro de kintela.es.",
   },
   "/libros": {
     title: "Libros de música y biografías",
