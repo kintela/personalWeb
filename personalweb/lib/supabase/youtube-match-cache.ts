@@ -621,9 +621,12 @@ export async function upsertYouTubeMatchCache({
         );
 
     if (error && isMissingDurationColumnError(error.message)) {
-      const legacyPayload = { ...basePayload };
+      const {
+        duration_seconds: legacyDurationSeconds,
+        ...legacyPayload
+      } = basePayload;
 
-      delete legacyPayload.duration_seconds;
+      void legacyDurationSeconds;
 
       ({ error } = existingRow
         ? await supabase
