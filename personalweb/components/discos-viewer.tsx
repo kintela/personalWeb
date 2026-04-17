@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useState } from "react";
 
+import { DiscosYearObservationPanel } from "@/components/discos-year-observation-panel";
 import {
   GridDensityControls,
   usePersistedGridDensity,
@@ -15,6 +17,8 @@ type DiscosViewerProps = {
   error: string | null;
   totalCount: number;
   yearObservations: Record<string, string>;
+  adminConfigured: boolean;
+  initiallyAdminUnlocked: boolean;
 };
 
 type YearSection = {
@@ -54,17 +58,67 @@ function buildYearSections(
   return [...sections.values()];
 }
 
+function buildNextYearObservations(
+  currentYearObservations: Record<string, string>,
+  yearKey: string,
+  observationValue: string,
+) {
+  const trimmedObservation = observationValue.trim();
+  const nextYearObservations = { ...currentYearObservations };
+
+  if (trimmedObservation) {
+    nextYearObservations[yearKey] = trimmedObservation;
+    return nextYearObservations;
+  }
+
+  delete nextYearObservations[yearKey];
+  return nextYearObservations;
+}
+
 export function DiscosViewer({
   discos,
   configured,
   error,
   totalCount,
   yearObservations,
+  adminConfigured,
+  initiallyAdminUnlocked,
 }: DiscosViewerProps) {
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
     DISCOS_VIEWER_GRID_STORAGE_KEY,
   );
-  const yearSections = buildYearSections(discos, yearObservations);
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(initiallyAdminUnlocked);
+  const [currentYearObservations, setCurrentYearObservations] =
+    useState(yearObservations);
+  const [editingYearKey, setEditingYearKey] = useState("");
+  const [editingObservation, setEditingObservation] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editSuccess, setEditSuccess] = useState("");
+  const [editFeedbackYearKey, setEditFeedbackYearKey] = useState("");
+
+  useEffect(() => {
+    setIsAdminUnlocked(initiallyAdminUnlocked);
+  }, [initiallyAdminUnlocked]);
+
+  useEffect(() => {
+    setCurrentYearObservations(yearObservations);
+  }, [yearObservations]);
+
+  useEffect(() => {
+    if (!isAdminUnlocked) {
+      setEditingYearKey("");
+      setEditingObservation("");
+      setEditError("");
+      setEditSuccess("");
+      setEditFeedbackYearKey("");
+    }
+  }, [isAdminUnlocked]);
+
+  const yearSections = buildYearSections(discos, currentYearObservations);
+  const editableYears = yearSections
+    .filter((section) => section.key !== "sin-ano")
+    .map((section) => section.key);
   const visibleGroupCount = new Set(
     discos.map((disco) => disco.groupName).filter(Boolean),
   ).size;
@@ -75,8 +129,62 @@ export function DiscosViewer({
     gridDensity === "dense"
       ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
       : gridDensity === "compact"
-        ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-        : "grid gap-5 sm:grid-cols-2 xl:grid-cols-3";
+      ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+      : "grid gap-5 sm:grid-cols-2 xl:grid-cols-3";
+
+  async function handleInlineObservationSave(yearKey: string) {
+    setIsSavingEdit(true);
+    setEditError("");
+    setEditSuccess("");
+
+    try {
+      const response = await fetch("/api/discos/year-observations", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          entries: [
+            {
+              yearPublicacion: Number(yearKey),
+              observaciones: editingObservation,
+            },
+          ],
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            error?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload?.ok) {
+        if (response.status === 401) {
+          setIsAdminUnlocked(false);
+        }
+
+        setEditError(payload?.error ?? "No he podido guardar la observación.");
+        return;
+      }
+
+      setCurrentYearObservations((current) =>
+        buildNextYearObservations(current, yearKey, editingObservation),
+      );
+      setEditingYearKey("");
+      setEditingObservation("");
+      setEditFeedbackYearKey(yearKey);
+      setEditSuccess(
+        editingObservation.trim()
+          ? `Observación de ${yearKey} guardada.`
+          : `Observación de ${yearKey} borrada.`,
+      );
+    } catch {
+      setEditError("No he podido guardar la observación.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
 
   return (
     <section className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/6 px-6 py-8 shadow-[0_32px_90px_rgba(15,23,42,0.25)] backdrop-blur md:px-10 md:py-10">
@@ -150,6 +258,15 @@ export function DiscosViewer({
           </div>
         ) : (
           <div className="space-y-8">
+            <DiscosYearObservationPanel
+              years={editableYears}
+              initialObservations={currentYearObservations}
+              isUnlocked={isAdminUnlocked}
+              adminConfigured={adminConfigured}
+              onUnlockedChange={setIsAdminUnlocked}
+              onObservationsChange={setCurrentYearObservations}
+            />
+
             <div className="flex justify-end">
               <GridDensityControls
                 gridDensity={gridDensity}
@@ -181,10 +298,101 @@ export function DiscosViewer({
                   </div>
 
                   <div className="space-y-5">
-                    {section.observation ? (
-                      <div className="rounded-[1.6rem] border border-cyan-300/18 bg-cyan-300/8 px-5 py-4 text-sm leading-7 text-slate-200 shadow-[0_18px_40px_rgba(8,145,178,0.08)]">
-                        {section.observation}
+                    {editingYearKey === section.key ? (
+                      <div className="rounded-[1.6rem] border border-cyan-300/25 bg-cyan-300/8 px-5 py-4 shadow-[0_18px_40px_rgba(8,145,178,0.08)]">
+                        <div className="space-y-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-100">
+                              Editando {section.label}
+                            </p>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                setEditingYearKey("");
+                                setEditingObservation("");
+                                setEditError("");
+                                setEditSuccess("");
+                                setEditFeedbackYearKey("");
+                              }}
+                                className="rounded-full border border-white/12 bg-slate-950/55 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-white/20 hover:text-white"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleInlineObservationSave(section.key)}
+                                disabled={isSavingEdit}
+                                className="rounded-full bg-cyan-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isSavingEdit ? "Guardando..." : "Guardar"}
+                              </button>
+                            </div>
+                          </div>
+
+                          <textarea
+                            value={editingObservation}
+                            onChange={(event) => setEditingObservation(event.target.value)}
+                            rows={6}
+                            className="min-h-36 w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm leading-7 text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                            placeholder={`Observaciones para ${section.label}`}
+                          />
+
+                          {editError ? (
+                            <p className="text-sm text-rose-200">{editError}</p>
+                          ) : null}
+                        </div>
                       </div>
+                    ) : section.observation ? (
+                      <div className="rounded-[1.6rem] border border-cyan-300/18 bg-cyan-300/8 px-5 py-4 shadow-[0_18px_40px_rgba(8,145,178,0.08)]">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <p className="text-sm leading-7 text-slate-200">
+                            {section.observation}
+                          </p>
+                          {isAdminUnlocked ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingYearKey(section.key);
+                                setEditingObservation(section.observation ?? "");
+                                setEditError("");
+                                setEditSuccess("");
+                                setEditFeedbackYearKey("");
+                              }}
+                              className="shrink-0 rounded-full border border-cyan-300/28 bg-slate-950/45 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/60 hover:text-white"
+                            >
+                              Editar
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : isAdminUnlocked ? (
+                      <div className="rounded-[1.6rem] border border-dashed border-cyan-300/18 bg-cyan-300/6 px-5 py-4">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-sm text-slate-300">
+                            Todavía no hay observaciones para {section.label}.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingYearKey(section.key);
+                              setEditingObservation("");
+                              setEditError("");
+                              setEditSuccess("");
+                              setEditFeedbackYearKey("");
+                            }}
+                            className="shrink-0 rounded-full border border-cyan-300/28 bg-slate-950/45 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/60 hover:text-white"
+                          >
+                            Añadir
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {editSuccess &&
+                    editingYearKey === "" &&
+                    editFeedbackYearKey === section.key ? (
+                      <p className="text-sm text-emerald-200">{editSuccess}</p>
                     ) : null}
 
                     <div className={gridClassName}>

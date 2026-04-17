@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DiscosViewer } from "@/components/discos-viewer";
 import { SectionPageShell } from "@/components/section-page-shell";
+import { isAdminAuthenticated, isAdminConfigured } from "@/lib/admin/auth";
 import { buildPageMetadata } from "@/lib/page-metadata";
 import { getDiscoList } from "@/lib/supabase/discos";
 
@@ -8,7 +9,10 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = buildPageMetadata("/discos");
 
 export default async function DiscosPage() {
-  const discos = await getDiscoList();
+  const [discos, initiallyAdminUnlocked] = await Promise.all([
+    getDiscoList(),
+    isAdminAuthenticated(),
+  ]);
 
   return (
     <SectionPageShell currentHref="/discos">
@@ -18,6 +22,8 @@ export default async function DiscosPage() {
         error={discos.error}
         totalCount={discos.totalCount}
         yearObservations={discos.yearObservations}
+        adminConfigured={isAdminConfigured()}
+        initiallyAdminUnlocked={initiallyAdminUnlocked}
       />
     </SectionPageShell>
   );
