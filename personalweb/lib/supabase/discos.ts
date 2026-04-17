@@ -4,6 +4,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const DISCOS_SELECT_COLUMNS =
   "id, nombre, year_publicacion, caratula, discografica, productor, grupo_id, created_at, updated_at, grupo:grupos!discos_grupo_id_fkey(nombre)";
+const DISCOS_YEAR_OBSERVACIONES_SELECT_COLUMNS =
+  "year_publicacion, observaciones";
 const DISCO_COVER_BUCKET = "caratulas";
 const DISCO_COVER_FOLDER = "discos";
 
@@ -30,6 +32,11 @@ type DiscoDatabaseRow = {
   grupo: DiscoGroupRelation;
 };
 
+type DiscoYearObservationRow = {
+  year_publicacion: number | null;
+  observaciones: string | null;
+};
+
 export type DiscoAsset = {
   id: string;
   title: string;
@@ -47,6 +54,7 @@ export type DiscoListResult = {
   configured: boolean;
   error: string | null;
   totalCount: number;
+  yearObservations: Record<string, string>;
   filterValue: string;
   groupValue: string;
   yearValue: string;
@@ -217,6 +225,23 @@ function mapDisco(row: DiscoDatabaseRow): DiscoAsset {
   };
 }
 
+function mapDiscoYearObservations(rows: DiscoYearObservationRow[] | null) {
+  const observations: Record<string, string> = {};
+
+  for (const row of rows ?? []) {
+    const yearKey = getDiscoYearValue(row.year_publicacion);
+    const observation = row.observaciones?.trim();
+
+    if (!yearKey || !observation) {
+      continue;
+    }
+
+    observations[yearKey] = observation;
+  }
+
+  return observations;
+}
+
 export async function getDiscoList(
   options: GetDiscoListOptions = {},
 ): Promise<DiscoListResult> {
@@ -232,6 +257,7 @@ export async function getDiscoList(
       error:
         "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
       totalCount: 0,
+      yearObservations: {},
       filterValue: requestedFilterValue,
       groupValue: requestedGroupValue,
       yearValue: requestedYearValue,
@@ -240,11 +266,17 @@ export async function getDiscoList(
     };
   }
 
-  const { data, error } = await supabase
-    .from("discos")
-    .select(DISCOS_SELECT_COLUMNS)
-    .order("year_publicacion", { ascending: true })
-    .order("nombre", { ascending: true });
+  const [{ data, error }, { data: yearObservationData }] = await Promise.all([
+    supabase
+      .from("discos")
+      .select(DISCOS_SELECT_COLUMNS)
+      .order("year_publicacion", { ascending: true })
+      .order("nombre", { ascending: true }),
+    supabase
+      .from("discos_year_observaciones")
+      .select(DISCOS_YEAR_OBSERVACIONES_SELECT_COLUMNS)
+      .order("year_publicacion", { ascending: true }),
+  ]);
 
   if (error) {
     return {
@@ -252,6 +284,7 @@ export async function getDiscoList(
       configured: true,
       error: `No he podido leer los discos: ${error.message}`,
       totalCount: 0,
+      yearObservations: {},
       filterValue: requestedFilterValue,
       groupValue: requestedGroupValue,
       yearValue: requestedYearValue,
@@ -261,6 +294,9 @@ export async function getDiscoList(
   }
 
   const rows = (data as DiscoDatabaseRow[] | null) ?? [];
+  const yearObservations = mapDiscoYearObservations(
+    (yearObservationData as DiscoYearObservationRow[] | null) ?? null,
+  );
   const groupOptions = [
     ...new Set(
       rows
@@ -303,6 +339,7 @@ export async function getDiscoList(
     configured: true,
     error: null,
     totalCount: sortedRows.length,
+    yearObservations,
     filterValue: requestedFilterValue,
     groupValue: normalizedGroupValue,
     yearValue: normalizedYearValue,

@@ -14,17 +14,22 @@ type DiscosViewerProps = {
   configured: boolean;
   error: string | null;
   totalCount: number;
+  yearObservations: Record<string, string>;
 };
 
 type YearSection = {
   key: string;
   label: string;
   discos: DiscoAsset[];
+  observation: string | null;
 };
 
 const DISCOS_VIEWER_GRID_STORAGE_KEY = "discos-viewer-grid-density";
 
-function buildYearSections(discos: DiscoAsset[]): YearSection[] {
+function buildYearSections(
+  discos: DiscoAsset[],
+  yearObservations: Record<string, string>,
+): YearSection[] {
   const sections = new Map<string, YearSection>();
 
   for (const disco of discos) {
@@ -42,6 +47,7 @@ function buildYearSections(discos: DiscoAsset[]): YearSection[] {
       key: sectionKey,
       label: Number.isInteger(disco.year) ? String(disco.year) : "Sin año",
       discos: [disco],
+      observation: yearObservations[sectionKey] ?? null,
     });
   }
 
@@ -53,11 +59,12 @@ export function DiscosViewer({
   configured,
   error,
   totalCount,
+  yearObservations,
 }: DiscosViewerProps) {
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
     DISCOS_VIEWER_GRID_STORAGE_KEY,
   );
-  const yearSections = buildYearSections(discos);
+  const yearSections = buildYearSections(discos, yearObservations);
   const visibleGroupCount = new Set(
     discos.map((disco) => disco.groupName).filter(Boolean),
   ).size;
@@ -173,50 +180,58 @@ export function DiscosViewer({
                     </p>
                   </div>
 
-                  <div className={gridClassName}>
-                    {section.discos.map((disco) => {
-                      const anchorId = `disco-${disco.id}`;
+                  <div className="space-y-5">
+                    {section.observation ? (
+                      <div className="rounded-[1.6rem] border border-cyan-300/18 bg-cyan-300/8 px-5 py-4 text-sm leading-7 text-slate-200 shadow-[0_18px_40px_rgba(8,145,178,0.08)]">
+                        {section.observation}
+                      </div>
+                    ) : null}
 
-                      return (
-                        <article
-                          key={disco.id}
-                          id={anchorId}
-                          className="group relative scroll-mt-32 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
-                        >
-                          <div className="relative aspect-square overflow-hidden border-b border-white/10 bg-slate-900">
-                            <ShareCardButton
-                              anchorId={anchorId}
-                              sectionId="discos"
-                              className="absolute right-4 top-4 z-10"
-                            />
+                    <div className={gridClassName}>
+                      {section.discos.map((disco) => {
+                        const anchorId = `disco-${disco.id}`;
 
-                            {disco.coverSrc ? (
-                              <Image
-                                src={disco.coverSrc}
-                                alt={`Carátula de ${disco.title}`}
-                                fill
-                                unoptimized
-                                className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                                sizes="(min-width: 1280px) 280px, (min-width: 640px) 50vw, 100vw"
+                        return (
+                          <article
+                            key={disco.id}
+                            id={anchorId}
+                            className="group relative scroll-mt-32 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                          >
+                            <div className="relative aspect-square overflow-hidden border-b border-white/10 bg-slate-900">
+                              <ShareCardButton
+                                anchorId={anchorId}
+                                sectionId="discos"
+                                className="absolute right-4 top-4 z-10"
                               />
-                            ) : (
-                              <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-4 text-center text-[0.72rem] uppercase tracking-[0.28em] text-slate-400">
-                                Sin carátula
-                              </div>
-                            )}
-                          </div>
 
-                          <div className="space-y-2 p-5">
-                            <p className="text-[0.72rem] font-medium uppercase tracking-[0.24em] text-cyan-200/88">
-                              {disco.groupName ?? "Grupo sin asignar"}
-                            </p>
-                            <h3 className="text-lg font-semibold leading-tight text-white">
-                              {disco.title}
-                            </h3>
-                          </div>
-                        </article>
-                      );
-                    })}
+                              {disco.coverSrc ? (
+                                <Image
+                                  src={disco.coverSrc}
+                                  alt={`Carátula de ${disco.title}`}
+                                  fill
+                                  unoptimized
+                                  className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                                  sizes="(min-width: 1280px) 280px, (min-width: 640px) 50vw, 100vw"
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-4 text-center text-[0.72rem] uppercase tracking-[0.28em] text-slate-400">
+                                  Sin carátula
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="space-y-2 p-5">
+                              <p className="text-[0.72rem] font-medium uppercase tracking-[0.24em] text-cyan-200/88">
+                                {disco.groupName ?? "Grupo sin asignar"}
+                              </p>
+                              <h3 className="text-lg font-semibold leading-tight text-white">
+                                {disco.title}
+                              </h3>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               ))}

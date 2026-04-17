@@ -17,6 +17,7 @@ export default async function DiscosPage() {
         configured={discos.configured}
         error={discos.error}
         totalCount={discos.totalCount}
+        yearObservations={discos.yearObservations}
       />
     </SectionPageShell>
   );
