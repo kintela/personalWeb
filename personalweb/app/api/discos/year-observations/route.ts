@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
 
 export const runtime = "nodejs";
@@ -56,7 +56,7 @@ function normalizeEntries(payload: ObservationPayload) {
 }
 
 async function readObservationMap(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
 ) {
   const { data, error } = await supabase
     .from("discos_year_observaciones")

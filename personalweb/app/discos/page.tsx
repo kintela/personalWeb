@@ -5,7 +5,7 @@ import { isAdminAuthenticated, isAdminConfigured } from "@/lib/admin/auth";
 import { buildPageMetadata } from "@/lib/page-metadata";
 import type { SpotifyPlaylistAsset } from "@/lib/spotify-types";
 import { getSpotifyPlaylistList } from "@/lib/spotify";
-import { getDiscoList } from "@/lib/supabase/discos";
+import { getDiscoGroupOptions, getDiscoList } from "@/lib/supabase/discos";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = buildPageMetadata("/discos");
@@ -42,10 +42,11 @@ function buildYearSpotifyPlaylists(
 }
 
 export default async function DiscosPage() {
-  const [discos, initiallyAdminUnlocked, spotifyPlaylists] = await Promise.all([
+  const [discos, initiallyAdminUnlocked, spotifyPlaylists, discoGroupOptions] = await Promise.all([
     getDiscoList(),
     isAdminAuthenticated(),
     getSpotifyPlaylistList(),
+    getDiscoGroupOptions(),
   ]);
   const discoYears = [
     ...new Set(
@@ -70,6 +71,7 @@ export default async function DiscosPage() {
         adminConfigured={isAdminConfigured()}
         initiallyAdminUnlocked={initiallyAdminUnlocked}
         yearSpotifyPlaylists={yearSpotifyPlaylists}
+        groupOptions={discoGroupOptions}
       />
     </SectionPageShell>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { ShareCardButton } from "@/components/share-card-button";
 import { YouTubeEmbeddedPlayer } from "@/components/youtube-embedded-player";
@@ -38,6 +38,94 @@ function buildMtvSearchHaystack(video: RankedYouTubeVideoAsset) {
     .filter(Boolean)
     .join(" \n")
     .toLocaleLowerCase("es-ES");
+}
+
+function getValidSelectedTrackName(
+  selectedTrackName: string,
+  trackOptions: string[],
+) {
+  if (!selectedTrackName || trackOptions.includes(selectedTrackName)) {
+    return selectedTrackName;
+  }
+
+  return "";
+}
+
+function getVisibleSelectedCacheKey(
+  selectedCacheKey: string,
+  filteredVideos: RankedYouTubeVideoAsset[],
+) {
+  if (filteredVideos.length === 0) {
+    return "";
+  }
+
+  if (
+    selectedCacheKey &&
+    filteredVideos.some((video) => video.cacheKey === selectedCacheKey)
+  ) {
+    return selectedCacheKey;
+  }
+
+  return filteredVideos[0]?.cacheKey ?? "";
+}
+
+function pickRandomValue<T>(values: T[]) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const randomIndex = Math.floor(Math.random() * values.length);
+
+  return values[randomIndex] ?? null;
+}
+
+function normalizeShufflePlaybackState(
+  shufflePlayback: ShufflePlaybackState,
+  filteredVideos: RankedYouTubeVideoAsset[],
+  selectedCacheKey: string,
+) {
+  if (filteredVideos.length === 0) {
+    return { history: [], index: -1 } satisfies ShufflePlaybackState;
+  }
+
+  const visibleCacheKeySet = new Set(
+    filteredVideos.map((video) => video.cacheKey),
+  );
+  const nextHistory = shufflePlayback.history.filter((cacheKey) =>
+    visibleCacheKeySet.has(cacheKey),
+  );
+
+  if (nextHistory.length === 0) {
+    const fallbackCacheKey =
+      selectedCacheKey && visibleCacheKeySet.has(selectedCacheKey)
+        ? selectedCacheKey
+        : filteredVideos[0]?.cacheKey ?? "";
+
+    return fallbackCacheKey
+      ? { history: [fallbackCacheKey], index: 0 }
+      : { history: [], index: -1 };
+  }
+
+  const nextIndex = Math.min(
+    Math.max(shufflePlayback.index, 0),
+    nextHistory.length - 1,
+  );
+  const nextSelectedCacheKey =
+    selectedCacheKey && visibleCacheKeySet.has(selectedCacheKey)
+      ? selectedCacheKey
+      : nextHistory[nextIndex] ?? "";
+  const selectedHistoryIndex = nextHistory.indexOf(nextSelectedCacheKey);
+
+  if (selectedHistoryIndex >= 0) {
+    return {
+      history: nextHistory,
+      index: selectedHistoryIndex,
+    } satisfies ShufflePlaybackState;
+  }
+
+  return nextSelectedCacheKey
+    ? { history: [nextSelectedCacheKey], index: 0 }
+    : { history: [], index: -1 };
 }
 
 function ShuffleIcon() {
@@ -154,13 +242,20 @@ export function MtvViewer({
       sensitivity: "base",
     }),
   );
+  const effectiveSelectedTrackName = getValidSelectedTrackName(
+    selectedTrackName,
+    trackOptions,
+  );
   const normalizedSearchValue = searchInput.trim().toLocaleLowerCase("es-ES");
   const filteredVideos = videos.filter((video) => {
     if (selectedArtist && video.artistsLabel !== selectedArtist) {
       return false;
     }
 
-    if (selectedTrackName && video.trackName !== selectedTrackName) {
+    if (
+      effectiveSelectedTrackName &&
+      video.trackName !== effectiveSelectedTrackName
+    ) {
       return false;
     }
 
@@ -178,8 +273,17 @@ export function MtvViewer({
   const filteredVideoTotalDurationLabel = formatYouTubeDurationTotalLabel(
     filteredVideoTotalDurationSeconds,
   );
+  const visibleSelectedCacheKey = getVisibleSelectedCacheKey(
+    selectedCacheKey,
+    filteredVideos,
+  );
+  const normalizedShufflePlayback = normalizeShufflePlaybackState(
+    shufflePlayback,
+    filteredVideos,
+    visibleSelectedCacheKey,
+  );
   const selectedVideo =
-    filteredVideos.find((video) => video.cacheKey === selectedCacheKey) ??
+    filteredVideos.find((video) => video.cacheKey === visibleSelectedCacheKey) ??
     filteredVideos[0] ??
     null;
   const selectedVideoIndex = selectedVideo
@@ -188,101 +292,11 @@ export function MtvViewer({
       )
     : -1;
   const hasPreviousVideo = isShuffleEnabled
-    ? shufflePlayback.index > 0
+    ? normalizedShufflePlayback.index > 0
     : selectedVideoIndex > 0;
   const hasNextVideo = isShuffleEnabled
     ? filteredVideos.length > 1
     : selectedVideoIndex >= 0 && selectedVideoIndex < filteredVideos.length - 1;
-
-  useEffect(() => {
-    if (!selectedTrackName || trackOptions.includes(selectedTrackName)) {
-      return;
-    }
-
-    setSelectedTrackName("");
-  }, [selectedTrackName, trackOptions]);
-
-  useEffect(() => {
-    if (!isShuffleEnabled) {
-      return;
-    }
-
-    const visibleCacheKeySet = new Set(
-      filteredVideos.map((video) => video.cacheKey),
-    );
-
-    setShufflePlayback((currentPlayback) => {
-      const nextHistory = currentPlayback.history.filter((cacheKey) =>
-        visibleCacheKeySet.has(cacheKey),
-      );
-
-      if (nextHistory.length === 0) {
-        const fallbackCacheKey =
-          selectedCacheKey && visibleCacheKeySet.has(selectedCacheKey)
-            ? selectedCacheKey
-            : filteredVideos[0]?.cacheKey ?? "";
-
-        return fallbackCacheKey
-          ? { history: [fallbackCacheKey], index: 0 }
-          : { history: [], index: -1 };
-      }
-
-      const nextIndex = Math.min(currentPlayback.index, nextHistory.length - 1);
-      const nextSelectedCacheKey =
-        selectedCacheKey && visibleCacheKeySet.has(selectedCacheKey)
-          ? selectedCacheKey
-          : nextHistory[Math.max(nextIndex, 0)] ?? "";
-      const selectedHistoryIndex = nextHistory.indexOf(nextSelectedCacheKey);
-
-      if (
-        nextHistory.length === currentPlayback.history.length &&
-        nextHistory.every(
-          (cacheKey, index) => cacheKey === currentPlayback.history[index],
-        ) &&
-        selectedHistoryIndex === currentPlayback.index
-      ) {
-        return currentPlayback;
-      }
-
-      if (selectedHistoryIndex >= 0) {
-        return {
-          history: nextHistory,
-          index: selectedHistoryIndex,
-        };
-      }
-
-      return {
-        history: [nextSelectedCacheKey],
-        index: nextSelectedCacheKey ? 0 : -1,
-      };
-    });
-  }, [filteredVideos, isShuffleEnabled, selectedCacheKey]);
-
-  useEffect(() => {
-    if (filteredVideos.length === 0) {
-      setSelectedCacheKey("");
-      setShufflePlayback((currentPlayback) =>
-        currentPlayback.history.length === 0 && currentPlayback.index === -1
-          ? currentPlayback
-          : { history: [], index: -1 },
-      );
-      return;
-    }
-
-    if (
-      selectedCacheKey &&
-      filteredVideos.some((video) => video.cacheKey === selectedCacheKey)
-    ) {
-      return;
-    }
-
-    const fallbackCacheKey = filteredVideos[0]?.cacheKey ?? "";
-    setSelectedCacheKey(fallbackCacheKey);
-
-    if (isShuffleEnabled) {
-      setShufflePlayback(fallbackCacheKey ? { history: [fallbackCacheKey], index: 0 } : { history: [], index: -1 });
-    }
-  }, [filteredVideos, isShuffleEnabled, selectedCacheKey]);
 
   function handleResetFilters() {
     setSearchInput("");
@@ -326,45 +340,48 @@ export function MtvViewer({
 
     if (isShuffleEnabled) {
       if (direction === "previous") {
-        if (shufflePlayback.index <= 0) {
+        if (normalizedShufflePlayback.index <= 0) {
           return;
         }
 
-        const nextIndex = shufflePlayback.index - 1;
-        const nextCacheKey = shufflePlayback.history[nextIndex] ?? "";
+        const nextIndex = normalizedShufflePlayback.index - 1;
+        const nextCacheKey = normalizedShufflePlayback.history[nextIndex] ?? "";
 
         if (!nextCacheKey) {
           return;
         }
 
-        setShufflePlayback((currentPlayback) => ({
-          history: currentPlayback.history,
+        setShufflePlayback({
+          history: normalizedShufflePlayback.history,
           index: nextIndex,
-        }));
+        });
         setSelectedCacheKey(nextCacheKey);
         return;
       }
 
-      if (shufflePlayback.index < shufflePlayback.history.length - 1) {
-        const nextIndex = shufflePlayback.index + 1;
-        const nextCacheKey = shufflePlayback.history[nextIndex] ?? "";
+      if (
+        normalizedShufflePlayback.index <
+        normalizedShufflePlayback.history.length - 1
+      ) {
+        const nextIndex = normalizedShufflePlayback.index + 1;
+        const nextCacheKey = normalizedShufflePlayback.history[nextIndex] ?? "";
 
         if (!nextCacheKey) {
           return;
         }
 
-        setShufflePlayback((currentPlayback) => ({
-          history: currentPlayback.history,
+        setShufflePlayback({
+          history: normalizedShufflePlayback.history,
           index: nextIndex,
-        }));
+        });
         setSelectedCacheKey(nextCacheKey);
         return;
       }
 
       const visibleCacheKeys = filteredVideos.map((video) => video.cacheKey);
-      const currentHistory = shufflePlayback.history.slice(
+      const currentHistory = normalizedShufflePlayback.history.slice(
         0,
-        shufflePlayback.index + 1,
+        normalizedShufflePlayback.index + 1,
       );
       const unseenCacheKeys = visibleCacheKeys.filter(
         (cacheKey) =>
@@ -381,10 +398,7 @@ export function MtvViewer({
         return;
       }
 
-      const nextCacheKey =
-        candidateCacheKeys[
-          Math.floor(Math.random() * candidateCacheKeys.length)
-        ] ?? "";
+      const nextCacheKey = pickRandomValue(candidateCacheKeys) ?? "";
 
       if (!nextCacheKey) {
         return;
@@ -536,7 +550,7 @@ export function MtvViewer({
                     </select>
 
                     <select
-                      value={selectedTrackName}
+                      value={effectiveSelectedTrackName}
                       onChange={(event) =>
                         setSelectedTrackName(event.target.value)
                       }

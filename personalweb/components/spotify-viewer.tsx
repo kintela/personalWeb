@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  useCallback,
   startTransition,
   useEffect,
   useEffectEvent,
@@ -587,7 +588,7 @@ export function SpotifyViewer({
     });
   });
 
-  async function requestNativeFullscreen() {
+  const requestNativeFullscreen = useCallback(async () => {
     if (typeof document === "undefined") {
       return;
     }
@@ -614,7 +615,7 @@ export function SpotifyViewer({
         setIsVideoExtendedMode(false);
       }
     }
-  }
+  }, []);
 
   async function exitNativeFullscreen() {
     if (typeof document === "undefined" || !document.fullscreenElement) {
@@ -756,7 +757,12 @@ export function SpotifyViewer({
     });
 
     return () => window.cancelAnimationFrame(animationFrameId);
-  }, [isVideoExtendedMode, requestNativeFullscreen, selectedPlaylist, shouldAutoEnterFullscreen]);
+  }, [
+    isVideoExtendedMode,
+    requestNativeFullscreen,
+    selectedPlaylist,
+    shouldAutoEnterFullscreen,
+  ]);
 
   useEffect(() => {
     if (videoCacheFilterMode === "all" || !selectedTrackId) {
@@ -793,7 +799,7 @@ export function SpotifyViewer({
       block: "nearest",
       behavior: "smooth",
     });
-  }, [isNativeFullscreen, isVideoExtendedMode, selectedTrack?.id]);
+  }, [isNativeFullscreen, isVideoExtendedMode, selectedTrack]);
 
   useEffect(() => {
     if (!sharedSpotifyPlaylistId) {

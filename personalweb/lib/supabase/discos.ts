@@ -37,6 +37,11 @@ type DiscoYearObservationRow = {
   observaciones: string | null;
 };
 
+type DiscoGroupRow = {
+  id: number | string | null;
+  nombre: string | null;
+};
+
 export type DiscoAsset = {
   id: string;
   title: string;
@@ -47,6 +52,11 @@ export type DiscoAsset = {
   producer: string | null;
   groupId: string;
   groupName: string | null;
+};
+
+export type DiscoGroupOption = {
+  id: string;
+  name: string;
 };
 
 export type DiscoListResult = {
@@ -147,6 +157,14 @@ export function getDiscoCoverPublicUrl(coverPath: string | null) {
   const encodedPath = objectPath.split("/").map(encodeURIComponent).join("/");
 
   return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(DISCO_COVER_BUCKET)}/${encodedPath}`;
+}
+
+export function getDiscoCoverBucketName() {
+  return DISCO_COVER_BUCKET;
+}
+
+export function getDiscoCoverFolderName() {
+  return DISCO_COVER_FOLDER;
 }
 
 function buildDiscoSearchHaystack(disco: DiscoDatabaseRow) {
@@ -346,4 +364,39 @@ export async function getDiscoList(
     groupOptions,
     yearOptions,
   };
+}
+
+export async function getDiscoGroupOptions(): Promise<DiscoGroupOption[]> {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("grupos")
+    .select("id, nombre")
+    .order("nombre", { ascending: true });
+
+  if (error) {
+    return [];
+  }
+
+  const rows = (data as DiscoGroupRow[] | null) ?? [];
+
+  return rows.flatMap((row) => {
+    const idValue = row.id;
+    const nameValue = row.nombre?.trim() ?? "";
+
+    if ((typeof idValue !== "number" && typeof idValue !== "string") || !nameValue) {
+      return [];
+    }
+
+    return [
+      {
+        id: String(idValue),
+        name: nameValue,
+      } satisfies DiscoGroupOption,
+    ];
+  });
 }

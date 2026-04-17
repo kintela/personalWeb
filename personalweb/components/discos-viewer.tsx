@@ -4,13 +4,14 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
+import { DiscoUploadForm } from "@/components/disco-upload-form";
 import { DiscosYearObservationPanel } from "@/components/discos-year-observation-panel";
 import {
   GridDensityControls,
   usePersistedGridDensity,
 } from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
-import type { DiscoAsset } from "@/lib/supabase/discos";
+import type { DiscoAsset, DiscoGroupOption } from "@/lib/supabase/discos";
 
 type DiscosViewerProps = {
   discos: DiscoAsset[];
@@ -28,6 +29,7 @@ type DiscosViewerProps = {
       trackCount: number;
     }
   >;
+  groupOptions: DiscoGroupOption[];
 };
 
 type YearSection = {
@@ -109,6 +111,7 @@ export function DiscosViewer({
   adminConfigured,
   initiallyAdminUnlocked,
   yearSpotifyPlaylists,
+  groupOptions,
 }: DiscosViewerProps) {
   const router = useRouter();
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
@@ -351,6 +354,13 @@ export function DiscosViewer({
                   </div>
 
                   <div className="space-y-5">
+                    {isAdminUnlocked && section.key !== "sin-ano" ? (
+                      <DiscoUploadForm
+                        year={section.key}
+                        groupOptions={groupOptions}
+                      />
+                    ) : null}
+
                     {editingYearKey === section.key ? (
                       <div className="rounded-[1.6rem] border border-cyan-300/25 bg-cyan-300/8 px-5 py-4 shadow-[0_18px_40px_rgba(8,145,178,0.08)]">
                         <div className="space-y-4">

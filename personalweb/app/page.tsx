@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { buildPageMetadata } from "@/lib/page-metadata";
 import { getVisibleSiteSections } from "@/lib/site-sections";
@@ -23,6 +24,30 @@ function getLandingAssetPublicUrl(path: string) {
     .join("/");
 
   return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(LANDING_IMAGE_BUCKET)}/${encodedPath}`;
+}
+
+function LandingPreviewImage({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className: string;
+}) {
+  return (
+    <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
+      <Image
+        src={src}
+        alt={alt}
+        width={1200}
+        height={700}
+        className={className}
+        loading="lazy"
+        sizes="(min-width: 1024px) 560px, 100vw"
+      />
+    </div>
+  );
 }
 
 export default function Home() {
@@ -193,110 +218,77 @@ export default function Home() {
                             ) : null}
                           </div>
                           {section.href === "/spotify" && spotifyLandingImageSrc ? (
-                            <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                              <img
-                                src={spotifyLandingImageSrc}
-                                alt="Vista de la sección de Spotify en la landing"
-                                className="h-52 w-full object-cover"
-                                loading="lazy"
-                              />
-                            </div>
+                            <LandingPreviewImage
+                              src={spotifyLandingImageSrc}
+                              alt="Vista de la sección de Spotify en la landing"
+                              className="h-52 w-full object-cover"
+                            />
                           ) : section.href === "/vinilos" && vinilosLandingImageSrc ? (
-                            <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                              <img
-                                src={vinilosLandingImageSrc}
-                                alt="Vista de la sección de Vinilos en la landing"
-                                className="h-52 w-full object-cover"
-                                loading="lazy"
-                              />
-                            </div>
+                            <LandingPreviewImage
+                              src={vinilosLandingImageSrc}
+                              alt="Vista de la sección de Vinilos en la landing"
+                              className="h-52 w-full object-cover"
+                            />
                           ) : null}
                         </div>
 
                         {section.href === "/cds" && cdsLandingImageSrc ? (
-                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                            <img
-                              src={cdsLandingImageSrc}
-                              alt="Vista de la sección de CDs en la landing"
-                              className="h-44 w-full object-cover"
-                              loading="lazy"
-                            />
-                          </div>
+                          <LandingPreviewImage
+                            src={cdsLandingImageSrc}
+                            alt="Vista de la sección de CDs en la landing"
+                            className="h-44 w-full object-cover"
+                          />
                         ) : section.href === "/mtv" && mtvLandingImageSrc ? (
-                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                            <img
-                              src={mtvLandingImageSrc}
-                              alt="Vista de la sección MTV en la landing"
-                              className="h-44 w-full object-cover"
-                              loading="lazy"
-                            />
-                          </div>
+                          <LandingPreviewImage
+                            src={mtvLandingImageSrc}
+                            alt="Vista de la sección MTV en la landing"
+                            className="h-44 w-full object-cover"
+                          />
                         ) : section.href === "/discos" && discosLandingImageSrc ? (
-                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                            <img
-                              src={discosLandingImageSrc}
-                              alt="Vista de la sección Aquellos maravillosos años en la landing"
-                              className="h-44 w-full bg-slate-950 object-contain object-top"
-                              loading="lazy"
-                            />
-                          </div>
+                          <LandingPreviewImage
+                            src={discosLandingImageSrc}
+                            alt="Vista de la sección Aquellos maravillosos años en la landing"
+                            className="h-44 w-full bg-slate-950 object-contain object-top"
+                          />
                         ) : section.href === "/libros" && librosLandingImageSrc ? (
-                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                            <img
-                              src={librosLandingImageSrc}
-                              alt="Vista de la sección de Libros en la landing"
-                              className="h-44 w-full object-cover"
-                              loading="lazy"
-                            />
-                          </div>
+                          <LandingPreviewImage
+                            src={librosLandingImageSrc}
+                            alt="Vista de la sección de Libros en la landing"
+                            className="h-44 w-full object-cover"
+                          />
                         ) : section.href === "/conciertos" &&
                           conciertosLandingImageSrc ? (
-                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                            <img
-                              src={conciertosLandingImageSrc}
-                              alt="Vista de la sección de Conciertos en la landing"
-                              className="h-44 w-full object-cover"
-                              loading="lazy"
-                            />
-                          </div>
+                          <LandingPreviewImage
+                            src={conciertosLandingImageSrc}
+                            alt="Vista de la sección de Conciertos en la landing"
+                            className="h-44 w-full object-cover"
+                          />
                         ) : section.href === "/fotos" && fotosLandingImageSrc ? (
-                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                            <img
-                              src={fotosLandingImageSrc}
-                              alt="Vista de la sección de Fotos en la landing"
-                              className="h-44 w-full object-cover"
-                              loading="lazy"
-                            />
-                          </div>
+                          <LandingPreviewImage
+                            src={fotosLandingImageSrc}
+                            alt="Vista de la sección de Fotos en la landing"
+                            className="h-44 w-full object-cover"
+                          />
                         ) : section.href === "/guitarra" &&
                           guitarraLandingImageSrc ? (
-                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                            <img
-                              src={guitarraLandingImageSrc}
-                              alt="Vista de la sección de Guitarra en la landing"
-                              className="h-44 w-full object-cover"
-                              loading="lazy"
-                            />
-                          </div>
+                          <LandingPreviewImage
+                            src={guitarraLandingImageSrc}
+                            alt="Vista de la sección de Guitarra en la landing"
+                            className="h-44 w-full object-cover"
+                          />
                         ) : section.href === "/videos" && videosLandingImageSrc ? (
-                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                            <img
-                              src={videosLandingImageSrc}
-                              alt="Vista de la sección de Videos en la landing"
-                              className="h-44 w-full object-cover"
-                              loading="lazy"
-                            />
-                          </div>
+                          <LandingPreviewImage
+                            src={videosLandingImageSrc}
+                            alt="Vista de la sección de Videos en la landing"
+                            className="h-44 w-full object-cover"
+                          />
                         ) : section.href === "/historia" &&
                           historiaLandingImageSrc ? (
-                          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/6">
-                            <img
-                              src={historiaLandingImageSrc}
-                              alt="Vista de la sección de Historia en la landing"
-                              className="h-44 w-full object-cover"
-                              loading="lazy"
-                            />
-                          </div>
+                          <LandingPreviewImage
+                            src={historiaLandingImageSrc}
+                            alt="Vista de la sección de Historia en la landing"
+                            className="h-44 w-full object-cover"
+                          />
                         ) : section.href === "/spotify" ||
                           section.href === "/fotos" ||
                           section.href === "/conciertos" ||
