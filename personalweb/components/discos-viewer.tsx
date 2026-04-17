@@ -19,6 +19,14 @@ type DiscosViewerProps = {
   yearObservations: Record<string, string>;
   adminConfigured: boolean;
   initiallyAdminUnlocked: boolean;
+  yearSpotifyPlaylists: Record<
+    string,
+    {
+      name: string;
+      externalUrl: string;
+      trackCount: number;
+    }
+  >;
 };
 
 type YearSection = {
@@ -26,6 +34,13 @@ type YearSection = {
   label: string;
   discos: DiscoAsset[];
   observation: string | null;
+  spotifyPlaylist:
+    | {
+        name: string;
+        externalUrl: string;
+        trackCount: number;
+      }
+    | null;
 };
 
 const DISCOS_VIEWER_GRID_STORAGE_KEY = "discos-viewer-grid-density";
@@ -33,6 +48,14 @@ const DISCOS_VIEWER_GRID_STORAGE_KEY = "discos-viewer-grid-density";
 function buildYearSections(
   discos: DiscoAsset[],
   yearObservations: Record<string, string>,
+  yearSpotifyPlaylists: Record<
+    string,
+    {
+      name: string;
+      externalUrl: string;
+      trackCount: number;
+    }
+  >,
 ): YearSection[] {
   const sections = new Map<string, YearSection>();
 
@@ -52,6 +75,7 @@ function buildYearSections(
       label: Number.isInteger(disco.year) ? String(disco.year) : "Sin año",
       discos: [disco],
       observation: yearObservations[sectionKey] ?? null,
+      spotifyPlaylist: yearSpotifyPlaylists[sectionKey] ?? null,
     });
   }
 
@@ -83,6 +107,7 @@ export function DiscosViewer({
   yearObservations,
   adminConfigured,
   initiallyAdminUnlocked,
+  yearSpotifyPlaylists,
 }: DiscosViewerProps) {
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
     DISCOS_VIEWER_GRID_STORAGE_KEY,
@@ -115,7 +140,11 @@ export function DiscosViewer({
     }
   }, [isAdminUnlocked]);
 
-  const yearSections = buildYearSections(discos, currentYearObservations);
+  const yearSections = buildYearSections(
+    discos,
+    currentYearObservations,
+    yearSpotifyPlaylists,
+  );
   const editableYears = yearSections
     .filter((section) => section.key !== "sin-ano")
     .map((section) => section.key);
@@ -295,6 +324,19 @@ export function DiscosViewer({
                       {section.discos.length} disco
                       {section.discos.length === 1 ? "" : "s"}
                     </p>
+                    {section.spotifyPlaylist ? (
+                      <a
+                        href={section.spotifyPlaylist.externalUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-300/35 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.22),rgba(15,23,42,0.92))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-100 transition hover:border-emerald-200/55 hover:text-white md:ml-7"
+                        aria-label={`Escuchar playlist ${section.spotifyPlaylist.name} en Spotify`}
+                        title={`Escuchar ${section.spotifyPlaylist.name} en Spotify`}
+                      >
+                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
+                        <span>Escuchar</span>
+                      </a>
+                    ) : null}
                   </div>
 
                   <div className="space-y-5">
