@@ -10,8 +10,13 @@ type ObservationPayload = {
   }>;
 };
 
+type ObservationRow = {
+  year_publicacion: number | null;
+  observaciones: string | null;
+};
+
 function jsonResponse(
-  body: Record<string, string | boolean | number>,
+  body: Record<string, string | boolean | number | Record<string, string>>,
   status = 200,
 ) {
   return Response.json(body, { status });
@@ -48,6 +53,36 @@ function normalizeEntries(payload: ObservationPayload) {
     year_publicacion: yearPublicacion,
     observaciones,
   }));
+}
+
+async function readObservationMap(
+  supabase: ReturnType<typeof createClient>,
+) {
+  const { data, error } = await supabase
+    .from("discos_year_observaciones")
+    .select("year_publicacion, observaciones")
+    .order("year_publicacion", { ascending: true });
+
+  if (error) {
+    throw new Error(
+      `No he podido releer las observaciones guardadas: ${error.message}`,
+    );
+  }
+
+  const rows = (data as ObservationRow[] | null) ?? [];
+
+  return Object.fromEntries(
+    rows.flatMap((row) => {
+      const yearValue = row.year_publicacion;
+      const observationValue = row.observaciones?.trim() ?? "";
+
+      if (!Number.isInteger(yearValue) || !observationValue) {
+        return [];
+      }
+
+      return [[String(yearValue), observationValue] as const];
+    }),
+  );
 }
 
 export async function POST(request: Request) {
@@ -135,9 +170,27 @@ export async function POST(request: Request) {
     }
   }
 
+  let observations: Record<string, string>;
+
+  try {
+    observations = await readObservationMap(supabase);
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "No he podido releer las observaciones guardadas.",
+      },
+      500,
+    );
+  }
+
   return jsonResponse({
     ok: true,
     updatedCount: entriesToUpsert.length,
     deletedCount: yearsToDelete.length,
+    observations,
   });
 }

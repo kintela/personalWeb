@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { startTransition, useEffect, useState, type FormEvent } from "react";
 
 type DiscosYearObservationPanelProps = {
   years: string[];
@@ -32,6 +33,7 @@ export function DiscosYearObservationPanel({
   onUnlockedChange,
   onObservationsChange,
 }: DiscosYearObservationPanelProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState("");
   const [unlockError, setUnlockError] = useState("");
@@ -115,6 +117,7 @@ export function DiscosYearObservationPanel({
             error?: string;
             updatedCount?: number;
             deletedCount?: number;
+            observations?: Record<string, string>;
           }
         | null;
 
@@ -149,12 +152,16 @@ export function DiscosYearObservationPanel({
           : "No había cambios que guardar.",
       );
       onObservationsChange(
-        Object.fromEntries(
-          Object.entries(draftObservations)
-            .map(([year, observation]) => [year, observation.trim()])
-            .filter(([, observation]) => observation.length > 0),
-        ),
+        payload?.observations ??
+          Object.fromEntries(
+            Object.entries(draftObservations)
+              .map(([year, observation]) => [year, observation.trim()])
+              .filter(([, observation]) => observation.length > 0),
+          ),
       );
+      startTransition(() => {
+        router.refresh();
+      });
     } catch {
       setSaveError("No he podido guardar las observaciones.");
     } finally {

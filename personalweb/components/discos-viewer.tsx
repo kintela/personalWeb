@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { startTransition, useEffect, useState } from "react";
 
 import { DiscosYearObservationPanel } from "@/components/discos-year-observation-panel";
 import {
@@ -109,6 +110,7 @@ export function DiscosViewer({
   initiallyAdminUnlocked,
   yearSpotifyPlaylists,
 }: DiscosViewerProps) {
+  const router = useRouter();
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
     DISCOS_VIEWER_GRID_STORAGE_KEY,
   );
@@ -185,6 +187,7 @@ export function DiscosViewer({
         | {
             ok?: boolean;
             error?: string;
+            observations?: Record<string, string>;
           }
         | null;
 
@@ -197,8 +200,13 @@ export function DiscosViewer({
         return;
       }
 
-      setCurrentYearObservations((current) =>
-        buildNextYearObservations(current, yearKey, editingObservation),
+      setCurrentYearObservations(
+        payload?.observations ??
+          buildNextYearObservations(
+            currentYearObservations,
+            yearKey,
+            editingObservation,
+          ),
       );
       setEditingYearKey("");
       setEditingObservation("");
@@ -208,6 +216,9 @@ export function DiscosViewer({
           ? `Observación de ${yearKey} guardada.`
           : `Observación de ${yearKey} borrada.`,
       );
+      startTransition(() => {
+        router.refresh();
+      });
     } catch {
       setEditError("No he podido guardar la observación.");
     } finally {
