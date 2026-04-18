@@ -27,6 +27,7 @@ type DiscoUploadFormProps = {
 type DiscoFormState = {
   nombre: string;
   yearPublicacion: string;
+  fechaPublicacion: string;
   discografica: string;
   productor: string;
   estudio: string;
@@ -37,6 +38,7 @@ function buildInitialUploadState(year: string): DiscoFormState {
   return {
     nombre: "",
     yearPublicacion: year,
+    fechaPublicacion: "",
     discografica: "",
     productor: "",
     estudio: "",
@@ -48,6 +50,7 @@ function buildEditState(disco: DiscoAsset): DiscoFormState {
   return {
     nombre: disco.title,
     yearPublicacion: Number.isInteger(disco.year) ? String(disco.year) : "",
+    fechaPublicacion: disco.releaseDate ?? "",
     discografica: disco.label ?? "",
     productor: disco.producer ?? "",
     estudio: disco.studio ?? "",
@@ -165,6 +168,7 @@ export function DiscoUploadForm({
     const discografica = formState.discografica.trim();
     const productor = formState.productor.trim();
     const estudio = formState.estudio.trim();
+    const fechaPublicacion = formState.fechaPublicacion.trim();
     const yearPublicacion = Number.parseInt(
       formState.yearPublicacion.trim(),
       10,
@@ -192,6 +196,16 @@ export function DiscoUploadForm({
       return;
     }
 
+    if (
+      fechaPublicacion &&
+      Number.parseInt(fechaPublicacion.slice(0, 4), 10) !== yearPublicacion
+    ) {
+      setUploadError(
+        "La fecha de publicación debe pertenecer al mismo año indicado.",
+      );
+      return;
+    }
+
     if (!isEditMode && !selectedFile) {
       setUploadError("Tienes que seleccionar una carátula.");
       return;
@@ -213,6 +227,7 @@ export function DiscoUploadForm({
             body: JSON.stringify({
               nombre,
               yearPublicacion,
+              fechaPublicacion,
               discografica,
               productor,
               estudio,
@@ -254,6 +269,7 @@ export function DiscoUploadForm({
       formData.set("file", selectedFile as File);
       formData.set("nombre", nombre);
       formData.set("year_publicacion", String(yearPublicacion));
+      formData.set("fecha_publicacion", fechaPublicacion);
       formData.set("discografica", discografica);
       formData.set("productor", productor);
       formData.set("estudio", estudio);
@@ -395,6 +411,21 @@ export function DiscoUploadForm({
                 />
               </label>
             ) : null}
+
+            <label className="space-y-2">
+              <span className="text-sm text-slate-200">Fecha de publicación</span>
+              <input
+                type="date"
+                value={formState.fechaPublicacion}
+                onChange={(event) =>
+                  setFormState((current) => ({
+                    ...current,
+                    fechaPublicacion: event.target.value,
+                  }))
+                }
+                className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+              />
+            </label>
 
             <label className="space-y-2">
               <span className="text-sm text-slate-200">Discográfica</span>

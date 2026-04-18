@@ -647,6 +647,12 @@ export function DiscosViewer({
                               <div className="space-y-1 text-[0.78rem] leading-5 text-slate-400">
                                 <p className="line-clamp-2">
                                   <span className="text-slate-500">
+                                    Fecha:
+                                  </span>{" "}
+                                  {disco.releaseDateLabel ?? "Sin fecha indicada"}
+                                </p>
+                                <p className="line-clamp-2">
+                                  <span className="text-slate-500">
                                     Discográfica:
                                   </span>{" "}
                                   {disco.label ?? "Sin discográfica indicada"}

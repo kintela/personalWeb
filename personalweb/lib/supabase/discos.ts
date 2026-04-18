@@ -3,7 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const DISCOS_SELECT_COLUMNS =
-  "id, nombre, year_publicacion, caratula, discografica, productor, estudio, grupo_id, created_at, updated_at, grupo:grupos!discos_grupo_id_fkey(nombre)";
+  "id, nombre, year_publicacion, fecha_publicacion, caratula, discografica, productor, estudio, grupo_id, created_at, updated_at, grupo:grupos!discos_grupo_id_fkey(nombre)";
 const DISCOS_YEAR_OBSERVACIONES_SELECT_COLUMNS =
   "year_publicacion, observaciones";
 const DISCO_COVER_BUCKET = "caratulas";
@@ -23,6 +23,7 @@ type DiscoDatabaseRow = {
   id: number | string;
   nombre: string;
   year_publicacion: number | null;
+  fecha_publicacion: string | null;
   caratula: string | null;
   discografica: string | null;
   productor: string | null;
@@ -47,6 +48,8 @@ export type DiscoAsset = {
   id: string;
   title: string;
   year: number | null;
+  releaseDate: string | null;
+  releaseDateLabel: string | null;
   cover: string | null;
   coverSrc: string | null;
   label: string | null;
@@ -84,6 +87,7 @@ type UpdateDiscoDetailsOptions = {
   id: number;
   nombre: string;
   yearPublicacion: number;
+  fechaPublicacion: string | null;
   discografica: string;
   productor: string;
   estudio: string | null;
@@ -145,6 +149,31 @@ function getDiscoYearValue(value: number | null) {
   return String(value);
 }
 
+function buildDiscoReleaseDateLabel(date: string | null) {
+  if (!date) {
+    return null;
+  }
+
+  const [rawYear, rawMonth, rawDay] = date.split("-");
+  const yearValue = Number.parseInt(rawYear ?? "", 10);
+  const monthValue = Number.parseInt(rawMonth ?? "", 10);
+  const dayValue = Number.parseInt(rawDay ?? "", 10);
+
+  if (
+    !Number.isInteger(yearValue) ||
+    !Number.isInteger(monthValue) ||
+    !Number.isInteger(dayValue)
+  ) {
+    return date;
+  }
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(yearValue, monthValue - 1, dayValue));
+}
+
 export function getDiscoCoverPublicUrl(coverPath: string | null) {
   const normalizedPath = coverPath?.trim();
   const supabaseUrl = getSupabaseUrl()?.trim();
@@ -186,6 +215,8 @@ function buildDiscoSearchHaystack(disco: DiscoDatabaseRow) {
     String(disco.id),
     disco.nombre,
     getDiscoYearValue(disco.year_publicacion),
+    disco.fecha_publicacion,
+    buildDiscoReleaseDateLabel(disco.fecha_publicacion),
     disco.caratula,
     disco.discografica,
     disco.productor,
@@ -247,6 +278,8 @@ function mapDisco(row: DiscoDatabaseRow): DiscoAsset {
     id: String(row.id),
     title: row.nombre.trim(),
     year: row.year_publicacion,
+    releaseDate: row.fecha_publicacion?.trim() || null,
+    releaseDateLabel: buildDiscoReleaseDateLabel(row.fecha_publicacion),
     cover: row.caratula?.trim() || null,
     coverSrc: getDiscoCoverPublicUrl(row.caratula),
     label: row.discografica?.trim() || null,
@@ -434,6 +467,7 @@ export async function updateDiscoDetails(
     .update({
       nombre: options.nombre,
       year_publicacion: options.yearPublicacion,
+      fecha_publicacion: options.fechaPublicacion,
       discografica: options.discografica,
       productor: options.productor,
       estudio: options.estudio,

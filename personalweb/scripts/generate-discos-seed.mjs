@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   DEFAULT_SEEDS_DIR,
+  toSqlDate,
   toSqlInteger,
   toSqlText,
 } from "./lib/legacy-seed-utils.mjs";
@@ -48,6 +49,41 @@ function parseOptionalText(value) {
   return normalizedValue || null;
 }
 
+function parseOptionalDate(value, fieldName, index) {
+  const normalizedValue = String(value ?? "").trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+    throw new Error(
+      `Disco at index ${index} has an invalid ${fieldName} format.`,
+    );
+  }
+
+  const [rawYear, rawMonth, rawDay] = normalizedValue.split("-");
+  const yearValue = Number.parseInt(rawYear ?? "", 10);
+  const monthValue = Number.parseInt(rawMonth ?? "", 10);
+  const dayValue = Number.parseInt(rawDay ?? "", 10);
+  const date = new Date(Date.UTC(yearValue, monthValue - 1, dayValue));
+
+  if (
+    !Number.isInteger(yearValue) ||
+    !Number.isInteger(monthValue) ||
+    !Number.isInteger(dayValue) ||
+    date.getUTCFullYear() !== yearValue ||
+    date.getUTCMonth() !== monthValue - 1 ||
+    date.getUTCDate() !== dayValue
+  ) {
+    throw new Error(
+      `Disco at index ${index} has an invalid ${fieldName}.`,
+    );
+  }
+
+  return date;
+}
+
 const sourcePath = path.resolve(INPUT_PATH);
 const source = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
 
@@ -62,6 +98,11 @@ const discos = source
     yearPublicacion: parseRequiredInteger(
       item.YearPublicacion,
       "YearPublicacion",
+      index,
+    ),
+    fechaPublicacion: parseOptionalDate(
+      item.FechaPublicacion,
+      "FechaPublicacion",
       index,
     ),
     caratula: parseRequiredText(item.Caratula, "Caratula", index),
@@ -81,7 +122,9 @@ const values = discos
     (item) =>
       `  (${toSqlInteger(item.id)}::integer, ${toSqlText(
         item.nombre,
-      )}::text, ${toSqlInteger(item.yearPublicacion)}::integer, ${toSqlText(
+      )}::text, ${toSqlInteger(item.yearPublicacion)}::integer, ${toSqlDate(
+        item.fechaPublicacion,
+      )}::date, ${toSqlText(
         item.caratula,
       )}::text, ${toSqlText(item.discografica)}::text, ${toSqlText(
         item.productor,
@@ -92,7 +135,7 @@ const values = discos
 fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 fs.writeFileSync(
   OUTPUT_PATH,
-  `begin;\n\nwith source (\n  id,\n  nombre,\n  year_publicacion,\n  caratula,\n  discografica,\n  productor,\n  estudio,\n  grupo_id\n) as (\n  values\n${values}\n)\ninsert into public.discos (\n  id,\n  nombre,\n  year_publicacion,\n  caratula,\n  discografica,\n  productor,\n  estudio,\n  grupo_id\n)\noverriding system value\nselect\n  id,\n  nombre,\n  year_publicacion,\n  caratula,\n  discografica,\n  productor,\n  estudio,\n  grupo_id\nfrom source\non conflict (id) do update\nset\n  nombre = excluded.nombre,\n  year_publicacion = excluded.year_publicacion,\n  caratula = excluded.caratula,\n  discografica = excluded.discografica,\n  productor = excluded.productor,\n  estudio = excluded.estudio,\n  grupo_id = excluded.grupo_id;\n\nselect setval(\n  pg_get_serial_sequence('public.discos', 'id'),\n  coalesce((select max(id) from public.discos), 1),\n  true\n);\n\ncommit;\n`,
+  `begin;\n\nwith source (\n  id,\n  nombre,\n  year_publicacion,\n  fecha_publicacion,\n  caratula,\n  discografica,\n  productor,\n  estudio,\n  grupo_id\n) as (\n  values\n${values}\n)\ninsert into public.discos (\n  id,\n  nombre,\n  year_publicacion,\n  fecha_publicacion,\n  caratula,\n  discografica,\n  productor,\n  estudio,\n  grupo_id\n)\noverriding system value\nselect\n  id,\n  nombre,\n  year_publicacion,\n  fecha_publicacion,\n  caratula,\n  discografica,\n  productor,\n  estudio,\n  grupo_id\nfrom source\non conflict (id) do update\nset\n  nombre = excluded.nombre,\n  year_publicacion = excluded.year_publicacion,\n  fecha_publicacion = excluded.fecha_publicacion,\n  caratula = excluded.caratula,\n  discografica = excluded.discografica,\n  productor = excluded.productor,\n  estudio = excluded.estudio,\n  grupo_id = excluded.grupo_id;\n\nselect setval(\n  pg_get_serial_sequence('public.discos', 'id'),\n  coalesce((select max(id) from public.discos), 1),\n  true\n);\n\ncommit;\n`,
 );
 
 console.log(

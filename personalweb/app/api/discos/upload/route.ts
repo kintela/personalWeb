@@ -63,6 +63,49 @@ function getIntegerValue(formData: FormData, key: string) {
   return Number.parseInt(rawValue, 10);
 }
 
+function parseOptionalDateValue(value: string) {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return {
+      ok: true as const,
+      value: null,
+    };
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+    return {
+      ok: false as const,
+      error: "La fecha de publicación debe tener formato AAAA-MM-DD.",
+    };
+  }
+
+  const [rawYear, rawMonth, rawDay] = normalizedValue.split("-");
+  const yearValue = Number.parseInt(rawYear ?? "", 10);
+  const monthValue = Number.parseInt(rawMonth ?? "", 10);
+  const dayValue = Number.parseInt(rawDay ?? "", 10);
+  const date = new Date(Date.UTC(yearValue, monthValue - 1, dayValue));
+
+  if (
+    !Number.isInteger(yearValue) ||
+    !Number.isInteger(monthValue) ||
+    !Number.isInteger(dayValue) ||
+    date.getUTCFullYear() !== yearValue ||
+    date.getUTCMonth() !== monthValue - 1 ||
+    date.getUTCDate() !== dayValue
+  ) {
+    return {
+      ok: false as const,
+      error: "La fecha de publicación no es válida.",
+    };
+  }
+
+  return {
+    ok: true as const,
+    value: normalizedValue,
+  };
+}
+
 function extractImageNumber(fileName: string) {
   const match = fileName.match(/^(\d+)\.[^.]+$/i);
 
@@ -188,10 +231,12 @@ export async function POST(request: Request) {
   const file = formData.get("file");
   const nombre = getStringValue(formData, "nombre");
   const yearPublicacion = getIntegerValue(formData, "year_publicacion");
+  const rawFechaPublicacion = getStringValue(formData, "fecha_publicacion");
   const discografica = getStringValue(formData, "discografica");
   const productor = getStringValue(formData, "productor");
   const estudio = getStringValue(formData, "estudio");
   const groupId = getIntegerValue(formData, "grupo_id");
+  const fechaPublicacion = parseOptionalDateValue(rawFechaPublicacion);
 
   if (!(file instanceof File)) {
     return jsonResponse(
@@ -218,6 +263,29 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: "El año de publicación debe ser un entero entre 1900 y 2100.",
+      },
+      400,
+    );
+  }
+
+  if (!fechaPublicacion.ok) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: fechaPublicacion.error,
+      },
+      400,
+    );
+  }
+
+  if (
+    fechaPublicacion.value &&
+    Number.parseInt(fechaPublicacion.value.slice(0, 4), 10) !== yearPublicacion
+  ) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: "La fecha de publicación debe pertenecer al mismo año indicado.",
       },
       400,
     );
@@ -284,6 +352,7 @@ export async function POST(request: Request) {
       .insert({
         nombre,
         year_publicacion: yearPublicacion,
+        fecha_publicacion: fechaPublicacion.value,
         caratula: imageName,
         discografica,
         productor,

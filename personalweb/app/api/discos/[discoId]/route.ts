@@ -37,6 +37,49 @@ function getIntegerValue(value: unknown) {
   return Number.parseInt(normalizedValue, 10);
 }
 
+function parseOptionalDateValue(value: unknown) {
+  const normalizedValue = getTrimmedStringValue(value);
+
+  if (!normalizedValue) {
+    return {
+      ok: true as const,
+      value: null,
+    };
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+    return {
+      ok: false as const,
+      error: "La fecha de publicación debe tener formato AAAA-MM-DD.",
+    };
+  }
+
+  const [rawYear, rawMonth, rawDay] = normalizedValue.split("-");
+  const yearValue = Number.parseInt(rawYear ?? "", 10);
+  const monthValue = Number.parseInt(rawMonth ?? "", 10);
+  const dayValue = Number.parseInt(rawDay ?? "", 10);
+  const date = new Date(Date.UTC(yearValue, monthValue - 1, dayValue));
+
+  if (
+    !Number.isInteger(yearValue) ||
+    !Number.isInteger(monthValue) ||
+    !Number.isInteger(dayValue) ||
+    date.getUTCFullYear() !== yearValue ||
+    date.getUTCMonth() !== monthValue - 1 ||
+    date.getUTCDate() !== dayValue
+  ) {
+    return {
+      ok: false as const,
+      error: "La fecha de publicación no es válida.",
+    };
+  }
+
+  return {
+    ok: true as const,
+    value: normalizedValue,
+  };
+}
+
 export async function PATCH(
   request: Request,
   context: RouteContext,
@@ -67,6 +110,7 @@ export async function PATCH(
   const payload = (await request.json().catch(() => ({}))) as {
     nombre?: unknown;
     yearPublicacion?: unknown;
+    fechaPublicacion?: unknown;
     discografica?: unknown;
     productor?: unknown;
     estudio?: unknown;
@@ -74,6 +118,7 @@ export async function PATCH(
   };
   const nombre = getTrimmedStringValue(payload.nombre);
   const yearPublicacion = getIntegerValue(payload.yearPublicacion);
+  const fechaPublicacion = parseOptionalDateValue(payload.fechaPublicacion);
   const discografica = getTrimmedStringValue(payload.discografica);
   const productor = getTrimmedStringValue(payload.productor);
   const estudio = getOptionalTrimmedStringValue(payload.estudio);
@@ -103,6 +148,29 @@ export async function PATCH(
     );
   }
 
+  if (!fechaPublicacion.ok) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: fechaPublicacion.error,
+      },
+      400,
+    );
+  }
+
+  if (
+    fechaPublicacion.value &&
+    Number.parseInt(fechaPublicacion.value.slice(0, 4), 10) !== yearPublicacion
+  ) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: "La fecha de publicación debe pertenecer al mismo año indicado.",
+      },
+      400,
+    );
+  }
+
   if (!Number.isInteger(groupId) || groupId <= 0) {
     return jsonResponse(
       {
@@ -117,6 +185,7 @@ export async function PATCH(
     id,
     nombre,
     yearPublicacion,
+    fechaPublicacion: fechaPublicacion.value,
     discografica,
     productor,
     estudio,
