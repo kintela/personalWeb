@@ -22,6 +22,7 @@ type DiscoUploadState = {
   nombre: string;
   discografica: string;
   productor: string;
+  estudio: string;
   grupoId: string;
 };
 
@@ -29,6 +30,7 @@ const INITIAL_UPLOAD_STATE: DiscoUploadState = {
   nombre: "",
   discografica: "",
   productor: "",
+  estudio: "",
   grupoId: "",
 };
 
@@ -109,6 +111,7 @@ export function DiscoUploadForm({
       formData.set("year_publicacion", String(yearValue));
       formData.set("discografica", formState.discografica.trim());
       formData.set("productor", formState.productor.trim());
+      formData.set("estudio", formState.estudio.trim());
       formData.set("grupo_id", formState.grupoId);
 
       const response = await fetch("/api/discos/upload", {
@@ -248,6 +251,22 @@ export function DiscoUploadForm({
                 className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
                 placeholder="Productor o productores"
                 required
+              />
+            </label>
+
+            <label className="space-y-2 xl:col-span-2">
+              <span className="text-sm text-slate-200">Estudio</span>
+              <input
+                type="text"
+                value={formState.estudio}
+                onChange={(event) =>
+                  setFormState((current) => ({
+                    ...current,
+                    estudio: event.target.value,
+                  }))
+                }
+                className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                placeholder="Estudio o estudios de grabación"
               />
             </label>
           </div>

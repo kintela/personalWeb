@@ -3,7 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const DISCOS_SELECT_COLUMNS =
-  "id, nombre, year_publicacion, caratula, discografica, productor, grupo_id, created_at, updated_at, grupo:grupos!discos_grupo_id_fkey(nombre)";
+  "id, nombre, year_publicacion, caratula, discografica, productor, estudio, grupo_id, created_at, updated_at, grupo:grupos!discos_grupo_id_fkey(nombre)";
 const DISCOS_YEAR_OBSERVACIONES_SELECT_COLUMNS =
   "year_publicacion, observaciones";
 const DISCO_COVER_BUCKET = "caratulas";
@@ -26,6 +26,7 @@ type DiscoDatabaseRow = {
   caratula: string | null;
   discografica: string | null;
   productor: string | null;
+  estudio: string | null;
   grupo_id: number | string;
   created_at: string | null;
   updated_at: string | null;
@@ -50,6 +51,7 @@ export type DiscoAsset = {
   coverSrc: string | null;
   label: string | null;
   producer: string | null;
+  studio: string | null;
   groupId: string;
   groupName: string | null;
 };
@@ -177,6 +179,7 @@ function buildDiscoSearchHaystack(disco: DiscoDatabaseRow) {
     disco.caratula,
     disco.discografica,
     disco.productor,
+    disco.estudio,
     String(disco.grupo_id),
     groupName,
     disco.created_at,
@@ -238,6 +241,7 @@ function mapDisco(row: DiscoDatabaseRow): DiscoAsset {
     coverSrc: getDiscoCoverPublicUrl(row.caratula),
     label: row.discografica?.trim() || null,
     producer: row.productor?.trim() || null,
+    studio: row.estudio?.trim() || null,
     groupId: String(row.grupo_id),
     groupName: getDiscoGroupName(row.grupo),
   };

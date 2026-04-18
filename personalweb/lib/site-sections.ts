@@ -121,7 +121,7 @@ export const SITE_SECTIONS: SiteSection[] = [
     eyebrow: "Discos",
     description:
       "Una línea temporal por años para recorrer discos clave, ver sus portadas y seguir la historia de cada grupo sin perder el hilo.",
-    summary: "Cronología visual de grupos, discos y carátulas.",
+    summary: "cronologia de la música que cambio el mundo",
     details: [
       "Cada año reúne debajo las carátulas que tocaron en ese momento y permite leer de un vistazo qué grupo publicó qué disco.",
       "La idea no es buscar por un formulario, sino entrar en la cronología y dejar que las portadas y los nombres cuenten la historia.",

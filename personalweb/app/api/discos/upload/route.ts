@@ -190,6 +190,7 @@ export async function POST(request: Request) {
   const yearPublicacion = getIntegerValue(formData, "year_publicacion");
   const discografica = getStringValue(formData, "discografica");
   const productor = getStringValue(formData, "productor");
+  const estudio = getStringValue(formData, "estudio");
   const groupId = getIntegerValue(formData, "grupo_id");
 
   if (!(file instanceof File)) {
@@ -286,6 +287,7 @@ export async function POST(request: Request) {
         caratula: imageName,
         discografica,
         productor,
+        estudio: estudio || null,
         grupo_id: groupId,
       })
       .select("id")

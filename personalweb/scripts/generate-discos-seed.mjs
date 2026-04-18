@@ -42,6 +42,12 @@ function parseRequiredText(value, fieldName, index) {
   return normalizedValue;
 }
 
+function parseOptionalText(value) {
+  const normalizedValue = String(value ?? "").trim();
+
+  return normalizedValue || null;
+}
+
 const sourcePath = path.resolve(INPUT_PATH);
 const source = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
 
@@ -65,6 +71,7 @@ const discos = source
       index,
     ),
     productor: parseRequiredText(item.Productor, "Productor", index),
+    estudio: parseOptionalText(item.Estudio),
     grupoId: parseRequiredInteger(item.GrupoId, "GrupoId", index),
   }))
   .sort((left, right) => left.id - right.id);
@@ -78,14 +85,14 @@ const values = discos
         item.caratula,
       )}::text, ${toSqlText(item.discografica)}::text, ${toSqlText(
         item.productor,
-      )}::text, ${toSqlInteger(item.grupoId)}::bigint)`,
+      )}::text, ${toSqlText(item.estudio)}::text, ${toSqlInteger(item.grupoId)}::bigint)`,
   )
   .join(",\n");
 
 fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 fs.writeFileSync(
   OUTPUT_PATH,
-  `begin;\n\nwith source (\n  id,\n  nombre,\n  year_publicacion,\n  caratula,\n  discografica,\n  productor,\n  grupo_id\n) as (\n  values\n${values}\n)\ninsert into public.discos (\n  id,\n  nombre,\n  year_publicacion,\n  caratula,\n  discografica,\n  productor,\n  grupo_id\n)\noverriding system value\nselect\n  id,\n  nombre,\n  year_publicacion,\n  caratula,\n  discografica,\n  productor,\n  grupo_id\nfrom source\non conflict (id) do update\nset\n  nombre = excluded.nombre,\n  year_publicacion = excluded.year_publicacion,\n  caratula = excluded.caratula,\n  discografica = excluded.discografica,\n  productor = excluded.productor,\n  grupo_id = excluded.grupo_id;\n\nselect setval(\n  pg_get_serial_sequence('public.discos', 'id'),\n  coalesce((select max(id) from public.discos), 1),\n  true\n);\n\ncommit;\n`,
+  `begin;\n\nwith source (\n  id,\n  nombre,\n  year_publicacion,\n  caratula,\n  discografica,\n  productor,\n  estudio,\n  grupo_id\n) as (\n  values\n${values}\n)\ninsert into public.discos (\n  id,\n  nombre,\n  year_publicacion,\n  caratula,\n  discografica,\n  productor,\n  estudio,\n  grupo_id\n)\noverriding system value\nselect\n  id,\n  nombre,\n  year_publicacion,\n  caratula,\n  discografica,\n  productor,\n  estudio,\n  grupo_id\nfrom source\non conflict (id) do update\nset\n  nombre = excluded.nombre,\n  year_publicacion = excluded.year_publicacion,\n  caratula = excluded.caratula,\n  discografica = excluded.discografica,\n  productor = excluded.productor,\n  estudio = excluded.estudio,\n  grupo_id = excluded.grupo_id;\n\nselect setval(\n  pg_get_serial_sequence('public.discos', 'id'),\n  coalesce((select max(id) from public.discos), 1),\n  true\n);\n\ncommit;\n`,
 );
 
 console.log(
