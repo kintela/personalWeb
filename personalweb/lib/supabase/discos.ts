@@ -80,6 +80,16 @@ type GetDiscoListOptions = {
   yearValue?: string | null;
 };
 
+type UpdateDiscoDetailsOptions = {
+  id: number;
+  nombre: string;
+  yearPublicacion: number;
+  discografica: string;
+  productor: string;
+  estudio: string | null;
+  groupId: number;
+};
+
 function getSupabaseUrl() {
   return process.env.NEXT_PUBLIC_SUPABASE_URL;
 }
@@ -403,4 +413,54 @@ export async function getDiscoGroupOptions(): Promise<DiscoGroupOption[]> {
       } satisfies DiscoGroupOption,
     ];
   });
+}
+
+export async function updateDiscoDetails(
+  options: UpdateDiscoDetailsOptions,
+) {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      ok: false as const,
+      notFound: false,
+      error:
+        "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("discos")
+    .update({
+      nombre: options.nombre,
+      year_publicacion: options.yearPublicacion,
+      discografica: options.discografica,
+      productor: options.productor,
+      estudio: options.estudio,
+      grupo_id: options.groupId,
+    })
+    .eq("id", options.id)
+    .select(DISCOS_SELECT_COLUMNS)
+    .maybeSingle();
+
+  if (error) {
+    return {
+      ok: false as const,
+      notFound: false,
+      error: `No he podido actualizar el disco: ${error.message}`,
+    };
+  }
+
+  if (!data) {
+    return {
+      ok: false as const,
+      notFound: true,
+      error: "No he encontrado el disco que querías actualizar.",
+    };
+  }
+
+  return {
+    ok: true as const,
+    disco: mapDisco(data as DiscoDatabaseRow),
+  };
 }

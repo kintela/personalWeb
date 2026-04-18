@@ -48,6 +48,44 @@ type YearSection = {
 
 const DISCOS_VIEWER_GRID_STORAGE_KEY = "discos-viewer-grid-density";
 
+function compareDiscoAssets(left: DiscoAsset, right: DiscoAsset) {
+  if (
+    typeof left.year === "number" &&
+    typeof right.year === "number" &&
+    left.year !== right.year
+  ) {
+    return left.year - right.year;
+  }
+
+  if (left.groupName && right.groupName) {
+    const byGroup = left.groupName.localeCompare(right.groupName, "es", {
+      sensitivity: "base",
+    });
+
+    if (byGroup !== 0) {
+      return byGroup;
+    }
+  } else if (left.groupName) {
+    return -1;
+  } else if (right.groupName) {
+    return 1;
+  }
+
+  const byTitle = left.title.localeCompare(right.title, "es", {
+    sensitivity: "base",
+  });
+
+  if (byTitle !== 0) {
+    return byTitle;
+  }
+
+  return left.id.localeCompare(right.id, "es", { numeric: true });
+}
+
+function sortDiscoAssets(discos: DiscoAsset[]) {
+  return [...discos].sort(compareDiscoAssets);
+}
+
 function buildYearSections(
   discos: DiscoAsset[],
   yearObservations: Record<string, string>,
@@ -114,6 +152,7 @@ export function DiscosViewer({
   groupOptions,
 }: DiscosViewerProps) {
   const router = useRouter();
+  const [currentDiscos, setCurrentDiscos] = useState(() => sortDiscoAssets(discos));
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
     DISCOS_VIEWER_GRID_STORAGE_KEY,
   );
@@ -126,10 +165,17 @@ export function DiscosViewer({
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
   const [editFeedbackYearKey, setEditFeedbackYearKey] = useState("");
+  const [editingDiscoId, setEditingDiscoId] = useState("");
+  const [discoEditSuccess, setDiscoEditSuccess] = useState("");
+  const [discoFeedbackId, setDiscoFeedbackId] = useState("");
 
   useEffect(() => {
     setIsAdminUnlocked(initiallyAdminUnlocked);
   }, [initiallyAdminUnlocked]);
+
+  useEffect(() => {
+    setCurrentDiscos(sortDiscoAssets(discos));
+  }, [discos]);
 
   useEffect(() => {
     setCurrentYearObservations(yearObservations);
@@ -142,11 +188,14 @@ export function DiscosViewer({
       setEditError("");
       setEditSuccess("");
       setEditFeedbackYearKey("");
+      setEditingDiscoId("");
+      setDiscoEditSuccess("");
+      setDiscoFeedbackId("");
     }
   }, [isAdminUnlocked]);
 
   const yearSections = buildYearSections(
-    discos,
+    currentDiscos,
     currentYearObservations,
     yearSpotifyPlaylists,
   );
@@ -154,7 +203,7 @@ export function DiscosViewer({
     .filter((section) => section.key !== "sin-ano")
     .map((section) => section.key);
   const visibleGroupCount = new Set(
-    discos.map((disco) => disco.groupName).filter(Boolean),
+    currentDiscos.map((disco) => disco.groupName).filter(Boolean),
   ).size;
   const visibleYearCount = yearSections.filter(
     (section) => section.key !== "sin-ano",
@@ -165,6 +214,47 @@ export function DiscosViewer({
       : gridDensity === "compact"
       ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
       : "grid gap-5 sm:grid-cols-2 xl:grid-cols-3";
+
+  async function ensureAdminUnlocked() {
+    if (isAdminUnlocked) {
+      return true;
+    }
+
+    if (!adminConfigured) {
+      window.alert("Falta ADMIN_PASSWORD en el entorno del servidor.");
+      return false;
+    }
+
+    const password = window.prompt("Contraseña admin");
+
+    if (!password?.trim()) {
+      return false;
+    }
+
+    try {
+      const response = await fetch("/api/admin/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.ok) {
+        window.alert(payload?.error ?? "No he podido validar la contraseña.");
+        return false;
+      }
+
+      setIsAdminUnlocked(true);
+      return true;
+    } catch {
+      window.alert("No he podido validar la contraseña.");
+      return false;
+    }
+  }
 
   async function handleInlineObservationSave(yearKey: string) {
     setIsSavingEdit(true);
@@ -227,6 +317,35 @@ export function DiscosViewer({
     } finally {
       setIsSavingEdit(false);
     }
+  }
+
+  async function handleStartDiscoEdit(disco: DiscoAsset) {
+    const adminReady = await ensureAdminUnlocked();
+
+    if (!adminReady) {
+      return;
+    }
+
+    setEditingDiscoId(disco.id);
+    setDiscoEditSuccess("");
+    setDiscoFeedbackId("");
+  }
+
+  function handleCancelDiscoEdit() {
+    setEditingDiscoId("");
+  }
+
+  function handleDiscoSaved(updatedDisco: DiscoAsset) {
+    setCurrentDiscos((current) =>
+      sortDiscoAssets(
+        current.map((disco) =>
+          disco.id === updatedDisco.id ? updatedDisco : disco,
+        ),
+      ),
+    );
+    setEditingDiscoId("");
+    setDiscoFeedbackId(updatedDisco.id);
+    setDiscoEditSuccess(`Datos de ${updatedDisco.title} guardados.`);
   }
 
   return (
@@ -358,6 +477,14 @@ export function DiscosViewer({
                       <DiscoUploadForm
                         year={section.key}
                         groupOptions={groupOptions}
+                        editingDisco={
+                          section.discos.find(
+                            (disco) => disco.id === editingDiscoId,
+                          ) ?? null
+                        }
+                        onEditCancel={handleCancelDiscoEdit}
+                        onDiscoSaved={handleDiscoSaved}
+                        onAdminSessionExpired={() => setIsAdminUnlocked(false)}
                       />
                     ) : null}
 
@@ -491,13 +618,60 @@ export function DiscosViewer({
                               )}
                             </div>
 
-                            <div className="space-y-2 p-5">
-                              <p className="text-[0.72rem] font-medium uppercase tracking-[0.24em] text-cyan-200/88">
-                                {disco.groupName ?? "Grupo sin asignar"}
-                              </p>
-                              <h3 className="text-lg font-semibold leading-tight text-white">
-                                {disco.title}
-                              </h3>
+                            <div className="space-y-4 p-5">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 space-y-2">
+                                  <p className="text-[0.72rem] font-medium uppercase tracking-[0.24em] text-cyan-200/88">
+                                    {disco.groupName ?? "Grupo sin asignar"}
+                                  </p>
+                                  <h3 className="text-lg font-semibold leading-tight text-white">
+                                    {disco.title}
+                                  </h3>
+                                </div>
+
+                                {adminConfigured ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleStartDiscoEdit(disco)}
+                                    className={`shrink-0 rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] transition ${
+                                      editingDiscoId === disco.id
+                                        ? "border-cyan-300/28 bg-cyan-300/10 text-cyan-100"
+                                        : "border-white/12 bg-slate-950/55 text-slate-200 hover:border-cyan-300/50 hover:text-white"
+                                    }`}
+                                  >
+                                    {editingDiscoId === disco.id ? "Editando" : "Editar"}
+                                  </button>
+                                ) : null}
+                              </div>
+
+                              <div className="space-y-1 text-[0.78rem] leading-5 text-slate-400">
+                                <p className="line-clamp-2">
+                                  <span className="text-slate-500">
+                                    Discográfica:
+                                  </span>{" "}
+                                  {disco.label ?? "Sin discográfica indicada"}
+                                </p>
+                                <p className="line-clamp-2">
+                                  <span className="text-slate-500">
+                                    Productor:
+                                  </span>{" "}
+                                  {disco.producer ?? "Sin productor indicado"}
+                                </p>
+                                <p className="line-clamp-2">
+                                  <span className="text-slate-500">
+                                    Estudio:
+                                  </span>{" "}
+                                  {disco.studio ?? "Sin estudio indicado"}
+                                </p>
+                              </div>
+
+                              {discoEditSuccess &&
+                              editingDiscoId === "" &&
+                              discoFeedbackId === disco.id ? (
+                                <p className="text-sm text-emerald-200">
+                                  {discoEditSuccess}
+                                </p>
+                              ) : null}
                             </div>
                           </article>
                         );
