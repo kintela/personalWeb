@@ -57,6 +57,24 @@ function compareDiscoAssets(left: DiscoAsset, right: DiscoAsset) {
     return left.year - right.year;
   }
 
+  if (
+    left.releaseDate &&
+    right.releaseDate &&
+    left.releaseDate !== right.releaseDate
+  ) {
+    return left.releaseDate.localeCompare(right.releaseDate, "es", {
+      numeric: true,
+    });
+  }
+
+  if (left.releaseDate) {
+    return -1;
+  }
+
+  if (right.releaseDate) {
+    return 1;
+  }
+
   if (left.groupName && right.groupName) {
     const byGroup = left.groupName.localeCompare(right.groupName, "es", {
       sensitivity: "base",
@@ -138,6 +156,24 @@ function buildNextYearObservations(
 
   delete nextYearObservations[yearKey];
   return nextYearObservations;
+}
+
+function EditIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20h9" />
+      <path d="m16.5 3.5 4 4L7 21l-4 1 1-4Z" />
+    </svg>
+  );
 }
 
 export function DiscosViewer({
@@ -441,166 +477,196 @@ export function DiscosViewer({
             <div className="relative space-y-10 md:space-y-14">
               <div className="absolute bottom-0 left-8 top-0 hidden w-px bg-white/10 md:block" />
 
-              {yearSections.map((section) => (
-                <div
-                  key={section.key}
-                  className="relative grid gap-5 md:grid-cols-[120px_minmax(0,1fr)] md:gap-8"
-                >
-                  <div className="relative md:pl-1">
-                    <div className="inline-flex items-center gap-3 md:min-h-[3.5rem]">
-                      <span className="relative z-10 hidden h-4 w-4 rounded-full border border-cyan-300/60 bg-slate-950 shadow-[0_0_0_4px_rgba(2,6,23,0.95)] md:block" />
-                      <div className="rounded-[1.2rem] border border-cyan-300/28 bg-cyan-300/10 px-4 py-2 text-lg font-semibold text-cyan-100 md:text-xl">
-                        {section.label}
+              {yearSections.map((section) => {
+                const yearAnchorId = `discos-year-${section.key}`;
+
+                return (
+                  <div
+                    key={section.key}
+                    id={yearAnchorId}
+                    className="relative grid scroll-mt-32 gap-5 md:grid-cols-[120px_minmax(0,1fr)] md:gap-8"
+                  >
+                    <div className="relative md:pl-1">
+                      <div className="inline-flex items-center gap-3 md:min-h-[3.5rem]">
+                        <span className="relative z-10 hidden h-4 w-4 rounded-full border border-cyan-300/60 bg-slate-950 shadow-[0_0_0_4px_rgba(2,6,23,0.95)] md:block" />
+                        <div className="rounded-[1.2rem] border border-cyan-300/28 bg-cyan-300/10 px-4 py-2 text-lg font-semibold text-cyan-100 md:text-xl">
+                          {section.label}
+                        </div>
+                        <ShareCardButton
+                          anchorId={yearAnchorId}
+                          sectionId="discos"
+                          className="h-9 w-9 shrink-0"
+                        />
                       </div>
+                      <p className="mt-3 text-sm text-slate-400 md:pl-7">
+                        {section.discos.length} disco
+                        {section.discos.length === 1 ? "" : "s"}
+                      </p>
+                      {section.spotifyPlaylist ? (
+                        <a
+                          href={section.spotifyPlaylist.externalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-300/35 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.22),rgba(15,23,42,0.92))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-100 transition hover:border-emerald-200/55 hover:text-white md:ml-7"
+                          aria-label={`Escuchar playlist ${section.spotifyPlaylist.name} en Spotify`}
+                          title={`Escuchar ${section.spotifyPlaylist.name} en Spotify`}
+                        >
+                          <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
+                          <span>Escuchar</span>
+                        </a>
+                      ) : null}
                     </div>
-                    <p className="mt-3 text-sm text-slate-400 md:pl-7">
-                      {section.discos.length} disco
-                      {section.discos.length === 1 ? "" : "s"}
-                    </p>
-                    {section.spotifyPlaylist ? (
-                      <a
-                        href={section.spotifyPlaylist.externalUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-300/35 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.22),rgba(15,23,42,0.92))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-100 transition hover:border-emerald-200/55 hover:text-white md:ml-7"
-                        aria-label={`Escuchar playlist ${section.spotifyPlaylist.name} en Spotify`}
-                        title={`Escuchar ${section.spotifyPlaylist.name} en Spotify`}
-                      >
-                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
-                        <span>Escuchar</span>
-                      </a>
-                    ) : null}
-                  </div>
 
-                  <div className="space-y-5">
-                    {isAdminUnlocked && section.key !== "sin-ano" ? (
-                      <DiscoUploadForm
-                        year={section.key}
-                        groupOptions={groupOptions}
-                        editingDisco={
-                          section.discos.find(
-                            (disco) => disco.id === editingDiscoId,
-                          ) ?? null
-                        }
-                        onEditCancel={handleCancelDiscoEdit}
-                        onDiscoSaved={handleDiscoSaved}
-                        onAdminSessionExpired={() => setIsAdminUnlocked(false)}
-                      />
-                    ) : null}
+                    <div className="space-y-5">
+                      {isAdminUnlocked && section.key !== "sin-ano" ? (
+                        <DiscoUploadForm
+                          year={section.key}
+                          groupOptions={groupOptions}
+                          editingDisco={
+                            section.discos.find(
+                              (disco) => disco.id === editingDiscoId,
+                            ) ?? null
+                          }
+                          onEditCancel={handleCancelDiscoEdit}
+                          onDiscoSaved={handleDiscoSaved}
+                          onAdminSessionExpired={() => setIsAdminUnlocked(false)}
+                        />
+                      ) : null}
 
-                    {editingYearKey === section.key ? (
-                      <div className="rounded-[1.6rem] border border-cyan-300/25 bg-cyan-300/8 px-5 py-4 shadow-[0_18px_40px_rgba(8,145,178,0.08)]">
-                        <div className="space-y-4">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-100">
-                              Editando {section.label}
+                      {editingYearKey === section.key ? (
+                        <div className="rounded-[1.6rem] border border-cyan-300/25 bg-cyan-300/8 px-5 py-4 shadow-[0_18px_40px_rgba(8,145,178,0.08)]">
+                          <div className="space-y-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-100">
+                                Editando {section.label}
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingYearKey("");
+                                    setEditingObservation("");
+                                    setEditError("");
+                                    setEditSuccess("");
+                                    setEditFeedbackYearKey("");
+                                  }}
+                                  className="rounded-full border border-white/12 bg-slate-950/55 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-white/20 hover:text-white"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleInlineObservationSave(section.key)}
+                                  disabled={isSavingEdit}
+                                  className="rounded-full bg-cyan-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {isSavingEdit ? "Guardando..." : "Guardar"}
+                                </button>
+                              </div>
+                            </div>
+
+                            <textarea
+                              value={editingObservation}
+                              onChange={(event) =>
+                                setEditingObservation(event.target.value)
+                              }
+                              rows={6}
+                              className="min-h-36 w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm leading-7 text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                              placeholder={`Observaciones para ${section.label}`}
+                            />
+
+                            {editError ? (
+                              <p className="text-sm text-rose-200">{editError}</p>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : section.observation ? (
+                        <div className="rounded-[1.6rem] border border-cyan-300/18 bg-cyan-300/8 px-5 py-4 shadow-[0_18px_40px_rgba(8,145,178,0.08)]">
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                            <p className="text-sm leading-7 text-slate-200">
+                              {section.observation}
                             </p>
-                            <div className="flex gap-2">
+                            {isAdminUnlocked ? (
                               <button
                                 type="button"
                                 onClick={() => {
-                                setEditingYearKey("");
-                                setEditingObservation("");
-                                setEditError("");
-                                setEditSuccess("");
-                                setEditFeedbackYearKey("");
-                              }}
-                                className="rounded-full border border-white/12 bg-slate-950/55 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-white/20 hover:text-white"
+                                  setEditingYearKey(section.key);
+                                  setEditingObservation(section.observation ?? "");
+                                  setEditError("");
+                                  setEditSuccess("");
+                                  setEditFeedbackYearKey("");
+                                }}
+                                className="shrink-0 rounded-full border border-cyan-300/28 bg-slate-950/45 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/60 hover:text-white"
                               >
-                                Cancelar
+                                Editar
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleInlineObservationSave(section.key)}
-                                disabled={isSavingEdit}
-                                className="rounded-full bg-cyan-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {isSavingEdit ? "Guardando..." : "Guardar"}
-                              </button>
-                            </div>
+                            ) : null}
                           </div>
-
-                          <textarea
-                            value={editingObservation}
-                            onChange={(event) => setEditingObservation(event.target.value)}
-                            rows={6}
-                            className="min-h-36 w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm leading-7 text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-                            placeholder={`Observaciones para ${section.label}`}
-                          />
-
-                          {editError ? (
-                            <p className="text-sm text-rose-200">{editError}</p>
-                          ) : null}
                         </div>
-                      </div>
-                    ) : section.observation ? (
-                      <div className="rounded-[1.6rem] border border-cyan-300/18 bg-cyan-300/8 px-5 py-4 shadow-[0_18px_40px_rgba(8,145,178,0.08)]">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                          <p className="text-sm leading-7 text-slate-200">
-                            {section.observation}
-                          </p>
-                          {isAdminUnlocked ? (
+                      ) : isAdminUnlocked ? (
+                        <div className="rounded-[1.6rem] border border-dashed border-cyan-300/18 bg-cyan-300/6 px-5 py-4">
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-sm text-slate-300">
+                              Todavía no hay observaciones para {section.label}.
+                            </p>
                             <button
                               type="button"
                               onClick={() => {
                                 setEditingYearKey(section.key);
-                                setEditingObservation(section.observation ?? "");
+                                setEditingObservation("");
                                 setEditError("");
                                 setEditSuccess("");
                                 setEditFeedbackYearKey("");
                               }}
                               className="shrink-0 rounded-full border border-cyan-300/28 bg-slate-950/45 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/60 hover:text-white"
                             >
-                              Editar
+                              Añadir
                             </button>
-                          ) : null}
+                          </div>
                         </div>
-                      </div>
-                    ) : isAdminUnlocked ? (
-                      <div className="rounded-[1.6rem] border border-dashed border-cyan-300/18 bg-cyan-300/6 px-5 py-4">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                          <p className="text-sm text-slate-300">
-                            Todavía no hay observaciones para {section.label}.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingYearKey(section.key);
-                              setEditingObservation("");
-                              setEditError("");
-                              setEditSuccess("");
-                              setEditFeedbackYearKey("");
-                            }}
-                            className="shrink-0 rounded-full border border-cyan-300/28 bg-slate-950/45 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/60 hover:text-white"
-                          >
-                            Añadir
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
+                      ) : null}
 
-                    {editSuccess &&
-                    editingYearKey === "" &&
-                    editFeedbackYearKey === section.key ? (
-                      <p className="text-sm text-emerald-200">{editSuccess}</p>
-                    ) : null}
+                      {editSuccess &&
+                      editingYearKey === "" &&
+                      editFeedbackYearKey === section.key ? (
+                        <p className="text-sm text-emerald-200">{editSuccess}</p>
+                      ) : null}
 
-                    <div className={gridClassName}>
-                      {section.discos.map((disco) => {
-                        const anchorId = `disco-${disco.id}`;
+                      <div className={gridClassName}>
+                        {section.discos.map((disco) => {
+                          const discoAnchorId = `disco-${disco.id}`;
 
-                        return (
-                          <article
-                            key={disco.id}
-                            id={anchorId}
-                            className="group relative scroll-mt-32 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
-                          >
+                          return (
+                            <article
+                              key={disco.id}
+                              id={discoAnchorId}
+                              className="group relative scroll-mt-32 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                            >
                             <div className="relative aspect-square overflow-hidden border-b border-white/10 bg-slate-900">
-                              <ShareCardButton
-                                anchorId={anchorId}
-                                sectionId="discos"
-                                className="absolute right-4 top-4 z-10"
-                              />
+                              {adminConfigured ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleStartDiscoEdit(disco)}
+                                  aria-label={`Editar ${disco.title}`}
+                                  title={
+                                    editingDiscoId === disco.id
+                                      ? `Editando ${disco.title}`
+                                      : `Editar ${disco.title}`
+                                  }
+                                  className={`absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border bg-slate-950/72 text-slate-100 shadow-[0_10px_25px_rgba(2,6,23,0.35)] backdrop-blur transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${
+                                    editingDiscoId === disco.id
+                                      ? "border-cyan-300/60 bg-cyan-300/14 text-cyan-100"
+                                      : "border-white/15 hover:border-cyan-300/60 hover:bg-cyan-300/14 hover:text-white"
+                                  }`}
+                                >
+                                  <span className="sr-only">
+                                    {editingDiscoId === disco.id
+                                      ? `Editando ${disco.title}`
+                                      : `Editar ${disco.title}`}
+                                  </span>
+                                  <EditIcon />
+                                </button>
+                              ) : null}
 
                               {disco.coverSrc ? (
                                 <Image
@@ -619,29 +685,13 @@ export function DiscosViewer({
                             </div>
 
                             <div className="space-y-4 p-5">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 space-y-2">
-                                  <p className="text-[0.72rem] font-medium uppercase tracking-[0.24em] text-cyan-200/88">
-                                    {disco.groupName ?? "Grupo sin asignar"}
-                                  </p>
-                                  <h3 className="text-lg font-semibold leading-tight text-white">
-                                    {disco.title}
-                                  </h3>
-                                </div>
-
-                                {adminConfigured ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleStartDiscoEdit(disco)}
-                                    className={`shrink-0 rounded-full border px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] transition ${
-                                      editingDiscoId === disco.id
-                                        ? "border-cyan-300/28 bg-cyan-300/10 text-cyan-100"
-                                        : "border-white/12 bg-slate-950/55 text-slate-200 hover:border-cyan-300/50 hover:text-white"
-                                    }`}
-                                  >
-                                    {editingDiscoId === disco.id ? "Editando" : "Editar"}
-                                  </button>
-                                ) : null}
+                              <div className="min-w-0 space-y-2">
+                                <p className="text-[0.72rem] font-medium uppercase tracking-[0.24em] text-cyan-200/88">
+                                  {disco.groupName ?? "Grupo sin asignar"}
+                                </p>
+                                <h3 className="text-lg font-semibold leading-tight text-white">
+                                  {disco.title}
+                                </h3>
                               </div>
 
                               <div className="space-y-1 text-[0.78rem] leading-5 text-slate-400">
@@ -679,13 +729,14 @@ export function DiscosViewer({
                                 </p>
                               ) : null}
                             </div>
-                          </article>
-                        );
-                      })}
+                            </article>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
