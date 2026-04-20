@@ -48,6 +48,26 @@ type YearSection = {
 
 const DISCOS_VIEWER_GRID_STORAGE_KEY = "discos-viewer-grid-density";
 
+function SpotifyLogoIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#ffffff"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+    >
+      <circle cx="12" cy="12" r="8.25" fill="#1DB954" stroke="none" />
+      <path d="M8.2 10.15c2.45-.78 5.43-.58 7.78.54" />
+      <path d="M8.95 12.55c2-.58 4.28-.41 6.18.5" />
+      <path d="M9.8 14.8c1.5-.38 3.1-.26 4.48.38" />
+    </svg>
+  );
+}
+
 function compareDiscoAssets(left: DiscoAsset, right: DiscoAsset) {
   if (
     typeof left.year === "number" &&
@@ -492,11 +512,6 @@ export function DiscosViewer({
                         <div className="rounded-[1.2rem] border border-cyan-300/28 bg-cyan-300/10 px-4 py-2 text-lg font-semibold text-cyan-100 md:text-xl">
                           {section.label}
                         </div>
-                        <ShareCardButton
-                          anchorId={yearAnchorId}
-                          sectionId="discos"
-                          className="h-9 w-9 shrink-0"
-                        />
                       </div>
                       <p className="mt-3 text-sm text-slate-400 md:pl-7">
                         {section.discos.length} disco
@@ -518,20 +533,29 @@ export function DiscosViewer({
                     </div>
 
                     <div className="space-y-5">
-                      {isAdminUnlocked && section.key !== "sin-ano" ? (
-                        <DiscoUploadForm
-                          year={section.key}
-                          groupOptions={groupOptions}
-                          editingDisco={
-                            section.discos.find(
-                              (disco) => disco.id === editingDiscoId,
-                            ) ?? null
-                          }
-                          onEditCancel={handleCancelDiscoEdit}
-                          onDiscoSaved={handleDiscoSaved}
-                          onAdminSessionExpired={() => setIsAdminUnlocked(false)}
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          {isAdminUnlocked && section.key !== "sin-ano" ? (
+                            <DiscoUploadForm
+                              year={section.key}
+                              groupOptions={groupOptions}
+                              editingDisco={
+                                section.discos.find(
+                                  (disco) => disco.id === editingDiscoId,
+                                ) ?? null
+                              }
+                              onEditCancel={handleCancelDiscoEdit}
+                              onDiscoSaved={handleDiscoSaved}
+                              onAdminSessionExpired={() => setIsAdminUnlocked(false)}
+                            />
+                          ) : null}
+                        </div>
+                        <ShareCardButton
+                          anchorId={yearAnchorId}
+                          sectionId="discos"
+                          className="h-9 w-9 shrink-0 self-end sm:self-start"
                         />
-                      ) : null}
+                      </div>
 
                       {editingYearKey === section.key ? (
                         <div className="rounded-[1.6rem] border border-cyan-300/25 bg-cyan-300/8 px-5 py-4 shadow-[0_18px_40px_rgba(8,145,178,0.08)]">
@@ -726,12 +750,11 @@ export function DiscosViewer({
                                   href={disco.spotifyUrl}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.18),rgba(15,23,42,0.92))] px-3 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-200/55 hover:text-white"
+                                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-emerald-300/30 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.18),rgba(15,23,42,0.92))] text-emerald-100 transition hover:border-emerald-200/55 hover:text-white"
                                   aria-label={`Abrir ${disco.title} en Spotify`}
                                   title={`Abrir ${disco.title} en Spotify`}
                                 >
-                                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
-                                  <span>Abrir en Spotify</span>
+                                  <SpotifyLogoIcon />
                                 </a>
                               ) : null}
 
