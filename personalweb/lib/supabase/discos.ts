@@ -248,6 +248,7 @@ function buildDiscoSearchHaystack(disco: DiscoDatabaseRow) {
     disco.productor,
     disco.estudio,
     disco.spotify,
+    disco.observaciones,
     String(disco.grupo_id),
     groupName,
     disco.created_at,

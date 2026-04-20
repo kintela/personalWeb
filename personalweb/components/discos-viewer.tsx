@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { startTransition, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { startTransition, useEffect, useState, type FormEvent } from "react";
 
 import { DiscoUploadForm } from "@/components/disco-upload-form";
 import { DiscosYearObservationPanel } from "@/components/discos-year-observation-panel";
@@ -19,6 +19,9 @@ type DiscosViewerProps = {
   configured: boolean;
   error: string | null;
   totalCount: number;
+  filterValue: string;
+  yearValue: string;
+  yearOptions: string[];
   yearObservations: Record<string, string>;
   adminConfigured: boolean;
   initiallyAdminUnlocked: boolean;
@@ -202,13 +205,20 @@ export function DiscosViewer({
   configured,
   error,
   totalCount,
+  filterValue,
+  yearValue,
+  yearOptions,
   yearObservations,
   adminConfigured,
   initiallyAdminUnlocked,
   yearSpotifyPlaylists,
   groupOptions,
 }: DiscosViewerProps) {
+  const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [filterInput, setFilterInput] = useState(filterValue);
+  const [selectedYear, setSelectedYear] = useState(yearValue);
   const [currentDiscos, setCurrentDiscos] = useState(() => sortDiscoAssets(discos));
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
     DISCOS_VIEWER_GRID_STORAGE_KEY,
@@ -229,6 +239,14 @@ export function DiscosViewer({
   useEffect(() => {
     setIsAdminUnlocked(initiallyAdminUnlocked);
   }, [initiallyAdminUnlocked]);
+
+  useEffect(() => {
+    setFilterInput(filterValue);
+  }, [filterValue]);
+
+  useEffect(() => {
+    setSelectedYear(yearValue);
+  }, [yearValue]);
 
   useEffect(() => {
     setCurrentDiscos(sortDiscoAssets(discos));
@@ -259,18 +277,61 @@ export function DiscosViewer({
   const editableYears = yearSections
     .filter((section) => section.key !== "sin-ano")
     .map((section) => section.key);
-  const visibleGroupCount = new Set(
-    currentDiscos.map((disco) => disco.groupName).filter(Boolean),
-  ).size;
-  const visibleYearCount = yearSections.filter(
-    (section) => section.key !== "sin-ano",
-  ).length;
+  const hasActiveFilters = Boolean(filterValue || yearValue);
   const gridClassName =
     gridDensity === "dense"
       ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
       : gridDensity === "compact"
       ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
       : "grid gap-5 sm:grid-cols-2 xl:grid-cols-3";
+
+  function applyFilters({
+    nextFilterValue,
+    nextYearValue,
+  }: {
+    nextFilterValue: string;
+    nextYearValue: string;
+  }) {
+    const params = new URLSearchParams(searchParams.toString());
+    const normalizedFilterValue = nextFilterValue.trim();
+    const normalizedYearValue = nextYearValue.trim();
+
+    if (normalizedFilterValue) {
+      params.set("discoFilter", normalizedFilterValue);
+    } else {
+      params.delete("discoFilter");
+    }
+
+    if (normalizedYearValue) {
+      params.set("discoYear", normalizedYearValue);
+    } else {
+      params.delete("discoYear");
+    }
+
+    startTransition(() => {
+      router.replace(
+        params.toString() ? `${pathname}?${params.toString()}` : pathname,
+        { scroll: false },
+      );
+    });
+  }
+
+  function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    applyFilters({
+      nextFilterValue: filterInput,
+      nextYearValue: selectedYear,
+    });
+  }
+
+  function handleResetFilters() {
+    setFilterInput("");
+    setSelectedYear("");
+    applyFilters({
+      nextFilterValue: "",
+      nextYearValue: "",
+    });
+  }
 
   async function ensureAdminUnlocked() {
     if (isAdminUnlocked) {
@@ -417,49 +478,74 @@ export function DiscosViewer({
               <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
                 Una línea temporal para ver qué estaba sonando en cada momento.
               </h2>
-              <p className="max-w-3xl text-base leading-8 text-slate-300 md:text-lg">
-                Aquí no se entra a buscar con un formulario. Aquí se baja por
-                los años y debajo de cada fecha aparecen las carátulas junto al
-                nombre del grupo y del disco para leer la historia de una forma
-                mucho más visual.
-              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 self-start lg:self-auto">
-            <ShareCardButton anchorId="discos" className="shrink-0" />
+            <ShareCardButton
+              anchorId="discos"
+              queryKeys={["discoFilter", "discoYear"]}
+              className="shrink-0"
+            />
             <div className="inline-flex w-fit items-center gap-3 rounded-full border border-white/10 bg-slate-950/55 px-5 py-3 text-sm text-slate-200">
               <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
-              <span>{totalCount} discos en la línea</span>
+              <span>
+                {totalCount} disco{totalCount === 1 ? "" : "s"}
+                {hasActiveFilters ? " encontrados" : " en la línea"}
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-[1.6rem] border border-white/10 bg-slate-950/40 px-5 py-4">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.28em] text-slate-400">
-              Totales
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-white">
-              {totalCount}
-            </p>
-          </div>
-          <div className="rounded-[1.6rem] border border-white/10 bg-slate-950/40 px-5 py-4">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.28em] text-slate-400">
-              Años cubiertos
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-white">
-              {visibleYearCount}
-            </p>
-          </div>
-          <div className="rounded-[1.6rem] border border-white/10 bg-slate-950/40 px-5 py-4">
-            <p className="text-[0.68rem] font-medium uppercase tracking-[0.28em] text-slate-400">
-              Grupos visibles
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-white">
-              {visibleGroupCount}
-            </p>
-          </div>
+        <div className="rounded-[1.85rem] border border-white/10 bg-slate-950/35 p-5">
+          <form
+            className="flex flex-col gap-3 lg:flex-row lg:items-center"
+            onSubmit={handleFilterSubmit}
+          >
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">Filtrar discos</span>
+              <input
+                type="search"
+                value={filterInput}
+                onChange={(event) => setFilterInput(event.target.value)}
+                placeholder="Filtrar por título, grupo, año, fecha, estudio, Spotify, observaciones..."
+                className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/70"
+              />
+            </label>
+
+            <label className="lg:w-52">
+              <span className="sr-only">Filtrar por año</span>
+              <select
+                value={selectedYear}
+                onChange={(event) => {
+                  const nextYearValue = event.target.value;
+                  setSelectedYear(nextYearValue);
+                  applyFilters({
+                    nextFilterValue: filterInput,
+                    nextYearValue,
+                  });
+                }}
+                className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-sm text-white outline-none transition focus:border-cyan-300/70"
+              >
+                <option value="">Todos los años</option>
+                {yearOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="rounded-2xl border border-white/12 bg-black/20 px-5 py-4 text-sm text-slate-100 transition hover:border-white/25 hover:text-white"
+              >
+                Limpiar
+              </button>
+            ) : null}
+          </form>
         </div>
 
         {!configured ? (
@@ -473,7 +559,9 @@ export function DiscosViewer({
           </div>
         ) : discos.length === 0 ? (
           <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/35 px-5 py-10 text-sm text-slate-300">
-            No hay discos cargados todavía.
+            {hasActiveFilters
+              ? "No he encontrado discos con el filtro actual."
+              : "No hay discos cargados todavía."}
           </div>
         ) : (
           <div className="space-y-8">

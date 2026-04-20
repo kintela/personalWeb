@@ -3,6 +3,10 @@ import { DiscosViewer } from "@/components/discos-viewer";
 import { SectionPageShell } from "@/components/section-page-shell";
 import { isAdminAuthenticated, isAdminConfigured } from "@/lib/admin/auth";
 import { buildPageMetadata } from "@/lib/page-metadata";
+import {
+  getSingleSearchParam,
+  type RouteSearchParams,
+} from "@/lib/route-search-params";
 import type { SpotifyPlaylistAsset } from "@/lib/spotify-types";
 import { getSpotifyPlaylistList } from "@/lib/spotify";
 import { getDiscoGroupOptions, getDiscoList } from "@/lib/supabase/discos";
@@ -41,13 +45,20 @@ function buildYearSpotifyPlaylists(
   return yearSpotifyPlaylists;
 }
 
-export default async function DiscosPage() {
-  const [discos, initiallyAdminUnlocked, spotifyPlaylists, discoGroupOptions] = await Promise.all([
-    getDiscoList(),
-    isAdminAuthenticated(),
-    getSpotifyPlaylistList(),
-    getDiscoGroupOptions(),
-  ]);
+export default async function DiscosPage(props: {
+  searchParams: RouteSearchParams;
+}) {
+  const searchParams = await props.searchParams;
+  const [discos, initiallyAdminUnlocked, spotifyPlaylists, discoGroupOptions] =
+    await Promise.all([
+      getDiscoList({
+        filterValue: getSingleSearchParam(searchParams.discoFilter).trim(),
+        yearValue: getSingleSearchParam(searchParams.discoYear).trim(),
+      }),
+      isAdminAuthenticated(),
+      getSpotifyPlaylistList(),
+      getDiscoGroupOptions(),
+    ]);
   const discoYears = [
     ...new Set(
       discos.discos
@@ -67,6 +78,9 @@ export default async function DiscosPage() {
         configured={discos.configured}
         error={discos.error}
         totalCount={discos.totalCount}
+        filterValue={discos.filterValue}
+        yearValue={discos.yearValue}
+        yearOptions={discos.yearOptions}
         yearObservations={discos.yearObservations}
         adminConfigured={isAdminConfigured()}
         initiallyAdminUnlocked={initiallyAdminUnlocked}
