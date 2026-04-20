@@ -3,7 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const DISCOS_SELECT_COLUMNS =
-  "id, nombre, year_publicacion, fecha_publicacion, caratula, discografica, productor, estudio, grupo_id, created_at, updated_at, grupo:grupos!discos_grupo_id_fkey(nombre)";
+  "id, nombre, year_publicacion, fecha_publicacion, caratula, discografica, productor, estudio, spotify, grupo_id, created_at, updated_at, grupo:grupos!discos_grupo_id_fkey(nombre)";
 const DISCOS_YEAR_OBSERVACIONES_SELECT_COLUMNS =
   "year_publicacion, observaciones";
 const DISCO_COVER_BUCKET = "caratulas";
@@ -28,6 +28,7 @@ type DiscoDatabaseRow = {
   discografica: string | null;
   productor: string | null;
   estudio: string | null;
+  spotify: string | null;
   grupo_id: number | string;
   created_at: string | null;
   updated_at: string | null;
@@ -55,6 +56,7 @@ export type DiscoAsset = {
   label: string | null;
   producer: string | null;
   studio: string | null;
+  spotifyUrl: string | null;
   groupId: string;
   groupName: string | null;
 };
@@ -91,6 +93,7 @@ type UpdateDiscoDetailsOptions = {
   discografica: string;
   productor: string;
   estudio: string | null;
+  spotify: string | null;
   groupId: number;
 };
 
@@ -174,6 +177,26 @@ function buildDiscoReleaseDateLabel(date: string | null) {
   }).format(new Date(yearValue, monthValue - 1, dayValue));
 }
 
+function getNormalizedHttpUrl(rawUrl: string | null | undefined) {
+  const normalizedValue = rawUrl?.trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  try {
+    const url = new URL(normalizedValue);
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function getDiscoCoverPublicUrl(coverPath: string | null) {
   const normalizedPath = coverPath?.trim();
   const supabaseUrl = getSupabaseUrl()?.trim();
@@ -221,6 +244,7 @@ function buildDiscoSearchHaystack(disco: DiscoDatabaseRow) {
     disco.discografica,
     disco.productor,
     disco.estudio,
+    disco.spotify,
     String(disco.grupo_id),
     groupName,
     disco.created_at,
@@ -285,6 +309,7 @@ function mapDisco(row: DiscoDatabaseRow): DiscoAsset {
     label: row.discografica?.trim() || null,
     producer: row.productor?.trim() || null,
     studio: row.estudio?.trim() || null,
+    spotifyUrl: getNormalizedHttpUrl(row.spotify),
     groupId: String(row.grupo_id),
     groupName: getDiscoGroupName(row.grupo),
   };
@@ -471,6 +496,7 @@ export async function updateDiscoDetails(
       discografica: options.discografica,
       productor: options.productor,
       estudio: options.estudio,
+      spotify: options.spotify,
       grupo_id: options.groupId,
     })
     .eq("id", options.id)

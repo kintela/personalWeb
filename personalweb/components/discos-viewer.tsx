@@ -721,6 +721,20 @@ export function DiscosViewer({
                                 </p>
                               </div>
 
+                              {disco.spotifyUrl ? (
+                                <a
+                                  href={disco.spotifyUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.18),rgba(15,23,42,0.92))] px-3 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-200/55 hover:text-white"
+                                  aria-label={`Abrir ${disco.title} en Spotify`}
+                                  title={`Abrir ${disco.title} en Spotify`}
+                                >
+                                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
+                                  <span>Abrir en Spotify</span>
+                                </a>
+                              ) : null}
+
                               {discoEditSuccess &&
                               editingDiscoId === "" &&
                               discoFeedbackId === disco.id ? (

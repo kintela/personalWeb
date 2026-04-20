@@ -31,6 +31,7 @@ type DiscoFormState = {
   discografica: string;
   productor: string;
   estudio: string;
+  spotify: string;
   grupoId: string;
 };
 
@@ -42,6 +43,7 @@ function buildInitialUploadState(year: string): DiscoFormState {
     discografica: "",
     productor: "",
     estudio: "",
+    spotify: "",
     grupoId: "",
   };
 }
@@ -54,6 +56,7 @@ function buildEditState(disco: DiscoAsset): DiscoFormState {
     discografica: disco.label ?? "",
     productor: disco.producer ?? "",
     estudio: disco.studio ?? "",
+    spotify: disco.spotifyUrl ?? "",
     grupoId: disco.groupId,
   };
 }
@@ -168,6 +171,7 @@ export function DiscoUploadForm({
     const discografica = formState.discografica.trim();
     const productor = formState.productor.trim();
     const estudio = formState.estudio.trim();
+    const spotify = formState.spotify.trim();
     const fechaPublicacion = formState.fechaPublicacion.trim();
     const yearPublicacion = Number.parseInt(
       formState.yearPublicacion.trim(),
@@ -231,6 +235,7 @@ export function DiscoUploadForm({
               discografica,
               productor,
               estudio,
+              spotify,
               groupId: grupoId,
             }),
           },
@@ -273,6 +278,7 @@ export function DiscoUploadForm({
       formData.set("discografica", discografica);
       formData.set("productor", productor);
       formData.set("estudio", estudio);
+      formData.set("spotify", spotify);
       formData.set("grupo_id", String(grupoId));
 
       const response = await fetch("/api/discos/upload", {
@@ -474,6 +480,23 @@ export function DiscoUploadForm({
                 }
                 className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
                 placeholder="Estudio o estudios de grabación"
+              />
+            </label>
+
+            <label className="space-y-2 xl:col-span-2">
+              <span className="text-sm text-slate-200">Spotify</span>
+              <input
+                type="url"
+                value={formState.spotify}
+                onChange={(event) =>
+                  setFormState((current) => ({
+                    ...current,
+                    spotify: event.target.value,
+                  }))
+                }
+                className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                placeholder="https://open.spotify.com/album/..."
+                inputMode="url"
               />
             </label>
           </div>

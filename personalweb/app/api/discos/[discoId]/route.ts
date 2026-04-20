@@ -80,6 +80,38 @@ function parseOptionalDateValue(value: unknown) {
   };
 }
 
+function parseOptionalHttpUrlValue(value: unknown, fieldLabel: string) {
+  const normalizedValue = getTrimmedStringValue(value);
+
+  if (!normalizedValue) {
+    return {
+      ok: true as const,
+      value: null,
+    };
+  }
+
+  try {
+    const url = new URL(normalizedValue);
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return {
+        ok: false as const,
+        error: `El enlace de ${fieldLabel} debe empezar por http:// o https://.`,
+      };
+    }
+
+    return {
+      ok: true as const,
+      value: url.toString(),
+    };
+  } catch {
+    return {
+      ok: false as const,
+      error: `El enlace de ${fieldLabel} no es una URL válida.`,
+    };
+  }
+}
+
 export async function PATCH(
   request: Request,
   context: RouteContext,
@@ -114,6 +146,7 @@ export async function PATCH(
     discografica?: unknown;
     productor?: unknown;
     estudio?: unknown;
+    spotify?: unknown;
     groupId?: unknown;
   };
   const nombre = getTrimmedStringValue(payload.nombre);
@@ -122,6 +155,7 @@ export async function PATCH(
   const discografica = getTrimmedStringValue(payload.discografica);
   const productor = getTrimmedStringValue(payload.productor);
   const estudio = getOptionalTrimmedStringValue(payload.estudio);
+  const spotify = parseOptionalHttpUrlValue(payload.spotify, "Spotify");
   const groupId = getIntegerValue(payload.groupId);
 
   if (!nombre || !discografica || !productor) {
@@ -158,6 +192,16 @@ export async function PATCH(
     );
   }
 
+  if (!spotify.ok) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: spotify.error,
+      },
+      400,
+    );
+  }
+
   if (
     fechaPublicacion.value &&
     Number.parseInt(fechaPublicacion.value.slice(0, 4), 10) !== yearPublicacion
@@ -189,6 +233,7 @@ export async function PATCH(
     discografica,
     productor,
     estudio,
+    spotify: spotify.value,
     groupId,
   });
 

@@ -106,6 +106,38 @@ function parseOptionalDateValue(value: string) {
   };
 }
 
+function parseOptionalHttpUrlValue(value: string, fieldLabel: string) {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return {
+      ok: true as const,
+      value: null,
+    };
+  }
+
+  try {
+    const url = new URL(normalizedValue);
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return {
+        ok: false as const,
+        error: `El enlace de ${fieldLabel} debe empezar por http:// o https://.`,
+      };
+    }
+
+    return {
+      ok: true as const,
+      value: url.toString(),
+    };
+  } catch {
+    return {
+      ok: false as const,
+      error: `El enlace de ${fieldLabel} no es una URL válida.`,
+    };
+  }
+}
+
 function extractImageNumber(fileName: string) {
   const match = fileName.match(/^(\d+)\.[^.]+$/i);
 
@@ -235,8 +267,10 @@ export async function POST(request: Request) {
   const discografica = getStringValue(formData, "discografica");
   const productor = getStringValue(formData, "productor");
   const estudio = getStringValue(formData, "estudio");
+  const rawSpotify = getStringValue(formData, "spotify");
   const groupId = getIntegerValue(formData, "grupo_id");
   const fechaPublicacion = parseOptionalDateValue(rawFechaPublicacion);
+  const spotify = parseOptionalHttpUrlValue(rawSpotify, "Spotify");
 
   if (!(file instanceof File)) {
     return jsonResponse(
@@ -273,6 +307,16 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: fechaPublicacion.error,
+      },
+      400,
+    );
+  }
+
+  if (!spotify.ok) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: spotify.error,
       },
       400,
     );
@@ -357,6 +401,7 @@ export async function POST(request: Request) {
         discografica,
         productor,
         estudio: estudio || null,
+        spotify: spotify.value,
         grupo_id: groupId,
       })
       .select("id")
