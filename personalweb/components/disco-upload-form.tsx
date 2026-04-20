@@ -32,6 +32,7 @@ type DiscoFormState = {
   productor: string;
   estudio: string;
   spotify: string;
+  observaciones: string;
   grupoId: string;
 };
 
@@ -44,6 +45,7 @@ function buildInitialUploadState(year: string): DiscoFormState {
     productor: "",
     estudio: "",
     spotify: "",
+    observaciones: "",
     grupoId: "",
   };
 }
@@ -57,6 +59,7 @@ function buildEditState(disco: DiscoAsset): DiscoFormState {
     productor: disco.producer ?? "",
     estudio: disco.studio ?? "",
     spotify: disco.spotifyUrl ?? "",
+    observaciones: disco.observations ?? "",
     grupoId: disco.groupId,
   };
 }
@@ -172,6 +175,7 @@ export function DiscoUploadForm({
     const productor = formState.productor.trim();
     const estudio = formState.estudio.trim();
     const spotify = formState.spotify.trim();
+    const observaciones = formState.observaciones.trim();
     const fechaPublicacion = formState.fechaPublicacion.trim();
     const yearPublicacion = Number.parseInt(
       formState.yearPublicacion.trim(),
@@ -236,6 +240,7 @@ export function DiscoUploadForm({
               productor,
               estudio,
               spotify,
+              observaciones,
               groupId: grupoId,
             }),
           },
@@ -279,6 +284,7 @@ export function DiscoUploadForm({
       formData.set("productor", productor);
       formData.set("estudio", estudio);
       formData.set("spotify", spotify);
+      formData.set("observaciones", observaciones);
       formData.set("grupo_id", String(grupoId));
 
       const response = await fetch("/api/discos/upload", {
@@ -497,6 +503,22 @@ export function DiscoUploadForm({
                 className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
                 placeholder="https://open.spotify.com/album/..."
                 inputMode="url"
+              />
+            </label>
+
+            <label className="space-y-2 xl:col-span-2">
+              <span className="text-sm text-slate-200">Observaciones</span>
+              <textarea
+                value={formState.observaciones}
+                onChange={(event) =>
+                  setFormState((current) => ({
+                    ...current,
+                    observaciones: event.target.value,
+                  }))
+                }
+                rows={4}
+                className="min-h-28 w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm leading-6 text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                placeholder="Notas que solo se mostrarán en el tooltip de la tarjeta"
               />
             </label>
           </div>

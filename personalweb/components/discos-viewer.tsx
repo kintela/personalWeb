@@ -11,6 +11,7 @@ import {
   usePersistedGridDensity,
 } from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
+import { InfoHover } from "@/components/video-info-hover";
 import type { DiscoAsset, DiscoGroupOption } from "@/lib/supabase/discos";
 
 type DiscosViewerProps = {
@@ -766,6 +767,12 @@ export function DiscosViewer({
                                 </p>
                               ) : null}
                             </div>
+                            <InfoHover
+                              info={disco.observations}
+                              overlayClassName="pointer-events-none absolute inset-0 z-[1] bg-slate-950/76 opacity-0 transition duration-300 group-hover:opacity-100"
+                              wrapperClassName="pointer-events-none absolute inset-3 z-[2] opacity-0 transition duration-300 group-hover:pointer-events-auto group-hover:opacity-100"
+                              panelClassName="flex h-full max-h-full overflow-y-auto rounded-[1.35rem] border border-cyan-300/25 bg-slate-950/94 p-4 text-sm leading-7 text-slate-100 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur-md"
+                            />
                             </article>
                           );
                         })}

@@ -268,6 +268,7 @@ export async function POST(request: Request) {
   const productor = getStringValue(formData, "productor");
   const estudio = getStringValue(formData, "estudio");
   const rawSpotify = getStringValue(formData, "spotify");
+  const observaciones = getStringValue(formData, "observaciones");
   const groupId = getIntegerValue(formData, "grupo_id");
   const fechaPublicacion = parseOptionalDateValue(rawFechaPublicacion);
   const spotify = parseOptionalHttpUrlValue(rawSpotify, "Spotify");
@@ -402,6 +403,7 @@ export async function POST(request: Request) {
         productor,
         estudio: estudio || null,
         spotify: spotify.value,
+        observaciones: observaciones || null,
         grupo_id: groupId,
       })
       .select("id")

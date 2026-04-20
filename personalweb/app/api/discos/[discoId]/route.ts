@@ -147,6 +147,7 @@ export async function PATCH(
     productor?: unknown;
     estudio?: unknown;
     spotify?: unknown;
+    observaciones?: unknown;
     groupId?: unknown;
   };
   const nombre = getTrimmedStringValue(payload.nombre);
@@ -156,6 +157,7 @@ export async function PATCH(
   const productor = getTrimmedStringValue(payload.productor);
   const estudio = getOptionalTrimmedStringValue(payload.estudio);
   const spotify = parseOptionalHttpUrlValue(payload.spotify, "Spotify");
+  const observaciones = getOptionalTrimmedStringValue(payload.observaciones);
   const groupId = getIntegerValue(payload.groupId);
 
   if (!nombre || !discografica || !productor) {
@@ -234,6 +236,7 @@ export async function PATCH(
     productor,
     estudio,
     spotify: spotify.value,
+    observaciones,
     groupId,
   });
 

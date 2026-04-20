@@ -3,7 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const DISCOS_SELECT_COLUMNS =
-  "id, nombre, year_publicacion, fecha_publicacion, caratula, discografica, productor, estudio, spotify, grupo_id, created_at, updated_at, grupo:grupos!discos_grupo_id_fkey(nombre)";
+  "id, nombre, year_publicacion, fecha_publicacion, caratula, discografica, productor, estudio, spotify, observaciones, grupo_id, created_at, updated_at, grupo:grupos!discos_grupo_id_fkey(nombre)";
 const DISCOS_YEAR_OBSERVACIONES_SELECT_COLUMNS =
   "year_publicacion, observaciones";
 const DISCO_COVER_BUCKET = "caratulas";
@@ -29,6 +29,7 @@ type DiscoDatabaseRow = {
   productor: string | null;
   estudio: string | null;
   spotify: string | null;
+  observaciones: string | null;
   grupo_id: number | string;
   created_at: string | null;
   updated_at: string | null;
@@ -57,6 +58,7 @@ export type DiscoAsset = {
   producer: string | null;
   studio: string | null;
   spotifyUrl: string | null;
+  observations: string | null;
   groupId: string;
   groupName: string | null;
 };
@@ -94,6 +96,7 @@ type UpdateDiscoDetailsOptions = {
   productor: string;
   estudio: string | null;
   spotify: string | null;
+  observaciones: string | null;
   groupId: number;
 };
 
@@ -310,6 +313,7 @@ function mapDisco(row: DiscoDatabaseRow): DiscoAsset {
     producer: row.productor?.trim() || null,
     studio: row.estudio?.trim() || null,
     spotifyUrl: getNormalizedHttpUrl(row.spotify),
+    observations: row.observaciones?.trim() || null,
     groupId: String(row.grupo_id),
     groupName: getDiscoGroupName(row.grupo),
   };
@@ -497,6 +501,7 @@ export async function updateDiscoDetails(
       productor: options.productor,
       estudio: options.estudio,
       spotify: options.spotify,
+      observaciones: options.observaciones,
       grupo_id: options.groupId,
     })
     .eq("id", options.id)
