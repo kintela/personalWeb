@@ -19,7 +19,8 @@ type DiscoUploadFormProps = {
   year: string;
   groupOptions: DiscoGroupOption[];
   isAdminUnlocked?: boolean;
-  onRequestAdminUnlock?: () => Promise<boolean>;
+  adminConfigured?: boolean;
+  onUnlockedChange?: (nextValue: boolean) => void;
   editingDisco?: DiscoAsset | null;
   onEditCancel?: () => void;
   onDiscoSaved?: (disco: DiscoAsset) => void;
@@ -78,7 +79,8 @@ export function DiscoUploadForm({
   year,
   groupOptions,
   isAdminUnlocked = false,
-  onRequestAdminUnlock,
+  adminConfigured = false,
+  onUnlockedChange,
   editingDisco = null,
   onEditCancel,
   onDiscoSaved,
@@ -91,6 +93,9 @@ export function DiscoUploadForm({
   const [formState, setFormState] = useState(() => buildInitialUploadState(year));
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState("");
+  const [unlockPassword, setUnlockPassword] = useState("");
+  const [unlockError, setUnlockError] = useState("");
+  const [isUnlocking, setIsUnlocking] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -171,26 +176,59 @@ export function DiscoUploadForm({
     onEditCancel?.();
   }
 
-  async function handleCreateFormToggle() {
+  function handleCreateFormToggle() {
     if (isOpen) {
       setIsOpen(false);
+      setUnlockPassword("");
+      setUnlockError("");
       setUploadError("");
       setUploadSuccess("");
       return;
     }
 
+    setUnlockPassword("");
+    setUnlockError("");
     setUploadError("");
     setUploadSuccess("");
+    setIsOpen(true);
+  }
 
-    if (!isAdminUnlocked) {
-      const adminReady = await onRequestAdminUnlock?.();
+  async function handleUnlock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-      if (!adminReady) {
-        return;
-      }
+    if (!adminConfigured) {
+      setUnlockError("Falta ADMIN_PASSWORD en el entorno del servidor.");
+      return;
     }
 
-    setIsOpen(true);
+    setIsUnlocking(true);
+    setUnlockError("");
+
+    try {
+      const response = await fetch("/api/admin/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password: unlockPassword }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.ok) {
+        setUnlockError(payload?.error ?? "No he podido validar la contraseña.");
+        return;
+      }
+
+      onUnlockedChange?.(true);
+      setUnlockPassword("");
+      setUnlockError("");
+    } catch {
+      setUnlockError("No he podido validar la contraseña.");
+    } finally {
+      setIsUnlocking(false);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -281,6 +319,9 @@ export function DiscoUploadForm({
 
         if (!response.ok || !payload?.ok || !payload.disco) {
           if (response.status === 401) {
+            setUnlockError(
+              "La sesión admin ha caducado. Vuelve a introducir la contraseña.",
+            );
             onAdminSessionExpired?.();
           }
 
@@ -327,6 +368,9 @@ export function DiscoUploadForm({
 
       if (!response.ok || !payload?.ok) {
         if (response.status === 401) {
+          setUnlockError(
+            "La sesión admin ha caducado. Vuelve a introducir la contraseña.",
+          );
           onAdminSessionExpired?.();
         }
 
@@ -359,7 +403,7 @@ export function DiscoUploadForm({
         <div className="flex justify-start">
           <button
             type="button"
-            onClick={() => void handleCreateFormToggle()}
+            onClick={handleCreateFormToggle}
             className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-slate-950/45 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/60 hover:text-white"
             aria-expanded={isOpen}
             aria-label={isOpen ? `Cerrar alta de disco en ${year}` : `Abrir alta de disco en ${year}`}
@@ -371,263 +415,298 @@ export function DiscoUploadForm({
       ) : null}
 
       {isOpen ? (
-        <form
-          className="space-y-5 rounded-[1.6rem] border border-white/10 bg-slate-950/35 p-5"
-          onSubmit={handleSubmit}
-        >
-          <div className="space-y-2">
-            <h4 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-200">
-              {editingDisco ? "Editar disco" : "Alta de disco"}
-            </h4>
-            <p className="text-sm text-slate-400">
-              {editingDisco
-                ? "Edita aquí los datos del disco. Si cambias el año, se recolocará en su nueva sección al guardar."
-                : `El año queda fijado en ${year} y la carátula se subirá a \`caratulas/discos\` con el siguiente número libre.`}
-            </p>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-sm text-slate-200">Nombre</span>
-              <input
-                type="text"
-                value={formState.nombre}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    nombre: event.target.value,
-                  }))
-                }
-                className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-                placeholder="Título del disco"
-                required
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-sm text-slate-200">Grupo</span>
-              <select
-                value={formState.grupoId}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    grupoId: event.target.value,
-                  }))
-                }
-                className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-                required
-              >
-                <option value="">Selecciona un grupo</option>
-                {groupOptions.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {editingDisco ? (
-              <label className="space-y-2">
-                <span className="text-sm text-slate-200">Año</span>
-                <input
-                  type="number"
-                  min={1900}
-                  max={2100}
-                  value={formState.yearPublicacion}
-                  onChange={(event) =>
-                    setFormState((current) => ({
-                      ...current,
-                      yearPublicacion: event.target.value,
-                    }))
-                  }
-                  className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-                  required
-                />
-              </label>
-            ) : null}
-
-            <label className="space-y-2">
-              <span className="text-sm text-slate-200">Fecha de publicación</span>
-              <input
-                type="date"
-                value={formState.fechaPublicacion}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    fechaPublicacion: event.target.value,
-                  }))
-                }
-                className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-sm text-slate-200">Discográfica</span>
-              <input
-                type="text"
-                value={formState.discografica}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    discografica: event.target.value,
-                  }))
-                }
-                className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-                placeholder="Sello o discográfica"
-                required
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-sm text-slate-200">Productor</span>
-              <input
-                type="text"
-                value={formState.productor}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    productor: event.target.value,
-                  }))
-                }
-                className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-                placeholder="Productor o productores"
-                required
-              />
-            </label>
-
-            <label className="space-y-2 xl:col-span-2">
-              <span className="text-sm text-slate-200">Estudio</span>
-              <input
-                type="text"
-                value={formState.estudio}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    estudio: event.target.value,
-                  }))
-                }
-                className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-                placeholder="Estudio o estudios de grabación"
-              />
-            </label>
-
-            <label className="space-y-2 xl:col-span-2">
-              <span className="text-sm text-slate-200">Spotify</span>
-              <input
-                type="url"
-                value={formState.spotify}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    spotify: event.target.value,
-                  }))
-                }
-                className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-                placeholder="https://open.spotify.com/album/..."
-                inputMode="url"
-              />
-            </label>
-
-            <label className="space-y-2 xl:col-span-2">
-              <span className="text-sm text-slate-200">Observaciones</span>
-              <textarea
-                value={formState.observaciones}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    observaciones: event.target.value,
-                  }))
-                }
-                rows={4}
-                className="min-h-28 w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm leading-6 text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-                placeholder="Notas que solo se mostrarán en el tooltip de la tarjeta"
-              />
-            </label>
-          </div>
-
-          {!editingDisco ? (
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
-              <label className="space-y-2">
-                <span className="text-sm text-slate-200">Carátula</span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif,image/avif,.jpg,.jpeg,.png,.webp,.gif,.avif"
-                  onChange={handleFileInputChange}
-                  className="block w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white file:mr-4 file:rounded-full file:border-0 file:bg-cyan-300 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-950"
-                  required
-                />
-                {selectedFile ? (
-                  <p className="text-xs text-slate-400">
-                    {selectedFile.name} · {formatBytes(selectedFile.size)}
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-500">
-                    Se renombrará automáticamente con el siguiente número libre.
-                  </p>
-                )}
-              </label>
-
+        <section className="rounded-[1.6rem] border border-white/10 bg-slate-950/35 p-5">
+          {!isAdminUnlocked && !isEditMode ? (
+            <form className="space-y-4" onSubmit={handleUnlock}>
               <div className="space-y-2">
-                <span className="text-sm text-slate-200">Vista previa</span>
-                <div className="flex min-h-48 items-center justify-center overflow-hidden rounded-[1.2rem] border border-white/10 bg-black/35">
-                  {selectedFilePreviewUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={selectedFilePreviewUrl}
-                      alt={`Vista previa de ${selectedFile?.name ?? "la carátula"}`}
-                      className="h-full w-full object-cover"
+                <h4 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-200">
+                  Alta de disco
+                </h4>
+                <p className="text-sm text-slate-400">
+                  Introduce la contraseña admin para mostrar el formulario de alta.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <input
+                  type="password"
+                  value={unlockPassword}
+                  onChange={(event) => setUnlockPassword(event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                  placeholder="Contraseña admin"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={isUnlocking}
+                  className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isUnlocking ? "Validando..." : "Desbloquear"}
+                </button>
+              </div>
+
+              {unlockError ? (
+                <p className="text-sm text-rose-200">{unlockError}</p>
+              ) : null}
+            </form>
+          ) : (
+            <form className="space-y-5" onSubmit={handleSubmit}>
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-200">
+                  {editingDisco ? "Editar disco" : "Alta de disco"}
+                </h4>
+                <p className="text-sm text-slate-400">
+                  {editingDisco
+                    ? "Edita aquí los datos del disco. Si cambias el año, se recolocará en su nueva sección al guardar."
+                    : `El año queda fijado en ${year} y la carátula se subirá a \`caratulas/discos\` con el siguiente número libre.`}
+                </p>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-sm text-slate-200">Nombre</span>
+                  <input
+                    type="text"
+                    value={formState.nombre}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        nombre: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                    placeholder="Título del disco"
+                    required
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-sm text-slate-200">Grupo</span>
+                  <select
+                    value={formState.grupoId}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        grupoId: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                    required
+                  >
+                    <option value="">Selecciona un grupo</option>
+                    {groupOptions.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {editingDisco ? (
+                  <label className="space-y-2">
+                    <span className="text-sm text-slate-200">Año</span>
+                    <input
+                      type="number"
+                      min={1900}
+                      max={2100}
+                      value={formState.yearPublicacion}
+                      onChange={(event) =>
+                        setFormState((current) => ({
+                          ...current,
+                          yearPublicacion: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                      required
                     />
-                  ) : (
-                    <p className="px-4 text-center text-xs uppercase tracking-[0.2em] text-slate-500">
-                      Sin vista previa
-                    </p>
-                  )}
+                  </label>
+                ) : null}
+
+                <label className="space-y-2">
+                  <span className="text-sm text-slate-200">Fecha de publicación</span>
+                  <input
+                    type="date"
+                    value={formState.fechaPublicacion}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        fechaPublicacion: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-sm text-slate-200">Discográfica</span>
+                  <input
+                    type="text"
+                    value={formState.discografica}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        discografica: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                    placeholder="Sello o discográfica"
+                    required
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-sm text-slate-200">Productor</span>
+                  <input
+                    type="text"
+                    value={formState.productor}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        productor: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                    placeholder="Productor o productores"
+                    required
+                  />
+                </label>
+
+                <label className="space-y-2 xl:col-span-2">
+                  <span className="text-sm text-slate-200">Estudio</span>
+                  <input
+                    type="text"
+                    value={formState.estudio}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        estudio: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                    placeholder="Estudio o estudios de grabación"
+                  />
+                </label>
+
+                <label className="space-y-2 xl:col-span-2">
+                  <span className="text-sm text-slate-200">Spotify</span>
+                  <input
+                    type="url"
+                    value={formState.spotify}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        spotify: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                    placeholder="https://open.spotify.com/album/..."
+                    inputMode="url"
+                  />
+                </label>
+
+                <label className="space-y-2 xl:col-span-2">
+                  <span className="text-sm text-slate-200">Observaciones</span>
+                  <textarea
+                    value={formState.observaciones}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        observaciones: event.target.value,
+                      }))
+                    }
+                    rows={4}
+                    className="min-h-28 w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm leading-6 text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+                    placeholder="Notas que solo se mostrarán en el tooltip de la tarjeta"
+                  />
+                </label>
+              </div>
+
+              {!editingDisco ? (
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
+                  <label className="space-y-2">
+                    <span className="text-sm text-slate-200">Carátula</span>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif,image/avif,.jpg,.jpeg,.png,.webp,.gif,.avif"
+                      onChange={handleFileInputChange}
+                      className="block w-full rounded-[1rem] border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white file:mr-4 file:rounded-full file:border-0 file:bg-cyan-300 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-950"
+                      required
+                    />
+                    {selectedFile ? (
+                      <p className="text-xs text-slate-400">
+                        {selectedFile.name} · {formatBytes(selectedFile.size)}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-500">
+                        Se renombrará automáticamente con el siguiente número libre.
+                      </p>
+                    )}
+                  </label>
+
+                  <div className="space-y-2">
+                    <span className="text-sm text-slate-200">Vista previa</span>
+                    <div className="flex min-h-48 items-center justify-center overflow-hidden rounded-[1.2rem] border border-white/10 bg-black/35">
+                      {selectedFilePreviewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={selectedFilePreviewUrl}
+                          alt={`Vista previa de ${selectedFile?.name ?? "la carátula"}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <p className="px-4 text-center text-xs uppercase tracking-[0.2em] text-slate-500">
+                          Sin vista previa
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  La carátula se mantiene como está. Si luego quieres cambiarla,
+                  habría que añadir esa acción aparte.
+                </p>
+              )}
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  {uploadError ? (
+                    <p className="text-sm text-rose-200">{uploadError}</p>
+                  ) : null}
+                  {uploadSuccess ? (
+                    <p className="text-sm text-emerald-200">{uploadSuccess}</p>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {editingDisco ? (
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="rounded-2xl border border-white/12 bg-slate-950/55 px-5 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/20 hover:text-white"
+                    >
+                      Cancelar
+                    </button>
+                  ) : null}
+
+                  <button
+                    type="submit"
+                    disabled={isUploading}
+                    className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isUploading
+                      ? "Guardando..."
+                      : editingDisco
+                      ? "Guardar cambios"
+                      : `Guardar disco en ${year}`}
+                  </button>
                 </div>
               </div>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500">
-              La carátula se mantiene como está. Si luego quieres cambiarla,
-              habría que añadir esa acción aparte.
-            </p>
+            </form>
           )}
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              {uploadError ? (
-                <p className="text-sm text-rose-200">{uploadError}</p>
-              ) : null}
-              {uploadSuccess ? (
-                <p className="text-sm text-emerald-200">{uploadSuccess}</p>
-              ) : null}
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row">
-              {editingDisco ? (
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="rounded-2xl border border-white/12 bg-slate-950/55 px-5 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/20 hover:text-white"
-                >
-                  Cancelar
-                </button>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={isUploading}
-                className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isUploading
-                  ? "Guardando..."
-                  : editingDisco
-                  ? "Guardar cambios"
-                  : `Guardar disco en ${year}`}
-              </button>
-            </div>
-          </div>
-        </form>
+        </section>
       ) : null}
     </div>
   );

@@ -616,7 +616,8 @@ export function DiscosViewer({
                               year={section.key}
                               groupOptions={groupOptions}
                               isAdminUnlocked={isAdminUnlocked}
-                              onRequestAdminUnlock={ensureAdminUnlocked}
+                              adminConfigured={adminConfigured}
+                              onUnlockedChange={setIsAdminUnlocked}
                               editingDisco={
                                 section.discos.find(
                                   (disco) => disco.id === editingDiscoId,
