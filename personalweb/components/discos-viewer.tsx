@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useState, type FormEvent } from "react";
 
 import { DiscoUploadForm } from "@/components/disco-upload-form";
-import { DiscosYearObservationPanel } from "@/components/discos-year-observation-panel";
 import {
   GridDensityControls,
   usePersistedGridDensity,
@@ -274,9 +273,6 @@ export function DiscosViewer({
     currentYearObservations,
     yearSpotifyPlaylists,
   );
-  const editableYears = yearSections
-    .filter((section) => section.key !== "sin-ano")
-    .map((section) => section.key);
   const hasActiveFilters = Boolean(filterValue || yearValue);
   const gridClassName =
     gridDensity === "dense"
@@ -565,15 +561,6 @@ export function DiscosViewer({
           </div>
         ) : (
           <div className="space-y-8">
-            <DiscosYearObservationPanel
-              years={editableYears}
-              initialObservations={currentYearObservations}
-              isUnlocked={isAdminUnlocked}
-              adminConfigured={adminConfigured}
-              onUnlockedChange={setIsAdminUnlocked}
-              onObservationsChange={setCurrentYearObservations}
-            />
-
             <div className="flex justify-end">
               <GridDensityControls
                 gridDensity={gridDensity}
@@ -624,10 +611,12 @@ export function DiscosViewer({
                     <div className="space-y-5">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 flex-1">
-                          {isAdminUnlocked && section.key !== "sin-ano" ? (
+                          {section.key !== "sin-ano" ? (
                             <DiscoUploadForm
                               year={section.key}
                               groupOptions={groupOptions}
+                              isAdminUnlocked={isAdminUnlocked}
+                              onRequestAdminUnlock={ensureAdminUnlocked}
                               editingDisco={
                                 section.discos.find(
                                   (disco) => disco.id === editingDiscoId,

@@ -18,6 +18,8 @@ import type {
 type DiscoUploadFormProps = {
   year: string;
   groupOptions: DiscoGroupOption[];
+  isAdminUnlocked?: boolean;
+  onRequestAdminUnlock?: () => Promise<boolean>;
   editingDisco?: DiscoAsset | null;
   onEditCancel?: () => void;
   onDiscoSaved?: (disco: DiscoAsset) => void;
@@ -75,6 +77,8 @@ function formatBytes(bytes: number) {
 export function DiscoUploadForm({
   year,
   groupOptions,
+  isAdminUnlocked = false,
+  onRequestAdminUnlock,
   editingDisco = null,
   onEditCancel,
   onDiscoSaved,
@@ -165,6 +169,28 @@ export function DiscoUploadForm({
     setUploadSuccess("");
     setIsOpen(false);
     onEditCancel?.();
+  }
+
+  async function handleCreateFormToggle() {
+    if (isOpen) {
+      setIsOpen(false);
+      setUploadError("");
+      setUploadSuccess("");
+      return;
+    }
+
+    setUploadError("");
+    setUploadSuccess("");
+
+    if (!isAdminUnlocked) {
+      const adminReady = await onRequestAdminUnlock?.();
+
+      if (!adminReady) {
+        return;
+      }
+    }
+
+    setIsOpen(true);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -333,11 +359,7 @@ export function DiscoUploadForm({
         <div className="flex justify-start">
           <button
             type="button"
-            onClick={() => {
-              setIsOpen((current) => !current);
-              setUploadError("");
-              setUploadSuccess("");
-            }}
+            onClick={() => void handleCreateFormToggle()}
             className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-slate-950/45 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/60 hover:text-white"
             aria-expanded={isOpen}
             aria-label={isOpen ? `Cerrar alta de disco en ${year}` : `Abrir alta de disco en ${year}`}
