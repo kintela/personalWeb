@@ -49,6 +49,11 @@ type YearSection = {
     | null;
 };
 
+type YearFilterState = {
+  text: string;
+  groupId: string;
+};
+
 const DISCOS_VIEWER_GRID_STORAGE_KEY = "discos-viewer-grid-density";
 
 function SpotifyLogoIcon() {
@@ -125,6 +130,75 @@ function compareDiscoAssets(left: DiscoAsset, right: DiscoAsset) {
 
 function sortDiscoAssets(discos: DiscoAsset[]) {
   return [...discos].sort(compareDiscoAssets);
+}
+
+function normalizeSearchValue(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("es-ES")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function buildDiscoAssetSearchHaystack(disco: DiscoAsset) {
+  return [
+    disco.id,
+    disco.title,
+    disco.year,
+    disco.releaseDate,
+    disco.releaseDateLabel,
+    disco.cover,
+    disco.coverSrc,
+    disco.label,
+    disco.producer,
+    disco.studio,
+    disco.spotifyUrl,
+    disco.observations,
+    disco.groupId,
+    disco.groupName,
+  ]
+    .map(normalizeSearchValue)
+    .filter(Boolean)
+    .join(" \n");
+}
+
+function buildYearGroupOptions(discos: DiscoAsset[]) {
+  const groups = new Map<string, string>();
+
+  for (const disco of discos) {
+    const groupId = disco.groupId.trim();
+
+    if (!groupId) {
+      continue;
+    }
+
+    groups.set(groupId, disco.groupName?.trim() || `Grupo ${groupId}`);
+  }
+
+  return [...groups.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((left, right) =>
+      left.name.localeCompare(right.name, "es", { sensitivity: "base" }),
+    );
+}
+
+function filterYearDiscos(discos: DiscoAsset[], filters: YearFilterState) {
+  const normalizedText = normalizeSearchValue(filters.text);
+  const normalizedGroupId = filters.groupId.trim();
+
+  if (!normalizedText && !normalizedGroupId) {
+    return discos;
+  }
+
+  return discos.filter((disco) => {
+    const matchesText =
+      !normalizedText ||
+      buildDiscoAssetSearchHaystack(disco).includes(normalizedText);
+    const matchesGroup =
+      !normalizedGroupId || disco.groupId === normalizedGroupId;
+
+    return matchesText && matchesGroup;
+  });
 }
 
 function buildYearSections(
@@ -234,6 +308,9 @@ export function DiscosViewer({
   const [editingDiscoId, setEditingDiscoId] = useState("");
   const [discoEditSuccess, setDiscoEditSuccess] = useState("");
   const [discoFeedbackId, setDiscoFeedbackId] = useState("");
+  const [yearFilters, setYearFilters] = useState<Record<string, YearFilterState>>(
+    {},
+  );
 
   useEffect(() => {
     setIsAdminUnlocked(initiallyAdminUnlocked);
@@ -326,6 +403,43 @@ export function DiscosViewer({
     applyFilters({
       nextFilterValue: "",
       nextYearValue: "",
+    });
+  }
+
+  function getYearFilters(yearKey: string): YearFilterState {
+    return yearFilters[yearKey] ?? { text: "", groupId: "" };
+  }
+
+  function updateYearFilters(
+    yearKey: string,
+    updater: (currentFilters: YearFilterState) => YearFilterState,
+  ) {
+    setYearFilters((current) => {
+      const nextFilters = updater(current[yearKey] ?? { text: "", groupId: "" });
+      const trimmedText = nextFilters.text.trim();
+      const trimmedGroupId = nextFilters.groupId.trim();
+
+      if (!trimmedText && !trimmedGroupId) {
+        const remainingFilters = { ...current };
+        delete remainingFilters[yearKey];
+        return remainingFilters;
+      }
+
+      return {
+        ...current,
+        [yearKey]: {
+          text: nextFilters.text,
+          groupId: trimmedGroupId,
+        },
+      };
+    });
+  }
+
+  function resetYearFilters(yearKey: string) {
+    setYearFilters((current) => {
+      const remainingFilters = { ...current };
+      delete remainingFilters[yearKey];
+      return remainingFilters;
     });
   }
 
@@ -575,6 +689,17 @@ export function DiscosViewer({
 
               {yearSections.map((section) => {
                 const yearAnchorId = `discos-year-${section.key}`;
+                const sectionFilters = getYearFilters(section.key);
+                const sectionGroupOptions = buildYearGroupOptions(section.discos);
+                const filteredSectionDiscos = filterYearDiscos(
+                  section.discos,
+                  sectionFilters,
+                );
+                const hasYearFilters = Boolean(
+                  sectionFilters.text.trim() || sectionFilters.groupId.trim(),
+                );
+                const visibleDiscoCount = filteredSectionDiscos.length;
+                const totalYearDiscoCount = section.discos.length;
 
                 return (
                   <div
@@ -590,8 +715,16 @@ export function DiscosViewer({
                         </div>
                       </div>
                       <p className="mt-3 text-sm text-slate-400 md:pl-7">
-                        {section.discos.length} disco
-                        {section.discos.length === 1 ? "" : "s"}
+                        {hasYearFilters ? (
+                          <>
+                            {visibleDiscoCount} de {totalYearDiscoCount} discos
+                          </>
+                        ) : (
+                          <>
+                            {totalYearDiscoCount} disco
+                            {totalYearDiscoCount === 1 ? "" : "s"}
+                          </>
+                        )}
                       </p>
                       {section.spotifyPlaylist ? (
                         <a
@@ -634,6 +767,68 @@ export function DiscosViewer({
                           sectionId="discos"
                           className="h-9 w-9 shrink-0 self-end sm:self-start"
                         />
+                      </div>
+
+                      <div className="rounded-[1.4rem] border border-white/10 bg-slate-950/30 p-3">
+                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_230px_auto]">
+                          <label>
+                            <span className="sr-only">
+                              Filtrar discos de {section.label}
+                            </span>
+                            <input
+                              type="search"
+                              value={sectionFilters.text}
+                              onChange={(event) =>
+                                updateYearFilters(section.key, (current) => ({
+                                  ...current,
+                                  text: event.target.value,
+                                }))
+                              }
+                              placeholder={`Buscar en ${section.label}: título, grupo, fecha, sello, estudio...`}
+                              className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/60"
+                            />
+                          </label>
+
+                          <label>
+                            <span className="sr-only">
+                              Filtrar grupos de {section.label}
+                            </span>
+                            <select
+                              value={sectionFilters.groupId}
+                              onChange={(event) =>
+                                updateYearFilters(section.key, (current) => ({
+                                  ...current,
+                                  groupId: event.target.value,
+                                }))
+                              }
+                              className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                            >
+                              <option value="">Todos los grupos</option>
+                              {sectionGroupOptions.map((group) => (
+                                <option key={group.id} value={group.id}>
+                                  {group.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          {hasYearFilters ? (
+                            <button
+                              type="button"
+                              onClick={() => resetYearFilters(section.key)}
+                              className="rounded-2xl border border-white/12 bg-black/20 px-4 py-3 text-sm text-slate-100 transition hover:border-white/25 hover:text-white"
+                            >
+                              Limpiar
+                            </button>
+                          ) : null}
+                        </div>
+
+                        {hasYearFilters ? (
+                          <p className="mt-3 text-xs uppercase tracking-[0.22em] text-slate-400">
+                            {visibleDiscoCount} de {totalYearDiscoCount} discos
+                            visibles en {section.label}
+                          </p>
+                        ) : null}
                       </div>
 
                       {editingYearKey === section.key ? (
@@ -735,126 +930,136 @@ export function DiscosViewer({
                         <p className="text-sm text-emerald-200">{editSuccess}</p>
                       ) : null}
 
-                      <div className={gridClassName}>
-                        {section.discos.map((disco) => {
-                          const discoAnchorId = `disco-${disco.id}`;
+                      {filteredSectionDiscos.length > 0 ? (
+                        <div className={gridClassName}>
+                          {filteredSectionDiscos.map((disco) => {
+                            const discoAnchorId = `disco-${disco.id}`;
 
-                          return (
-                            <article
-                              key={disco.id}
-                              id={discoAnchorId}
-                              className="group relative scroll-mt-32 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
-                            >
-                            <div className="relative aspect-square overflow-hidden border-b border-white/10 bg-slate-900">
-                              {adminConfigured ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void handleStartDiscoEdit(disco)}
-                                  aria-label={`Editar ${disco.title}`}
-                                  title={
-                                    editingDiscoId === disco.id
-                                      ? `Editando ${disco.title}`
-                                      : `Editar ${disco.title}`
-                                  }
-                                  className={`absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border bg-slate-950/72 text-slate-100 shadow-[0_10px_25px_rgba(2,6,23,0.35)] backdrop-blur transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${
-                                    editingDiscoId === disco.id
-                                      ? "border-cyan-300/60 bg-cyan-300/14 text-cyan-100"
-                                      : "border-white/15 hover:border-cyan-300/60 hover:bg-cyan-300/14 hover:text-white"
-                                  }`}
-                                >
-                                  <span className="sr-only">
-                                    {editingDiscoId === disco.id
-                                      ? `Editando ${disco.title}`
-                                      : `Editar ${disco.title}`}
-                                  </span>
-                                  <EditIcon />
-                                </button>
-                              ) : null}
+                            return (
+                              <article
+                                key={disco.id}
+                                id={discoAnchorId}
+                                className="group relative scroll-mt-32 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
+                              >
+                                <div className="relative aspect-square overflow-hidden border-b border-white/10 bg-slate-900">
+                                  {adminConfigured ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleStartDiscoEdit(disco)}
+                                      aria-label={`Editar ${disco.title}`}
+                                      title={
+                                        editingDiscoId === disco.id
+                                          ? `Editando ${disco.title}`
+                                          : `Editar ${disco.title}`
+                                      }
+                                      className={`absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border bg-slate-950/72 text-slate-100 shadow-[0_10px_25px_rgba(2,6,23,0.35)] backdrop-blur transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${
+                                        editingDiscoId === disco.id
+                                          ? "border-cyan-300/60 bg-cyan-300/14 text-cyan-100"
+                                          : "border-white/15 hover:border-cyan-300/60 hover:bg-cyan-300/14 hover:text-white"
+                                      }`}
+                                    >
+                                      <span className="sr-only">
+                                        {editingDiscoId === disco.id
+                                          ? `Editando ${disco.title}`
+                                          : `Editar ${disco.title}`}
+                                      </span>
+                                      <EditIcon />
+                                    </button>
+                                  ) : null}
 
-                              {disco.coverSrc ? (
-                                <Image
-                                  src={disco.coverSrc}
-                                  alt={`Carátula de ${disco.title}`}
-                                  fill
-                                  unoptimized
-                                  className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                                  sizes="(min-width: 1280px) 280px, (min-width: 640px) 50vw, 100vw"
-                                />
-                              ) : (
-                                <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-4 text-center text-[0.72rem] uppercase tracking-[0.28em] text-slate-400">
-                                  Sin carátula
+                                  {disco.coverSrc ? (
+                                    <Image
+                                      src={disco.coverSrc}
+                                      alt={`Carátula de ${disco.title}`}
+                                      fill
+                                      unoptimized
+                                      className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                                      sizes="(min-width: 1280px) 280px, (min-width: 640px) 50vw, 100vw"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-4 text-center text-[0.72rem] uppercase tracking-[0.28em] text-slate-400">
+                                      Sin carátula
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
 
-                            <div className="space-y-4 p-5">
-                              <div className="min-w-0 space-y-2">
-                                <p className="text-[0.72rem] font-medium uppercase tracking-[0.24em] text-cyan-200/88">
-                                  {disco.groupName ?? "Grupo sin asignar"}
-                                </p>
-                                <h3 className="text-lg font-semibold leading-tight text-white">
-                                  {disco.title}
-                                </h3>
-                              </div>
+                                <div className="space-y-4 p-5">
+                                  <div className="min-w-0 space-y-2">
+                                    <p className="text-[0.72rem] font-medium uppercase tracking-[0.24em] text-cyan-200/88">
+                                      {disco.groupName ?? "Grupo sin asignar"}
+                                    </p>
+                                    <h3 className="text-lg font-semibold leading-tight text-white">
+                                      {disco.title}
+                                    </h3>
+                                  </div>
 
-                              <div className="space-y-1 text-[0.78rem] leading-5 text-slate-400">
-                                <p className="line-clamp-2">
-                                  <span className="text-slate-500">
-                                    Fecha:
-                                  </span>{" "}
-                                  {disco.releaseDateLabel ?? "Sin fecha indicada"}
-                                </p>
-                                <p className="line-clamp-2">
-                                  <span className="text-slate-500">
-                                    Discográfica:
-                                  </span>{" "}
-                                  {disco.label ?? "Sin discográfica indicada"}
-                                </p>
-                                <p className="line-clamp-2">
-                                  <span className="text-slate-500">
-                                    Productor:
-                                  </span>{" "}
-                                  {disco.producer ?? "Sin productor indicado"}
-                                </p>
-                                <p className="line-clamp-2">
-                                  <span className="text-slate-500">
-                                    Estudio:
-                                  </span>{" "}
-                                  {disco.studio ?? "Sin estudio indicado"}
-                                </p>
-                              </div>
+                                  <div className="space-y-1 text-[0.78rem] leading-5 text-slate-400">
+                                    <p className="line-clamp-2">
+                                      <span className="text-slate-500">
+                                        Fecha:
+                                      </span>{" "}
+                                      {disco.releaseDateLabel ??
+                                        "Sin fecha indicada"}
+                                    </p>
+                                    <p className="line-clamp-2">
+                                      <span className="text-slate-500">
+                                        Discográfica:
+                                      </span>{" "}
+                                      {disco.label ??
+                                        "Sin discográfica indicada"}
+                                    </p>
+                                    <p className="line-clamp-2">
+                                      <span className="text-slate-500">
+                                        Productor:
+                                      </span>{" "}
+                                      {disco.producer ??
+                                        "Sin productor indicado"}
+                                    </p>
+                                    <p className="line-clamp-2">
+                                      <span className="text-slate-500">
+                                        Estudio:
+                                      </span>{" "}
+                                      {disco.studio ?? "Sin estudio indicado"}
+                                    </p>
+                                  </div>
 
-                              {disco.spotifyUrl ? (
-                                <a
-                                  href={disco.spotifyUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-emerald-300/30 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.18),rgba(15,23,42,0.92))] text-emerald-100 transition hover:border-emerald-200/55 hover:text-white"
-                                  aria-label={`Abrir ${disco.title} en Spotify`}
-                                  title={`Abrir ${disco.title} en Spotify`}
-                                >
-                                  <SpotifyLogoIcon />
-                                </a>
-                              ) : null}
+                                  {disco.spotifyUrl ? (
+                                    <a
+                                      href={disco.spotifyUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-emerald-300/30 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.18),rgba(15,23,42,0.92))] text-emerald-100 transition hover:border-emerald-200/55 hover:text-white"
+                                      aria-label={`Abrir ${disco.title} en Spotify`}
+                                      title={`Abrir ${disco.title} en Spotify`}
+                                    >
+                                      <SpotifyLogoIcon />
+                                    </a>
+                                  ) : null}
 
-                              {discoEditSuccess &&
-                              editingDiscoId === "" &&
-                              discoFeedbackId === disco.id ? (
-                                <p className="text-sm text-emerald-200">
-                                  {discoEditSuccess}
-                                </p>
-                              ) : null}
-                            </div>
-                            <InfoHover
-                              info={disco.observations}
-                              overlayClassName="pointer-events-none absolute inset-0 z-[1] bg-slate-950/76 opacity-0 transition duration-300 group-hover:opacity-100"
-                              wrapperClassName="pointer-events-none absolute inset-3 z-[2] opacity-0 transition duration-300 group-hover:pointer-events-auto group-hover:opacity-100"
-                              panelClassName="flex h-full max-h-full overflow-y-auto rounded-[1.35rem] border border-cyan-300/25 bg-slate-950/94 p-4 text-sm leading-7 text-slate-100 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur-md"
-                            />
-                            </article>
-                          );
-                        })}
-                      </div>
+                                  {discoEditSuccess &&
+                                  editingDiscoId === "" &&
+                                  discoFeedbackId === disco.id ? (
+                                    <p className="text-sm text-emerald-200">
+                                      {discoEditSuccess}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <InfoHover
+                                  info={disco.observations}
+                                  overlayClassName="pointer-events-none absolute inset-0 z-[1] bg-slate-950/76 opacity-0 transition duration-300 group-hover:opacity-100"
+                                  wrapperClassName="pointer-events-none absolute inset-3 z-[2] opacity-0 transition duration-300 group-hover:pointer-events-auto group-hover:opacity-100"
+                                  panelClassName="flex h-full max-h-full overflow-y-auto rounded-[1.35rem] border border-cyan-300/25 bg-slate-950/94 p-4 text-sm leading-7 text-slate-100 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur-md"
+                                />
+                              </article>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-[1.5rem] border border-dashed border-white/14 bg-slate-950/30 px-5 py-8 text-sm text-slate-300">
+                          No hay discos de {section.label} que coincidan con
+                          estos filtros.
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
