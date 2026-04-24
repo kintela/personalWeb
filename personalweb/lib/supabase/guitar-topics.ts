@@ -3,7 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const GUITAR_TOPICS_SELECT_COLUMNS =
-  "id, grupo_id, nombre, observaciones, letra_imagen, grupo:grupos!temas_grupo_id_fkey(nombre)";
+  "id, grupo_id, nombre, observaciones, letra_imagen, spotify, grupo:grupos!temas_grupo_id_fkey(nombre)";
 const GUITAR_TOPIC_VIDEOS_SELECT_COLUMNS =
   "id, tema_id, enlace, observaciones";
 const GUITAR_LYRICS_BUCKET = "lyrics";
@@ -25,6 +25,7 @@ type GuitarTopicDatabaseRow = {
   nombre: string;
   observaciones: string | null;
   letra_imagen: string | null;
+  spotify: string | null;
   grupo: TopicGroupRelation;
 };
 
@@ -62,6 +63,7 @@ export type GuitarTopicAsset = {
   observations: string | null;
   lyricImagePath: string | null;
   lyricImageSrc: string | null;
+  spotifyUrl: string | null;
   tablatureImages: GuitarTopicTablatureAsset[];
   videos: GuitarTopicVideoAsset[];
 };
@@ -178,6 +180,36 @@ function trimNullableValue(value: string | null | undefined) {
   const normalizedValue = value?.trim();
 
   return normalizedValue ? normalizedValue : null;
+}
+
+function getNormalizedHttpUrl(rawUrl: string | null | undefined) {
+  const normalizedValue = rawUrl?.trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  try {
+    const url = new URL(normalizedValue);
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function parseGuitarTopicId(value: string) {
+  const topicId = Number.parseInt(value.trim(), 10);
+
+  if (!Number.isInteger(topicId) || topicId <= 0) {
+    return null;
+  }
+
+  return topicId;
 }
 
 function getGroupName(group: TopicGroupRelation) {
@@ -392,6 +424,109 @@ export async function getGuitarTopicTablatureImages(topicId: string) {
   return getTopicTablatureImages(supabase, topicId);
 }
 
+export async function getStoredGuitarTopicSpotifyUrl(topicId: string) {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      spotifyUrl: null,
+      error:
+        "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
+    };
+  }
+
+  const normalizedTopicId = parseGuitarTopicId(topicId);
+
+  if (!normalizedTopicId) {
+    return {
+      spotifyUrl: null,
+      error: "El identificador del tema no es válido.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("temas")
+    .select("spotify")
+    .eq("id", normalizedTopicId)
+    .maybeSingle();
+
+  if (error) {
+    return {
+      spotifyUrl: null,
+      error: `No he podido leer el enlace de Spotify del tema ${normalizedTopicId}: ${error.message}`,
+    };
+  }
+
+  return {
+    spotifyUrl: getNormalizedHttpUrl(data?.spotify),
+    error: null,
+  };
+}
+
+export async function updateGuitarTopicSpotifyUrl({
+  topicId,
+  spotifyUrl,
+}: {
+  topicId: string;
+  spotifyUrl: string;
+}) {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      ok: false,
+      error:
+        "Faltan variables de entorno de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y la clave pública o de servicio.",
+    };
+  }
+
+  const normalizedTopicId = parseGuitarTopicId(topicId);
+
+  if (!normalizedTopicId) {
+    return {
+      ok: false,
+      error: "El identificador del tema no es válido.",
+    };
+  }
+
+  const normalizedSpotifyUrl = getNormalizedHttpUrl(spotifyUrl);
+
+  if (!normalizedSpotifyUrl) {
+    return {
+      ok: false,
+      error: "El enlace de Spotify del tema no es válido.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("temas")
+    .update({
+      spotify: normalizedSpotifyUrl,
+    })
+    .eq("id", normalizedTopicId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return {
+      ok: false,
+      error: `No he podido guardar el enlace de Spotify del tema ${normalizedTopicId}: ${error.message}`,
+    };
+  }
+
+  if (!data) {
+    return {
+      ok: false,
+      error: `No he encontrado el tema ${normalizedTopicId} para guardar su enlace de Spotify.`,
+    };
+  }
+
+  return {
+    ok: true,
+    error: null,
+  };
+}
+
 export async function getGuitarTopicList(
   options: GetGuitarTopicListOptions = {},
 ): Promise<GuitarTopicListResult> {
@@ -480,6 +615,7 @@ export async function getGuitarTopicList(
         lyricImageSrc: getGuitarTopicLyricImagePublicUrl(
           trimNullableValue(row.letra_imagen),
         ),
+        spotifyUrl: getNormalizedHttpUrl(row.spotify),
         tablatureImages: [],
         videos,
       };

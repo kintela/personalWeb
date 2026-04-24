@@ -11,7 +11,6 @@ import {
 } from "@/components/grid-density-controls";
 import { ShareCardButton } from "@/components/share-card-button";
 import { VideoInfoHover } from "@/components/video-info-hover";
-import type { SpotifyTopicMatchAsset } from "@/lib/spotify-types";
 import type {
   GuitarTopicAsset,
   GuitarTopicGroupOption,
@@ -33,7 +32,6 @@ type GuitarViewerProps = {
   topicValue: string;
   groupOptions: GuitarTopicGroupOption[];
   topicOptions: GuitarTopicOption[];
-  spotifyTopicMatch: SpotifyTopicMatchAsset | null;
 };
 
 type SelectedGuitarVideo = {
@@ -60,7 +58,7 @@ type SelectedGuitarTablature = {
 type TopicContextState = {
   tablatureImages: GuitarTopicTablatureAsset[];
   hasLoadedTablatures: boolean;
-  spotifyTopicMatch: SpotifyTopicMatchAsset | null;
+  spotifyUrl: string | null;
   hasLoadedSpotify: boolean;
 };
 
@@ -413,7 +411,6 @@ export function GuitarViewer({
   topicValue,
   groupOptions,
   topicOptions,
-  spotifyTopicMatch,
 }: GuitarViewerProps) {
   const [isClient, setIsClient] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<SelectedGuitarVideo | null>(
@@ -441,8 +438,8 @@ export function GuitarViewer({
       [topicValue]: {
         tablatureImages: initialTopic.tablatureImages,
         hasLoadedTablatures: true,
-        spotifyTopicMatch,
-        hasLoadedSpotify: Boolean(spotifyTopicMatch),
+        spotifyUrl: initialTopic.spotifyUrl,
+        hasLoadedSpotify: Boolean(initialTopic.spotifyUrl),
       },
     };
   });
@@ -480,15 +477,16 @@ export function GuitarViewer({
       [topicValue]: {
         tablatureImages: initialTopic.tablatureImages,
         hasLoadedTablatures: true,
-        spotifyTopicMatch:
+        spotifyUrl:
           currentValue[topicValue]?.hasLoadedSpotify === true
-            ? currentValue[topicValue]?.spotifyTopicMatch ?? null
-            : spotifyTopicMatch,
+            ? currentValue[topicValue]?.spotifyUrl ?? null
+            : initialTopic.spotifyUrl,
         hasLoadedSpotify:
-          currentValue[topicValue]?.hasLoadedSpotify ?? Boolean(spotifyTopicMatch),
+          currentValue[topicValue]?.hasLoadedSpotify ??
+          Boolean(initialTopic.spotifyUrl),
       },
     }));
-  }, [spotifyTopicMatch, topicValue, topics]);
+  }, [topicValue, topics]);
 
   useEffect(() => {
     if (!isClient) {
@@ -523,7 +521,9 @@ export function GuitarViewer({
           activeTopicContext?.tablatureImages ?? baseActiveTopic.tablatureImages,
       }
     : null;
-  const activeSpotifyTopicMatch = activeTopicContext?.spotifyTopicMatch ?? null;
+  const activeTopicSpotifyUrl = activeTopic?.spotifyUrl ?? null;
+  const activeSpotifyUrl =
+    activeTopicContext?.spotifyUrl ?? activeTopicSpotifyUrl;
   const activeTopicId = activeTopic?.id ?? "";
   const activeTopicName = activeTopic?.name ?? "";
   const activeTopicGroupName = activeTopic?.groupName ?? "";
@@ -746,8 +746,10 @@ export function GuitarViewer({
             [activeTopicId]: {
               tablatureImages: Array.isArray(result.images) ? result.images : [],
               hasLoadedTablatures: true,
-              spotifyTopicMatch: currentTopicContext?.spotifyTopicMatch ?? null,
-              hasLoadedSpotify: currentTopicContext?.hasLoadedSpotify ?? false,
+              spotifyUrl: currentTopicContext?.spotifyUrl ?? activeTopicSpotifyUrl,
+              hasLoadedSpotify:
+                currentTopicContext?.hasLoadedSpotify ??
+                Boolean(activeTopicSpotifyUrl),
             },
           };
         });
@@ -765,8 +767,10 @@ export function GuitarViewer({
             [activeTopicId]: {
               tablatureImages: currentTopicContext?.tablatureImages ?? [],
               hasLoadedTablatures: true,
-              spotifyTopicMatch: currentTopicContext?.spotifyTopicMatch ?? null,
-              hasLoadedSpotify: currentTopicContext?.hasLoadedSpotify ?? false,
+              spotifyUrl: currentTopicContext?.spotifyUrl ?? activeTopicSpotifyUrl,
+              hasLoadedSpotify:
+                currentTopicContext?.hasLoadedSpotify ??
+                Boolean(activeTopicSpotifyUrl),
             },
           };
         });
@@ -787,20 +791,22 @@ export function GuitarViewer({
     return () => {
       controller.abort();
     };
-  }, [activeTopicContext?.hasLoadedTablatures, activeTopicId]);
+  }, [activeTopicContext?.hasLoadedTablatures, activeTopicId, activeTopicSpotifyUrl]);
 
   useEffect(() => {
     if (
       !activeTopicId ||
       !activeTopicName ||
       !activeTopicGroupName ||
-      activeTopicContext?.hasLoadedSpotify
+      activeTopicContext?.hasLoadedSpotify ||
+      Boolean(activeTopicSpotifyUrl)
     ) {
       return;
     }
 
     const controller = new AbortController();
     const params = new URLSearchParams({
+      topicId: activeTopicId,
       topicName: activeTopicName,
       groupName: activeTopicGroupName,
     });
@@ -814,7 +820,7 @@ export function GuitarViewer({
       .then(async (response) => {
         const result = (await response.json()) as {
           error?: string | null;
-          match?: SpotifyTopicMatchAsset | null;
+          spotifyUrl?: string | null;
         };
 
         if (!response.ok) {
@@ -822,6 +828,11 @@ export function GuitarViewer({
             result.error ?? "No he podido buscar el tema en Spotify.",
           );
         }
+
+        const spotifyUrl =
+          typeof result.spotifyUrl === "string" && result.spotifyUrl.trim()
+            ? result.spotifyUrl.trim()
+            : null;
 
         setTopicContextById((currentValue) => {
           const currentTopicContext = currentValue[activeTopicId];
@@ -832,7 +843,7 @@ export function GuitarViewer({
               tablatureImages: currentTopicContext?.tablatureImages ?? [],
               hasLoadedTablatures:
                 currentTopicContext?.hasLoadedTablatures ?? false,
-              spotifyTopicMatch: result.match ?? null,
+              spotifyUrl,
               hasLoadedSpotify: true,
             },
           };
@@ -852,7 +863,7 @@ export function GuitarViewer({
               tablatureImages: currentTopicContext?.tablatureImages ?? [],
               hasLoadedTablatures:
                 currentTopicContext?.hasLoadedTablatures ?? false,
-              spotifyTopicMatch: null,
+              spotifyUrl: null,
               hasLoadedSpotify: true,
             },
           };
@@ -879,6 +890,7 @@ export function GuitarViewer({
     activeTopicGroupName,
     activeTopicId,
     activeTopicName,
+    activeTopicSpotifyUrl,
   ]);
 
   return (
@@ -1149,9 +1161,9 @@ export function GuitarViewer({
                               </div>
 
                               <div className="flex items-center gap-3">
-                                {activeSpotifyTopicMatch ? (
+                                {activeSpotifyUrl ? (
                                   <a
-                                    href={activeSpotifyTopicMatch.trackExternalUrl}
+                                    href={activeSpotifyUrl}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="rounded-full border border-emerald-300/35 bg-emerald-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-300/65 hover:bg-emerald-300/18 hover:text-white"

@@ -39,7 +39,6 @@ export default async function GuitarraPage(props: {
         topicValue={guitarTopics.topicValue}
         groupOptions={guitarTopics.groupOptions}
         topicOptions={guitarTopics.topicOptions}
-        spotifyTopicMatch={null}
       />
     </SectionPageShell>
   );
