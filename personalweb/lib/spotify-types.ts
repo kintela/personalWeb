@@ -33,6 +33,16 @@ export type SpotifyPlaylistTrackAsset = {
   rating: number;
 };
 
+export type SpotifyPlaylistTrackSearchPreviewAsset = {
+  trackName: string;
+  trackArtistsLabel: string;
+};
+
+export type SpotifyPlaylistTrackSearchHitAsset = {
+  playlistId: string;
+  matchedTrack: SpotifyPlaylistTrackSearchPreviewAsset;
+};
+
 export type SpotifyTopicMatchAsset = {
   playlistId: string;
   playlistName: string;

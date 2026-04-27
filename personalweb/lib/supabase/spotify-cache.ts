@@ -1,0 +1,784 @@
+import "server-only";
+
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type {
+  SpotifyPlaylistAsset,
+  SpotifyPlaylistTrackAsset,
+  SpotifyPlaylistTrackSearchHitAsset,
+  SpotifyTopicMatchAsset,
+} from "@/lib/spotify-types";
+import {
+  buildSpotifyHighlightedPlaylistUrl,
+  buildSpotifyTrackExternalUrl,
+  canonicalizeSpotifyTrackNameForMatch,
+  formatSpotifyDurationLabel,
+  normalizeSpotifyMatchValue,
+} from "@/lib/spotify-match";
+
+type SpotifyPlaylistCacheRow = {
+  id: number | string;
+  spotify_id: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  external_url: string;
+  owner_spotify_id: string;
+  owner_name: string | null;
+  track_count: number | string | null;
+  visibility_label: string | null;
+  collaborative: boolean | null;
+  snapshot_id: string;
+  is_active: boolean | null;
+  last_synced_at: string | null;
+};
+
+type SpotifyPlaylistTrackCacheRow = {
+  id: number | string;
+  playlist_cache_id: number | string;
+  spotify_track_id: string | null;
+  position: number | string;
+  name: string;
+  artists_label: string;
+  album_name: string | null;
+  album_release_date: string | null;
+  duration_ms: number | string | null;
+  normalized_track_name: string;
+  canonical_track_name: string;
+};
+
+type UpsertSpotifyPlaylistCacheInput = {
+  spotifyId: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  externalUrl: string;
+  ownerSpotifyId: string;
+  ownerName: string | null;
+  trackCount: number;
+  visibilityLabel: string | null;
+  collaborative: boolean;
+  snapshotId: string;
+};
+
+type ReplaceSpotifyPlaylistTracksInput = {
+  playlistCacheId: number;
+  tracks: Array<{
+    spotifyTrackId: string | null;
+    position: number;
+    name: string;
+    artistsLabel: string;
+    albumName: string | null;
+    albumReleaseDate: string | null;
+    durationMs: number | null;
+    isLocal: boolean;
+    normalizedTrackName: string;
+    canonicalTrackName: string;
+  }>;
+};
+
+export type SpotifyCachedPlaylistSyncState = {
+  id: number;
+  spotifyId: string;
+  snapshotId: string;
+  isActive: boolean;
+  lastSyncedAt: string | null;
+};
+
+type SpotifyCacheMutationResult =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type UpsertSpotifyPlaylistCacheResult =
+  | {
+      ok: true;
+      playlistCacheIdBySpotifyId: Map<string, number>;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+function getSupabaseUrl() {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL;
+}
+
+function getSupabasePublicKey() {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+}
+
+function getSupabaseServerKey() {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY ?? getSupabasePublicKey();
+}
+
+function createSupabaseServerClient(): SupabaseClient | null {
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseKey = getSupabaseServerKey();
+
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+function trimNullableValue(value: string | null | undefined) {
+  const normalizedValue = value?.trim();
+
+  return normalizedValue ? normalizedValue : null;
+}
+
+function parseInteger(value: number | string | null | undefined) {
+  const normalizedValue =
+    typeof value === "number" ? value : Number.parseInt(value ?? "", 10);
+
+  return Number.isFinite(normalizedValue) ? normalizedValue : 0;
+}
+
+function parseNullableInteger(value: number | string | null | undefined) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const normalizedValue =
+    typeof value === "number" ? value : Number.parseInt(value, 10);
+
+  return Number.isFinite(normalizedValue) ? normalizedValue : null;
+}
+
+function escapeLikeValue(value: string) {
+  return value.replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
+function mapPlaylistCacheRowToAsset(
+  row: SpotifyPlaylistCacheRow,
+): SpotifyPlaylistAsset {
+  return {
+    id: row.spotify_id.trim(),
+    name: row.name.trim(),
+    description: trimNullableValue(row.description),
+    imageUrl: trimNullableValue(row.image_url),
+    externalUrl: row.external_url.trim(),
+    embedUrl: `https://open.spotify.com/embed/playlist/${row.spotify_id.trim()}?utm_source=generator`,
+    ownerName: trimNullableValue(row.owner_name) ?? "Spotify",
+    trackCount: Math.max(0, parseInteger(row.track_count)),
+    visibilityLabel: trimNullableValue(row.visibility_label) ?? "Pública",
+    collaborative: Boolean(row.collaborative),
+  } satisfies SpotifyPlaylistAsset;
+}
+
+function mapTrackCacheRowToAsset(
+  row: SpotifyPlaylistTrackCacheRow,
+): SpotifyPlaylistTrackAsset {
+  const durationMs = parseNullableInteger(row.duration_ms);
+  const position = Math.max(1, parseInteger(row.position));
+  const spotifyTrackId = trimNullableValue(row.spotify_track_id);
+  const fallbackId = `${position}-${row.name
+    .trim()
+    .toLocaleLowerCase("es-ES")
+    .replace(/\s+/g, "-")}`;
+
+  return {
+    id: spotifyTrackId ?? fallbackId,
+    position,
+    name: row.name.trim(),
+    artistsLabel: row.artists_label.trim(),
+    albumName: trimNullableValue(row.album_name),
+    albumReleaseDate: trimNullableValue(row.album_release_date),
+    durationMs,
+    durationLabel: formatSpotifyDurationLabel(durationMs),
+    youtubeCacheStatus: "uncached",
+    rating: 0,
+  } satisfies SpotifyPlaylistTrackAsset;
+}
+
+async function readAllSpotifyCachedTrackPlaylistIds(supabase: SupabaseClient) {
+  const playlistCacheIds: number[] = [];
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("spotify_playlist_tracks_cache")
+      .select("playlist_cache_id")
+      .range(from, from + pageSize - 1)
+      .returns<Array<{ playlist_cache_id: number | string }>>();
+
+    if (error) {
+      return {
+        ok: false,
+        error,
+        playlistCacheIds,
+      } as const;
+    }
+
+    const rows = data ?? [];
+
+    playlistCacheIds.push(
+      ...rows
+        .map((row) => parseInteger(row.playlist_cache_id))
+        .filter((playlistCacheId) => playlistCacheId > 0),
+    );
+
+    if (rows.length < pageSize) {
+      return {
+        ok: true,
+        playlistCacheIds,
+      } as const;
+    }
+
+    from += pageSize;
+  }
+}
+
+export async function getSpotifyCacheSummary() {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return null;
+  }
+
+  const [
+    { data: activePlaylists, error: playlistsError },
+    trackPlaylistIdsResult,
+    { data, error: latestError },
+  ] =
+    await Promise.all([
+      supabase
+        .from("spotify_playlists_cache")
+        .select("id")
+        .eq("is_active", true),
+      readAllSpotifyCachedTrackPlaylistIds(supabase),
+      supabase
+        .from("spotify_playlists_cache")
+        .select("last_synced_at")
+        .eq("is_active", true)
+        .order("last_synced_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ last_synced_at: string | null }>(),
+    ]);
+
+  if (playlistsError || !trackPlaylistIdsResult.ok || latestError) {
+    return null;
+  }
+
+  const activePlaylistIds = new Set(
+    (activePlaylists ?? []).map((playlist) => parseInteger(playlist.id)),
+  );
+  const playlistIdsWithTracks = new Set(
+    trackPlaylistIdsResult.playlistCacheIds.filter((playlistCacheId) =>
+      activePlaylistIds.has(playlistCacheId),
+    ),
+  );
+
+  return {
+    activePlaylistCount: activePlaylistIds.size,
+    activePlaylistCountWithTracks: playlistIdsWithTracks.size,
+    cachedTrackCount: trackPlaylistIdsResult.playlistCacheIds.length,
+    latestSyncAt: data?.last_synced_at ?? null,
+  };
+}
+
+export async function readSpotifyCachedPlaylists() {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return [] as SpotifyPlaylistAsset[];
+  }
+
+  const { data, error } = await supabase
+    .from("spotify_playlists_cache")
+    .select(
+      "id, spotify_id, name, description, image_url, external_url, owner_spotify_id, owner_name, track_count, visibility_label, collaborative, snapshot_id, is_active, last_synced_at",
+    )
+    .eq("is_active", true)
+    .order("name", { ascending: true })
+    .returns<SpotifyPlaylistCacheRow[]>();
+
+  if (error) {
+    return [] as SpotifyPlaylistAsset[];
+  }
+
+  return (data ?? []).map((row) => mapPlaylistCacheRowToAsset(row));
+}
+
+export async function readSpotifyCachedPlaylistSyncState() {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return [] as SpotifyCachedPlaylistSyncState[];
+  }
+
+  const { data, error } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id, spotify_id, snapshot_id, is_active, last_synced_at")
+    .returns<SpotifyPlaylistCacheRow[]>();
+
+  if (error) {
+    return [] as SpotifyCachedPlaylistSyncState[];
+  }
+
+  return (data ?? []).map((row) => ({
+    id: parseInteger(row.id),
+    spotifyId: row.spotify_id.trim(),
+    snapshotId: row.snapshot_id.trim(),
+    isActive: Boolean(row.is_active),
+    lastSyncedAt: row.last_synced_at,
+  }));
+}
+
+export async function readSpotifyCachedPlaylistTrackCounts() {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return new Map<number, number>();
+  }
+
+  const result = await readAllSpotifyCachedTrackPlaylistIds(supabase);
+
+  if (!result.ok) {
+    return new Map<number, number>();
+  }
+
+  const trackCountByPlaylistCacheId = new Map<number, number>();
+
+  for (const playlistCacheId of result.playlistCacheIds) {
+    trackCountByPlaylistCacheId.set(
+      playlistCacheId,
+      (trackCountByPlaylistCacheId.get(playlistCacheId) ?? 0) + 1,
+    );
+  }
+
+  return trackCountByPlaylistCacheId;
+}
+
+export async function upsertSpotifyCachedPlaylists(
+  playlists: UpsertSpotifyPlaylistCacheInput[],
+): Promise<UpsertSpotifyPlaylistCacheResult> {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      ok: false,
+      error: "Falta configurar Supabase para escribir la caché de Spotify.",
+    };
+  }
+
+  const rows = playlists.map((playlist) => ({
+    spotify_id: playlist.spotifyId.trim(),
+    name: playlist.name.trim(),
+    description: trimNullableValue(playlist.description),
+    image_url: trimNullableValue(playlist.imageUrl),
+    external_url: playlist.externalUrl.trim(),
+    owner_spotify_id: playlist.ownerSpotifyId.trim(),
+    owner_name: trimNullableValue(playlist.ownerName),
+    track_count: Math.max(0, playlist.trackCount),
+    visibility_label: trimNullableValue(playlist.visibilityLabel),
+    collaborative: playlist.collaborative,
+    snapshot_id: playlist.snapshotId.trim(),
+    is_active: true,
+    last_synced_at: new Date().toISOString(),
+  }));
+
+  const { data, error } = await supabase
+    .from("spotify_playlists_cache")
+    .upsert(rows, { onConflict: "spotify_id" })
+    .select("id, spotify_id")
+    .returns<Array<{ id: number | string; spotify_id: string }>>();
+
+  if (error) {
+    return {
+      ok: false,
+      error: error.message,
+    };
+  }
+
+  return {
+    ok: true,
+    playlistCacheIdBySpotifyId: new Map(
+      (data ?? []).map((row) => [row.spotify_id.trim(), parseInteger(row.id)]),
+    ),
+  };
+}
+
+export async function markMissingSpotifyCachedPlaylistsInactive(
+  activeSpotifyIds: string[],
+): Promise<SpotifyCacheMutationResult> {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      ok: false,
+      error: "Falta configurar Supabase para actualizar la caché de Spotify.",
+    };
+  }
+
+  const normalizedActiveSpotifyIds = new Set(
+    activeSpotifyIds.map((spotifyId) => spotifyId.trim()).filter(Boolean),
+  );
+  const { data, error } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id, spotify_id")
+    .eq("is_active", true)
+    .returns<Array<{ id: number | string; spotify_id: string }>>();
+
+  if (error) {
+    return {
+      ok: false,
+      error: error.message,
+    };
+  }
+
+  const playlistIdsToDeactivate = (data ?? [])
+    .filter((row) => !normalizedActiveSpotifyIds.has(row.spotify_id.trim()))
+    .map((row) => parseInteger(row.id))
+    .filter((id) => id > 0);
+
+  if (playlistIdsToDeactivate.length === 0) {
+    return { ok: true };
+  }
+
+  const { error: updateError } = await supabase
+    .from("spotify_playlists_cache")
+    .update({
+      is_active: false,
+      last_synced_at: new Date().toISOString(),
+    })
+    .in("id", playlistIdsToDeactivate);
+
+  if (updateError) {
+    return {
+      ok: false,
+      error: updateError.message,
+    };
+  }
+
+  return { ok: true };
+}
+
+export async function replaceSpotifyCachedPlaylistTracks({
+  playlistCacheId,
+  tracks,
+}: ReplaceSpotifyPlaylistTracksInput): Promise<SpotifyCacheMutationResult> {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return {
+      ok: false,
+      error: "Falta configurar Supabase para guardar los temas de Spotify.",
+    };
+  }
+
+  const normalizedPlaylistCacheId = Math.max(0, playlistCacheId);
+
+  if (!normalizedPlaylistCacheId) {
+    return {
+      ok: false,
+      error: "Falta el identificador interno de la playlist cacheada.",
+    };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("spotify_playlist_tracks_cache")
+    .delete()
+    .eq("playlist_cache_id", normalizedPlaylistCacheId);
+
+  if (deleteError) {
+    return {
+      ok: false,
+      error: deleteError.message,
+    };
+  }
+
+  if (tracks.length > 0) {
+    const chunkSize = 500;
+
+    for (let index = 0; index < tracks.length; index += chunkSize) {
+      const trackChunk = tracks.slice(index, index + chunkSize);
+      const { error: insertError } = await supabase
+        .from("spotify_playlist_tracks_cache")
+        .insert(
+          trackChunk.map((track) => ({
+            playlist_cache_id: normalizedPlaylistCacheId,
+            spotify_track_id: trimNullableValue(track.spotifyTrackId),
+            position: Math.max(1, track.position),
+            name: track.name.trim(),
+            artists_label: track.artistsLabel.trim(),
+            album_name: trimNullableValue(track.albumName),
+            album_release_date: trimNullableValue(track.albumReleaseDate),
+            duration_ms: track.durationMs,
+            is_local: track.isLocal,
+            normalized_track_name: track.normalizedTrackName.trim(),
+            canonical_track_name: track.canonicalTrackName.trim(),
+            last_synced_at: new Date().toISOString(),
+          })),
+        );
+
+      if (insertError) {
+        return {
+          ok: false,
+          error: insertError.message,
+        };
+      }
+    }
+  }
+
+  const { error: playlistUpdateError } = await supabase
+    .from("spotify_playlists_cache")
+    .update({
+      last_synced_at: new Date().toISOString(),
+      is_active: true,
+    })
+    .eq("id", normalizedPlaylistCacheId);
+
+  if (playlistUpdateError) {
+    return {
+      ok: false,
+      error: playlistUpdateError.message,
+    };
+  }
+
+  return { ok: true };
+}
+
+export async function readSpotifyCachedPlaylistTracks(playlistSpotifyId: string) {
+  const supabase = createSupabaseServerClient();
+  const normalizedPlaylistSpotifyId = playlistSpotifyId.trim();
+
+  if (!supabase || !normalizedPlaylistSpotifyId) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const { data: playlistRow, error: playlistError } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id")
+    .eq("spotify_id", normalizedPlaylistSpotifyId)
+    .eq("is_active", true)
+    .maybeSingle<{ id: number | string }>();
+
+  if (playlistError || !playlistRow) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const { data, error } = await supabase
+    .from("spotify_playlist_tracks_cache")
+    .select(
+      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, duration_ms, normalized_track_name, canonical_track_name",
+    )
+    .eq("playlist_cache_id", parseInteger(playlistRow.id))
+    .order("position", { ascending: true })
+    .returns<SpotifyPlaylistTrackCacheRow[]>();
+
+  if (error) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  return (data ?? []).map((row) => mapTrackCacheRowToAsset(row));
+}
+
+export async function searchSpotifyCachedPlaylistsByTrackQuery(query: string) {
+  const supabase = createSupabaseServerClient();
+  const normalizedQuery = normalizeSpotifyMatchValue(query);
+  const canonicalQuery = canonicalizeSpotifyTrackNameForMatch(query);
+
+  if (!supabase || !normalizedQuery) {
+    return [] as SpotifyPlaylistTrackSearchHitAsset[];
+  }
+
+  const { data: playlists, error: playlistsError } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id, spotify_id, name")
+    .eq("is_active", true)
+    .returns<Array<{ id: number | string; spotify_id: string; name: string }>>();
+
+  if (playlistsError || !playlists?.length) {
+    return [] as SpotifyPlaylistTrackSearchHitAsset[];
+  }
+
+  const activePlaylistIds = playlists.map((playlist) => parseInteger(playlist.id));
+  const playlistById = new Map(
+    playlists.map((playlist) => [
+      parseInteger(playlist.id),
+      {
+        spotifyId: playlist.spotify_id.trim(),
+        name: playlist.name.trim(),
+      },
+    ]),
+  );
+  const playlistNameBySpotifyId = new Map(
+    playlists.map((playlist) => [
+      playlist.spotify_id.trim(),
+      playlist.name.trim(),
+    ]),
+  );
+  const escapedNormalizedQuery = escapeLikeValue(normalizedQuery);
+  const escapedCanonicalQuery = escapeLikeValue(canonicalQuery || normalizedQuery);
+  const { data: tracks, error: tracksError } = await supabase
+    .from("spotify_playlist_tracks_cache")
+    .select("playlist_cache_id, position, name, artists_label")
+    .in("playlist_cache_id", activePlaylistIds)
+    .or(
+      `normalized_track_name.ilike.%${escapedNormalizedQuery}%,canonical_track_name.ilike.%${escapedCanonicalQuery}%`,
+    )
+    .order("position", { ascending: true })
+    .returns<
+      Array<{
+        playlist_cache_id: number | string;
+        position: number | string;
+        name: string;
+        artists_label: string;
+      }>
+    >();
+
+  if (tracksError || !tracks?.length) {
+    return [] as SpotifyPlaylistTrackSearchHitAsset[];
+  }
+
+  const firstHitByPlaylistId = new Map<
+    number,
+    SpotifyPlaylistTrackSearchHitAsset
+  >();
+
+  for (const track of tracks) {
+    const playlistCacheId = parseInteger(track.playlist_cache_id);
+
+    if (!playlistById.has(playlistCacheId) || firstHitByPlaylistId.has(playlistCacheId)) {
+      continue;
+    }
+
+    const playlist = playlistById.get(playlistCacheId);
+
+    if (!playlist) {
+      continue;
+    }
+
+    firstHitByPlaylistId.set(playlistCacheId, {
+      playlistId: playlist.spotifyId,
+      matchedTrack: {
+        trackName: track.name.trim(),
+        trackArtistsLabel: track.artists_label.trim(),
+      },
+    });
+  }
+
+  return [...firstHitByPlaylistId.values()].sort((left, right) =>
+    (playlistNameBySpotifyId.get(left.playlistId) ?? left.playlistId).localeCompare(
+      playlistNameBySpotifyId.get(right.playlistId) ?? right.playlistId,
+      "es",
+      { sensitivity: "base" },
+    ),
+  );
+}
+
+export async function findSpotifyCachedTopicMatch({
+  topicName,
+  groupName,
+}: {
+  topicName: string;
+  groupName: string;
+}) {
+  const supabase = createSupabaseServerClient();
+  const normalizedTopicName = normalizeSpotifyMatchValue(topicName);
+  const canonicalTopicName = canonicalizeSpotifyTrackNameForMatch(topicName);
+  const normalizedGroupName = normalizeSpotifyMatchValue(groupName);
+
+  if (!supabase || !normalizedTopicName || !normalizedGroupName) {
+    return null;
+  }
+
+  const { data: playlists, error: playlistsError } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id, spotify_id, name, external_url")
+    .eq("is_active", true)
+    .returns<
+      Array<{
+        id: number | string;
+        spotify_id: string;
+        name: string;
+        external_url: string;
+      }>
+    >();
+
+  if (playlistsError || !playlists?.length) {
+    return null;
+  }
+
+  const activePlaylistIds = playlists.map((playlist) => parseInteger(playlist.id));
+  const playlistById = new Map(
+    playlists.map((playlist) => [
+      parseInteger(playlist.id),
+      {
+        spotifyId: playlist.spotify_id.trim(),
+        playlistName: playlist.name.trim(),
+        externalUrl: playlist.external_url.trim(),
+      },
+    ]),
+  );
+  const escapedNormalizedTopicName = escapeLikeValue(normalizedTopicName);
+  const escapedCanonicalTopicName = escapeLikeValue(
+    canonicalTopicName || normalizedTopicName,
+  );
+  const { data: tracks, error: tracksError } = await supabase
+    .from("spotify_playlist_tracks_cache")
+    .select(
+      "playlist_cache_id, spotify_track_id, position, name, artists_label, normalized_track_name, canonical_track_name",
+    )
+    .in("playlist_cache_id", activePlaylistIds)
+    .or(
+      `normalized_track_name.eq.${escapedNormalizedTopicName},canonical_track_name.eq.${escapedCanonicalTopicName}`,
+    )
+    .order("position", { ascending: true })
+    .returns<SpotifyPlaylistTrackCacheRow[]>();
+
+  if (tracksError || !tracks?.length) {
+    return null;
+  }
+
+  const match =
+    tracks.find((track) => {
+      const normalizedArtistsLabel = normalizeSpotifyMatchValue(track.artists_label);
+
+      return (
+        normalizedArtistsLabel === normalizedGroupName ||
+        normalizedArtistsLabel.includes(normalizedGroupName) ||
+        normalizedGroupName.includes(normalizedArtistsLabel)
+      );
+    }) ?? null;
+
+  if (!match) {
+    return null;
+  }
+
+  const playlist = playlistById.get(parseInteger(match.playlist_cache_id));
+  const trackId = trimNullableValue(match.spotify_track_id);
+
+  if (!playlist || !trackId) {
+    return null;
+  }
+
+  return {
+    playlistId: playlist.spotifyId,
+    playlistName: playlist.playlistName,
+    playlistExternalUrl: playlist.externalUrl,
+    highlightedPlaylistUrl: buildSpotifyHighlightedPlaylistUrl(
+      playlist.externalUrl,
+      trackId,
+    ),
+    trackId,
+    trackName: match.name.trim(),
+    trackArtistsLabel: match.artists_label.trim(),
+    trackExternalUrl: buildSpotifyTrackExternalUrl(trackId),
+  } satisfies SpotifyTopicMatchAsset;
+}

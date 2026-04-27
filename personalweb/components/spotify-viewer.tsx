@@ -22,6 +22,7 @@ import type {
   SpotifyPlaylistAsset,
   SpotifyQuickAccessAsset,
   SpotifyPlaylistTrackAsset,
+  SpotifyPlaylistTrackSearchHitAsset,
 } from "@/lib/spotify-types";
 import type { YouTubeMatchedVideoAsset } from "@/lib/youtube-types";
 
@@ -43,6 +44,11 @@ type SpotifyPlaylistTracksPayload = {
   error?: string;
 };
 
+type SpotifyPlaylistSearchPayload = {
+  hits?: SpotifyPlaylistTrackSearchHitAsset[];
+  error?: string;
+};
+
 type YouTubeMatchPayload = {
   ok?: boolean;
   video?: YouTubeMatchedVideoAsset | null;
@@ -61,9 +67,27 @@ type VideoCacheFilterMode = "all" | "uncached" | "cached" | "ranked";
 const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
 const TRACK_RATING_VALUES = [1, 2, 3, 4, 5] as const;
 const UNCACHED_YOUTUBE_LOOKUP_DEBOUNCE_MS = 900;
+const PLAYLIST_TRACK_SEARCH_DEBOUNCE_MS = 700;
+const PLAYLIST_TRACK_SEARCH_MIN_LENGTH = 4;
 
 function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
+}
+
+function matchesPlaylistTextFilter(
+  playlist: SpotifyPlaylistAsset,
+  normalizedFilterValue: string,
+) {
+  if (!normalizedFilterValue) {
+    return true;
+  }
+
+  const haystack = [playlist.name, playlist.description]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase("es-ES");
+
+  return haystack.includes(normalizedFilterValue);
 }
 
 function formatPlaylistDurationLabel(durationMs: number) {
@@ -409,6 +433,14 @@ export function SpotifyViewer({
   const [trackCache, setTrackCache] = useState<
     Record<string, SpotifyPlaylistTrackAsset[]>
   >({});
+  const [playlistTrackSearchCache, setPlaylistTrackSearchCache] = useState<
+    Record<string, SpotifyPlaylistTrackSearchHitAsset[]>
+  >({});
+  const [playlistTrackSearchStatus, setPlaylistTrackSearchStatus] =
+    useState<SpotifyTrackStatus>("idle");
+  const [playlistTrackSearchError, setPlaylistTrackSearchError] = useState<
+    string | null
+  >(null);
   const [trackFilterInput, setTrackFilterInput] = useState("");
   const [isTrackShuffleEnabled, setIsTrackShuffleEnabled] = useState(false);
   const [videoCacheFilterMode, setVideoCacheFilterMode] =
@@ -449,15 +481,22 @@ export function SpotifyViewer({
         ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         : "grid gap-5 xl:grid-cols-2 2xl:grid-cols-3";
   const normalizedFilterValue = filterInput.trim().toLocaleLowerCase("es-ES");
+  const shouldSearchTracksInPlaylists =
+    normalizedFilterValue.length >= PLAYLIST_TRACK_SEARCH_MIN_LENGTH;
+  const cachedPlaylistTrackSearchHits = shouldSearchTracksInPlaylists
+    ? playlistTrackSearchCache[normalizedFilterValue] ?? []
+    : [];
+  const playlistTrackSearchHitByPlaylistId = new Map(
+    cachedPlaylistTrackSearchHits.map((hit) => [hit.playlistId, hit]),
+  );
+  const isPlaylistTrackSearchInFlight =
+    shouldSearchTracksInPlaylists && playlistTrackSearchStatus === "loading";
   const filteredPlaylists = normalizedFilterValue
-    ? playlists.filter((playlist) => {
-        const haystack = [playlist.name, playlist.description]
-          .filter(Boolean)
-          .join(" ")
-          .toLocaleLowerCase("es-ES");
-
-        return haystack.includes(normalizedFilterValue);
-      })
+    ? playlists.filter(
+        (playlist) =>
+          matchesPlaylistTextFilter(playlist, normalizedFilterValue) ||
+          playlistTrackSearchHitByPlaylistId.has(playlist.id),
+      )
     : playlists;
   const normalizedTrackFilterValue = trackFilterInput
     .trim()
@@ -725,6 +764,87 @@ export function SpotifyViewer({
   useEffect(() => {
     setFilterInput(filterValue);
   }, [filterValue]);
+
+  useEffect(() => {
+    if (!configured || !connected || !shouldSearchTracksInPlaylists) {
+      setPlaylistTrackSearchStatus("idle");
+      setPlaylistTrackSearchError(null);
+      return;
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(
+        playlistTrackSearchCache,
+        normalizedFilterValue,
+      )
+    ) {
+      setPlaylistTrackSearchStatus("ready");
+      setPlaylistTrackSearchError(null);
+      return;
+    }
+
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        try {
+          setPlaylistTrackSearchStatus("loading");
+          setPlaylistTrackSearchError(null);
+
+          const params = new URLSearchParams({
+            q: filterInput.trim(),
+          });
+          const response = await fetch(
+            `/api/spotify/playlists/search?${params.toString()}`,
+            {
+              method: "GET",
+              signal: abortController.signal,
+              cache: "no-store",
+            },
+          );
+          const payload =
+            (await response.json()) as SpotifyPlaylistSearchPayload;
+
+          if (!response.ok) {
+            throw new Error(
+              payload.error ||
+                "No he podido buscar temas dentro de las playlists.",
+            );
+          }
+
+          const nextHits = Array.isArray(payload.hits) ? payload.hits : [];
+
+          setPlaylistTrackSearchCache((currentValue) => ({
+            ...currentValue,
+            [normalizedFilterValue]: nextHits,
+          }));
+          setPlaylistTrackSearchStatus("ready");
+        } catch (error) {
+          if (abortController.signal.aborted) {
+            return;
+          }
+
+          setPlaylistTrackSearchError(
+            error instanceof Error
+              ? error.message
+              : "No he podido buscar temas dentro de las playlists.",
+          );
+          setPlaylistTrackSearchStatus("error");
+        }
+      })();
+    }, PLAYLIST_TRACK_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      abortController.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    configured,
+    connected,
+    filterInput,
+    normalizedFilterValue,
+    playlistTrackSearchCache,
+    shouldSearchTracksInPlaylists,
+  ]);
 
   useEffect(() => {
     setIsAdminUnlocked(initiallyAdminUnlocked);
@@ -1624,7 +1744,7 @@ export function SpotifyViewer({
                       type="search"
                       value={filterInput}
                       onChange={(event) => setFilterInput(event.target.value)}
-                      placeholder="Buscar por nombre o descripción..."
+                      placeholder="Buscar por lista, descripción o tema..."
                       className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/70"
                     />
 
@@ -1639,12 +1759,49 @@ export function SpotifyViewer({
                 </div>
 
                 {filterInput.trim() ? (
-                  <p className="text-sm text-slate-300">
-                    {filteredPlaylists.length} playlists encontradas para{" "}
-                    <span className="font-semibold text-white">
-                      {filterInput.trim()}
-                    </span>
-                  </p>
+                  <div className="space-y-1 text-sm text-slate-300">
+                    {isPlaylistTrackSearchInFlight &&
+                    filteredPlaylists.length === 0 ? (
+                      <p>
+                        Buscando playlists para{" "}
+                        <span className="font-semibold text-white">
+                          {filterInput.trim()}
+                        </span>
+                        ...
+                      </p>
+                    ) : (
+                      <p>
+                        {filteredPlaylists.length} playlists encontradas para{" "}
+                        <span className="font-semibold text-white">
+                          {filterInput.trim()}
+                        </span>
+                      </p>
+                    )}
+                    {cachedPlaylistTrackSearchHits.length > 0 ? (
+                      <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/80">
+                        {cachedPlaylistTrackSearchHits.length} coincidencia
+                        {cachedPlaylistTrackSearchHits.length === 1 ? "" : "s"}{" "}
+                        por tema dentro de tus playlists
+                      </p>
+                    ) : null}
+                    {!shouldSearchTracksInPlaylists &&
+                    filterInput.trim().length > 0 ? (
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                        La búsqueda por tema se activa a partir de 4 caracteres
+                      </p>
+                    ) : null}
+                    {shouldSearchTracksInPlaylists &&
+                    playlistTrackSearchStatus === "loading" ? (
+                      <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/80">
+                        Buscando también temas dentro de tus playlists...
+                      </p>
+                    ) : null}
+                    {playlistTrackSearchError ? (
+                      <p className="text-xs text-rose-200">
+                        {playlistTrackSearchError}
+                      </p>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             </div>
@@ -1700,7 +1857,12 @@ export function SpotifyViewer({
               />
             </div>
 
-            {filteredPlaylists.length === 0 ? (
+            {filteredPlaylists.length === 0 && isPlaylistTrackSearchInFlight ? (
+              <div className="rounded-[1.75rem] border border-cyan-300/20 bg-cyan-300/8 px-5 py-10 text-sm text-cyan-100/85">
+                Estoy buscando ese tema dentro de tus playlists. En cuanto termine,
+                aparecerán aquí las listas donde esté.
+              </div>
+            ) : filteredPlaylists.length === 0 ? (
               <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/35 px-5 py-10 text-sm text-slate-300">
                 No hay playlists que coincidan con ese filtro.
               </div>
@@ -1708,6 +1870,8 @@ export function SpotifyViewer({
               <div className={gridClassName}>
                 {filteredPlaylists.map((playlist) => {
                   const anchorId = `spotify-playlist-${playlist.id}`;
+                  const trackSearchHit =
+                    playlistTrackSearchHitByPlaylistId.get(playlist.id) ?? null;
 
                   return (
                     <article
@@ -1741,9 +1905,16 @@ export function SpotifyViewer({
 
                       <div className="flex flex-1 flex-col gap-4 p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                          <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
-                            {playlist.trackCount} temas
-                          </span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
+                              {playlist.trackCount} temas
+                            </span>
+                            {trackSearchHit ? (
+                              <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-cyan-100">
+                                Tema encontrado
+                              </span>
+                            ) : null}
+                          </div>
 
                           <div className="flex items-center gap-2">
                             <button
@@ -1775,6 +1946,16 @@ export function SpotifyViewer({
                           {playlist.description ? (
                             <p className="text-sm leading-7 text-slate-300">
                               {playlist.description}
+                            </p>
+                          ) : null}
+                          {trackSearchHit ? (
+                            <p className="text-sm leading-7 text-cyan-100/85">
+                              Coincide con el tema{" "}
+                              <span className="font-semibold text-white">
+                                {trackSearchHit.matchedTrack.trackName}
+                              </span>
+                              {" · "}
+                              {trackSearchHit.matchedTrack.trackArtistsLabel}
                             </p>
                           ) : null}
                         </div>
