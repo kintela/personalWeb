@@ -262,15 +262,15 @@ export async function getSpotifyCacheSummary() {
 
   const [
     { data: activePlaylists, error: playlistsError },
-    trackPlaylistIdsResult,
+    trackCountByPlaylistCacheId,
     { data, error: latestError },
   ] =
     await Promise.all([
       supabase
         .from("spotify_playlists_cache")
-        .select("id")
+        .select("id, track_count")
         .eq("is_active", true),
-      readAllSpotifyCachedTrackPlaylistIds(supabase),
+      readSpotifyCachedPlaylistTrackCounts(),
       supabase
         .from("spotify_playlists_cache")
         .select("last_synced_at")
@@ -280,23 +280,40 @@ export async function getSpotifyCacheSummary() {
         .maybeSingle<{ last_synced_at: string | null }>(),
     ]);
 
-  if (playlistsError || !trackPlaylistIdsResult.ok || latestError) {
+  if (playlistsError || latestError) {
     return null;
   }
 
-  const activePlaylistIds = new Set(
-    (activePlaylists ?? []).map((playlist) => parseInteger(playlist.id)),
-  );
-  const playlistIdsWithTracks = new Set(
-    trackPlaylistIdsResult.playlistCacheIds.filter((playlistCacheId) =>
-      activePlaylistIds.has(playlistCacheId),
-    ),
+  const playlists = (activePlaylists ?? []).map((playlist) => ({
+    id: parseInteger(playlist.id),
+    expectedTrackCount: Math.max(0, parseInteger(playlist.track_count)),
+  }));
+  const activePlaylistIds = new Set(playlists.map((playlist) => playlist.id));
+  const activePlaylistCountWithTracks = playlists.filter(
+    (playlist) => (trackCountByPlaylistCacheId.get(playlist.id) ?? 0) > 0,
+  ).length;
+  const activePlaylistCountFullySynced = playlists.filter(
+    (playlist) =>
+      (trackCountByPlaylistCacheId.get(playlist.id) ?? 0) >=
+      playlist.expectedTrackCount,
+  ).length;
+  const incompletePlaylistCount = playlists.filter(
+    (playlist) =>
+      (trackCountByPlaylistCacheId.get(playlist.id) ?? 0) <
+      playlist.expectedTrackCount,
+  ).length;
+  const cachedTrackCount = [...trackCountByPlaylistCacheId.entries()].reduce(
+    (total, [playlistCacheId, trackCount]) =>
+      activePlaylistIds.has(playlistCacheId) ? total + trackCount : total,
+    0,
   );
 
   return {
     activePlaylistCount: activePlaylistIds.size,
-    activePlaylistCountWithTracks: playlistIdsWithTracks.size,
-    cachedTrackCount: trackPlaylistIdsResult.playlistCacheIds.length,
+    activePlaylistCountWithTracks,
+    activePlaylistCountFullySynced,
+    incompletePlaylistCount,
+    cachedTrackCount,
     latestSyncAt: data?.last_synced_at ?? null,
   };
 }
@@ -556,63 +573,27 @@ export async function replaceSpotifyCachedPlaylistTracks({
     };
   }
 
-  const { error: deleteError } = await supabase
-    .from("spotify_playlist_tracks_cache")
-    .delete()
-    .eq("playlist_cache_id", normalizedPlaylistCacheId);
+  const payload = tracks.map((track) => ({
+    spotify_track_id: trimNullableValue(track.spotifyTrackId),
+    position: Math.max(1, track.position),
+    name: track.name.trim(),
+    artists_label: track.artistsLabel.trim(),
+    album_name: trimNullableValue(track.albumName),
+    album_release_date: trimNullableValue(track.albumReleaseDate),
+    duration_ms: track.durationMs,
+    is_local: track.isLocal,
+    normalized_track_name: track.normalizedTrackName.trim(),
+    canonical_track_name: track.canonicalTrackName.trim(),
+  }));
+  const { error } = await supabase.rpc("sync_spotify_playlist_tracks_cache", {
+    target_playlist_cache_id: normalizedPlaylistCacheId,
+    target_tracks: payload,
+  });
 
-  if (deleteError) {
+  if (error) {
     return {
       ok: false,
-      error: deleteError.message,
-    };
-  }
-
-  if (tracks.length > 0) {
-    const chunkSize = 500;
-
-    for (let index = 0; index < tracks.length; index += chunkSize) {
-      const trackChunk = tracks.slice(index, index + chunkSize);
-      const { error: insertError } = await supabase
-        .from("spotify_playlist_tracks_cache")
-        .insert(
-          trackChunk.map((track) => ({
-            playlist_cache_id: normalizedPlaylistCacheId,
-            spotify_track_id: trimNullableValue(track.spotifyTrackId),
-            position: Math.max(1, track.position),
-            name: track.name.trim(),
-            artists_label: track.artistsLabel.trim(),
-            album_name: trimNullableValue(track.albumName),
-            album_release_date: trimNullableValue(track.albumReleaseDate),
-            duration_ms: track.durationMs,
-            is_local: track.isLocal,
-            normalized_track_name: track.normalizedTrackName.trim(),
-            canonical_track_name: track.canonicalTrackName.trim(),
-            last_synced_at: new Date().toISOString(),
-          })),
-        );
-
-      if (insertError) {
-        return {
-          ok: false,
-          error: insertError.message,
-        };
-      }
-    }
-  }
-
-  const { error: playlistUpdateError } = await supabase
-    .from("spotify_playlists_cache")
-    .update({
-      last_synced_at: new Date().toISOString(),
-      is_active: true,
-    })
-    .eq("id", normalizedPlaylistCacheId);
-
-  if (playlistUpdateError) {
-    return {
-      ok: false,
-      error: playlistUpdateError.message,
+      error: error.message,
     };
   }
 

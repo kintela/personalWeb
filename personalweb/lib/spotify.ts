@@ -1051,7 +1051,7 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
         Boolean(targetPlaylistId) ||
         !currentState ||
         !currentState.isActive ||
-        cachedTrackCount === 0 ||
+        cachedTrackCount < playlist.tracks.total ||
         currentState.snapshotId !== playlist.snapshot_id.trim()
       );
     });
@@ -1159,15 +1159,16 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
 async function ensureSpotifyPlaylistCacheReady(options?: { force?: boolean }) {
   const summary = await getSpotifyCacheSummary();
   const activePlaylistCount = summary?.activePlaylistCount ?? 0;
-  const activePlaylistCountWithTracks =
-    summary?.activePlaylistCountWithTracks ?? 0;
+  const activePlaylistCountFullySynced =
+    summary?.activePlaylistCountFullySynced ?? 0;
   const cachedTrackCount = summary?.cachedTrackCount ?? 0;
   const latestSyncAtMs = summary?.latestSyncAt
     ? Date.parse(summary.latestSyncAt)
     : Number.NaN;
   const hasCache = activePlaylistCount > 0;
   const hasCachedTracks =
-    cachedTrackCount > 0 && activePlaylistCountWithTracks >= activePlaylistCount;
+    cachedTrackCount > 0 &&
+    activePlaylistCountFullySynced >= activePlaylistCount;
   const isStale =
     !Number.isFinite(latestSyncAtMs) ||
     Date.now() - latestSyncAtMs > SPOTIFY_SUPABASE_CACHE_TTL_MS;

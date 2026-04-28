@@ -6,6 +6,8 @@ import { useState } from "react";
 type SpotifyCacheSummary = {
   activePlaylistCount: number;
   activePlaylistCountWithTracks: number;
+  activePlaylistCountFullySynced: number;
+  incompletePlaylistCount: number;
   cachedTrackCount: number;
   latestSyncAt: string | null;
 } | null;
@@ -140,10 +142,10 @@ export function AdminSpotifyCachePanel({
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
-              Con temas
+              Completas
             </p>
             <p className="mt-3 text-2xl font-semibold text-white">
-              {summary?.activePlaylistCountWithTracks ?? 0}
+              {summary?.activePlaylistCountFullySynced ?? 0}
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -193,9 +195,7 @@ export function AdminSpotifyCachePanel({
 
       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-400">
         <span>Última sync: {formatSyncDate(summary?.latestSyncAt)}</span>
-        <span>
-          Pendientes: {syncGaps.length.toLocaleString("es-ES")} listas
-        </span>
+        <span>Pendientes: {(summary?.incompletePlaylistCount ?? syncGaps.length).toLocaleString("es-ES")} listas</span>
         {status === "running" ? <span>Sincronizando...</span> : null}
       </div>
 

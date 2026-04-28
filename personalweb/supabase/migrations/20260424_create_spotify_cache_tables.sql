@@ -110,7 +110,7 @@ on public.spotify_playlist_tracks_cache (playlist_cache_id);
 create unique index if not exists spotify_playlist_tracks_cache_playlist_position_idx
 on public.spotify_playlist_tracks_cache (playlist_cache_id, position);
 
-create unique index if not exists spotify_playlist_tracks_cache_playlist_track_idx
+create index if not exists spotify_playlist_tracks_cache_playlist_track_idx
 on public.spotify_playlist_tracks_cache (playlist_cache_id, spotify_track_id)
 where spotify_track_id is not null;
 
