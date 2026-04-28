@@ -84,6 +84,16 @@ export type SpotifyCachedPlaylistSyncState = {
   lastSyncedAt: string | null;
 };
 
+export type SpotifyPlaylistCacheSyncGap = {
+  playlistCacheId: number;
+  spotifyId: string;
+  name: string;
+  expectedTrackCount: number;
+  cachedTrackCount: number;
+  missingTrackCount: number;
+  lastSyncedAt: string | null;
+};
+
 type SpotifyCacheMutationResult =
   | {
       ok: true;
@@ -289,6 +299,62 @@ export async function getSpotifyCacheSummary() {
     cachedTrackCount: trackPlaylistIdsResult.playlistCacheIds.length,
     latestSyncAt: data?.last_synced_at ?? null,
   };
+}
+
+export async function readSpotifyCachedPlaylistSyncGaps() {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return [] as SpotifyPlaylistCacheSyncGap[];
+  }
+
+  const [{ data: playlists, error: playlistsError }, trackCounts] =
+    await Promise.all([
+      supabase
+        .from("spotify_playlists_cache")
+        .select("id, spotify_id, name, track_count, last_synced_at")
+        .eq("is_active", true)
+        .order("name", { ascending: true })
+        .returns<
+          Array<{
+            id: number | string;
+            spotify_id: string;
+            name: string;
+            track_count: number | string | null;
+            last_synced_at: string | null;
+          }>
+        >(),
+      readSpotifyCachedPlaylistTrackCounts(),
+    ]);
+
+  if (playlistsError) {
+    return [] as SpotifyPlaylistCacheSyncGap[];
+  }
+
+  return (playlists ?? [])
+    .map((playlist) => {
+      const playlistCacheId = parseInteger(playlist.id);
+      const expectedTrackCount = Math.max(0, parseInteger(playlist.track_count));
+      const cachedTrackCount = trackCounts.get(playlistCacheId) ?? 0;
+
+      return {
+        playlistCacheId,
+        spotifyId: playlist.spotify_id.trim(),
+        name: playlist.name.trim(),
+        expectedTrackCount,
+        cachedTrackCount,
+        missingTrackCount: Math.max(expectedTrackCount - cachedTrackCount, 0),
+        lastSyncedAt: playlist.last_synced_at,
+      } satisfies SpotifyPlaylistCacheSyncGap;
+    })
+    .filter((playlist) => playlist.missingTrackCount > 0)
+    .sort((left, right) => {
+      if (right.missingTrackCount !== left.missingTrackCount) {
+        return right.missingTrackCount - left.missingTrackCount;
+      }
+
+      return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
+    });
 }
 
 export async function readSpotifyCachedPlaylists() {

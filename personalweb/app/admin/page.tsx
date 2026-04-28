@@ -1,11 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
+import { AdminSpotifyCachePanel } from "@/components/admin-spotify-cache-panel";
 import { isAdminAuthenticated, isAdminConfigured } from "@/lib/admin/auth";
 import {
   getConcertAssetsAudit,
   type ConcertStorageAudit,
 } from "@/lib/admin/concert-assets-audit";
 import { getPhotoAudit } from "@/lib/admin/photos-audit";
+import {
+  getSpotifyCacheSummary,
+  readSpotifyCachedPlaylistSyncGaps,
+} from "@/lib/supabase/spotify-cache";
 import { getPhotoPublicUrl } from "@/lib/supabase/photos";
 
 export const dynamic = "force-dynamic";
@@ -293,9 +298,16 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
     );
   }
 
-  const [audit, concertAssetsAudit] = await Promise.all([
+  const [
+    audit,
+    concertAssetsAudit,
+    spotifyCacheSummary,
+    spotifyCacheSyncGaps,
+  ] = await Promise.all([
     getPhotoAudit(),
     getConcertAssetsAudit(),
+    getSpotifyCacheSummary(),
+    readSpotifyCachedPlaylistSyncGaps(),
   ]);
   const bucketSearch = getSingleValue(searchParams.file).trim();
   const matchedBucketFiles = bucketSearch
@@ -357,6 +369,11 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
             {audit.error}
           </section>
         ) : null}
+
+        <AdminSpotifyCachePanel
+          summary={spotifyCacheSummary}
+          syncGaps={spotifyCacheSyncGaps}
+        />
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">

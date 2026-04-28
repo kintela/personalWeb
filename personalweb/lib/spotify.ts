@@ -165,7 +165,33 @@ let spotifyPlaylistTrackIndexCache:
 let spotifyPlaylistTrackIndexPromise:
   | Promise<SpotifyPlaylistTrackSearchIndexEntry[]>
   | null = null;
-let spotifySupabaseCacheSyncPromise: Promise<void> | null = null;
+export type SpotifyPlaylistCacheSyncResult = {
+  ok: boolean;
+  force: boolean;
+  targetPlaylistId: string | null;
+  attemptedCount: number;
+  completedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  completedPlaylists: Array<{
+    playlistId: string;
+    name: string;
+    trackCount: number;
+  }>;
+  failedPlaylists: Array<{
+    playlistId: string;
+    name: string;
+    error: string;
+  }>;
+  rateLimited: boolean;
+  retryAfterMs: number | null;
+  stoppedAtPlaylistId: string | null;
+  startedAt: string;
+  finishedAt: string;
+};
+
+let spotifySupabaseCacheSyncPromise: Promise<SpotifyPlaylistCacheSyncResult> | null =
+  null;
 const spotifyPlaylistTrackQueryCache = new Map<
   string,
   {
@@ -404,7 +430,7 @@ function isSpotifyExpiredTokenError(error: unknown) {
   );
 }
 
-function isSpotifyRateLimitError(error: unknown) {
+function isSpotifyRateLimitError(error: unknown): error is SpotifyApiError {
   return error instanceof SpotifyApiError && error.status === 429;
 }
 
@@ -911,15 +937,39 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
   force?: boolean;
   playlistId?: string;
 }) {
+  const startedAt = new Date().toISOString();
+  const force = options?.force === true;
+  const targetPlaylistId = options?.playlistId?.trim() ?? "";
+
   if (!isSpotifyConfigured() || !isSpotifyConnected()) {
-    return;
+    return {
+      ok: false,
+      force,
+      targetPlaylistId: targetPlaylistId || null,
+      attemptedCount: 0,
+      completedCount: 0,
+      skippedCount: 0,
+      failedCount: 1,
+      completedPlaylists: [],
+      failedPlaylists: [
+        {
+          playlistId: targetPlaylistId || "",
+          name: targetPlaylistId || "Spotify",
+          error:
+            "Faltan variables de entorno de Spotify o SPOTIFY_REFRESH_TOKEN.",
+        },
+      ],
+      rateLimited: false,
+      retryAfterMs: null,
+      stoppedAtPlaylistId: null,
+      startedAt,
+      finishedAt: new Date().toISOString(),
+    } satisfies SpotifyPlaylistCacheSyncResult;
   }
 
   if (spotifySupabaseCacheSyncPromise) {
     return spotifySupabaseCacheSyncPromise;
   }
-
-  const targetPlaylistId = options?.playlistId?.trim() ?? "";
 
   spotifySupabaseCacheSyncPromise = (async () => {
     const [
@@ -946,7 +996,22 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
     }
 
     if (playlists.length === 0) {
-      return;
+      return {
+        ok: true,
+        force,
+        targetPlaylistId: targetPlaylistId || null,
+        attemptedCount: 0,
+        completedCount: 0,
+        skippedCount: 0,
+        failedCount: 0,
+        completedPlaylists: [],
+        failedPlaylists: [],
+        rateLimited: false,
+        retryAfterMs: null,
+        stoppedAtPlaylistId: null,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+      } satisfies SpotifyPlaylistCacheSyncResult;
     }
 
     const playlistUpsertResult = await upsertSpotifyCachedPlaylists(
@@ -982,7 +1047,7 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
         : 0;
 
       return (
-        options?.force ||
+        force ||
         Boolean(targetPlaylistId) ||
         !currentState ||
         !currentState.isActive ||
@@ -991,19 +1056,27 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
       );
     });
 
-    await mapValuesWithConcurrencyLimit(
-      playlistsToRefresh,
-      SPOTIFY_PLAYLIST_TRACK_INDEX_CONCURRENCY,
-      async (playlist) => {
-        const playlistCacheId =
-          playlistUpsertResult.playlistCacheIdBySpotifyId.get(playlist.id) ?? 0;
+    const completedPlaylists: SpotifyPlaylistCacheSyncResult["completedPlaylists"] =
+      [];
+    const failedPlaylists: SpotifyPlaylistCacheSyncResult["failedPlaylists"] = [];
+    let rateLimited = false;
+    let retryAfterMs: number | null = null;
+    let stoppedAtPlaylistId: string | null = null;
 
-        if (!playlistCacheId) {
-          throw new Error(
-            `No he encontrado la playlist cacheada ${playlist.name.trim()}.`,
-          );
-        }
+    for (const playlist of playlistsToRefresh) {
+      const playlistCacheId =
+        playlistUpsertResult.playlistCacheIdBySpotifyId.get(playlist.id) ?? 0;
 
+      if (!playlistCacheId) {
+        failedPlaylists.push({
+          playlistId: playlist.id,
+          name: playlist.name.trim(),
+          error: `No he encontrado la playlist cacheada ${playlist.name.trim()}.`,
+        });
+        continue;
+      }
+
+      try {
         const trackItems = await fetchSpotifyPlaylistTrackItems(
           playlist.id,
           fetchSpotifyJsonWithRetry,
@@ -1024,14 +1097,58 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
         });
 
         if (!replaceResult.ok) {
-          throw new Error(replaceResult.error);
+          failedPlaylists.push({
+            playlistId: playlist.id,
+            name: playlist.name.trim(),
+            error: replaceResult.error,
+          });
+          continue;
         }
-      },
-    );
+
+        completedPlaylists.push({
+          playlistId: playlist.id,
+          name: playlist.name.trim(),
+          trackCount: trackItems.length,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Error desconocido.";
+
+        failedPlaylists.push({
+          playlistId: playlist.id,
+          name: playlist.name.trim(),
+          error: message,
+        });
+
+        if (isSpotifyRateLimitError(error)) {
+          rateLimited = true;
+          retryAfterMs = error.retryAfterMs;
+          stoppedAtPlaylistId = playlist.id;
+          break;
+        }
+      }
+    }
 
     spotifyPlaylistListCache = null;
     spotifyPlaylistTrackIndexCache = null;
     spotifyPlaylistTrackQueryCache.clear();
+
+    return {
+      ok: failedPlaylists.length === 0 && !rateLimited,
+      force,
+      targetPlaylistId: targetPlaylistId || null,
+      attemptedCount: playlistsToRefresh.length,
+      completedCount: completedPlaylists.length,
+      skippedCount: Math.max(playlists.length - playlistsToRefresh.length, 0),
+      failedCount: failedPlaylists.length,
+      completedPlaylists,
+      failedPlaylists,
+      rateLimited,
+      retryAfterMs,
+      stoppedAtPlaylistId,
+      startedAt,
+      finishedAt: new Date().toISOString(),
+    } satisfies SpotifyPlaylistCacheSyncResult;
   })().finally(() => {
     spotifySupabaseCacheSyncPromise = null;
   });

@@ -522,6 +522,10 @@ export function SpotifyViewer({
   const cachedTrackCount = textFilteredPlaylistTracks.filter(
     (track) => track.youtubeCacheStatus === "cached",
   ).length;
+  const spotifyCachedTrackCount = playlistTracks.length;
+  const youtubeCachedTrackCount = playlistTracks.filter(
+    (track) => track.youtubeCacheStatus === "cached",
+  ).length;
   const rankedTrackCount = textFilteredPlaylistTracks.filter(
     (track) => track.rating > 0,
   ).length;
@@ -2023,6 +2027,9 @@ export function SpotifyViewer({
                             {selectedPlaylistDurationLabel
                               ? ` · ${selectedPlaylistDurationLabel}`
                               : ""}
+                            {trackStatus === "ready"
+                              ? ` · ${youtubeCachedTrackCount} cacheados en YouTube · ${spotifyCachedTrackCount} cacheados en Spotify`
+                              : ""}
                           </p>
                         </div>
 
@@ -2072,12 +2079,6 @@ export function SpotifyViewer({
                                 {filteredPlaylistTracks.length === 1
                                   ? "canción"
                                   : "canciones"}
-                              </p>
-                              <p className="mt-1 text-[0.62rem] uppercase tracking-[0.22em] text-slate-500">
-                                {visibleCachedTrackCount}{" "}
-                                {visibleCachedTrackCount === 1
-                                  ? "cacheada"
-                                  : "cacheadas"}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
