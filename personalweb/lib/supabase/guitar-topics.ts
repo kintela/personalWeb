@@ -248,6 +248,14 @@ function getPlatformLabelFromUrl(rawUrl: string) {
       return "Google Drive";
     }
 
+    if (
+      hostname === "1drv.ms" ||
+      hostname === "onedrive.live.com" ||
+      hostname.endsWith(".sharepoint.com")
+    ) {
+      return "OneDrive";
+    }
+
     if (hostname === "dai.ly" || hostname === "dailymotion.com" || hostname.endsWith(".dailymotion.com")) {
       return "Dailymotion";
     }

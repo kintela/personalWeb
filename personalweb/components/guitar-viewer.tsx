@@ -39,7 +39,7 @@ type SelectedGuitarVideo = {
   subtitle: string;
   externalUrl: string;
   embedUrl: string;
-  platform: "youtube" | "instagram" | "vimeo";
+  platform: "youtube" | "instagram" | "vimeo" | "onedrive";
 };
 
 type SelectedGuitarLyric = {
@@ -354,6 +354,37 @@ function getVimeoExternalUrl(rawUrl: string) {
   }
 }
 
+function getOneDriveEmbedUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (
+      hostname !== "1drv.ms" &&
+      hostname !== "onedrive.live.com" &&
+      !hostname.endsWith(".sharepoint.com")
+    ) {
+      return null;
+    }
+
+    if (
+      hostname.endsWith(".sharepoint.com") &&
+      url.pathname.toLowerCase().includes("/_layouts/15/embed.aspx")
+    ) {
+      return url.toString();
+    }
+
+    const embedUrl = new URL(url.toString());
+
+    embedUrl.searchParams.set("embed", "1");
+    embedUrl.searchParams.delete("download");
+
+    return embedUrl.toString();
+  } catch {
+    return null;
+  }
+}
+
 function getGuitarVideoDescriptor(
   rawUrl: string,
   title: string,
@@ -392,6 +423,18 @@ function getGuitarVideoDescriptor(
       externalUrl: getVimeoExternalUrl(rawUrl),
       embedUrl: vimeoEmbedUrl,
       platform: "vimeo",
+    };
+  }
+
+  const oneDriveEmbedUrl = getOneDriveEmbedUrl(rawUrl);
+
+  if (oneDriveEmbedUrl) {
+    return {
+      title,
+      subtitle,
+      externalUrl: rawUrl,
+      embedUrl: oneDriveEmbedUrl,
+      platform: "onedrive",
     };
   }
 
@@ -1564,7 +1607,9 @@ export function GuitarViewer({
                             ? "YouTube"
                             : selectedVideo.platform === "instagram"
                               ? "Instagram"
-                              : "Vimeo"}
+                              : selectedVideo.platform === "onedrive"
+                                ? "OneDrive"
+                                : "Vimeo"}
                         </p>
                       </div>
 
@@ -1605,6 +1650,16 @@ export function GuitarViewer({
                         />
                       </div>
                     </div>
+
+                    {selectedVideo.platform === "onedrive" ? (
+                      <div className="rounded-[1.5rem] border border-amber-300/20 bg-amber-300/10 px-4 py-4 text-sm text-amber-100">
+                        Si SharePoint bloquea este vídeo dentro del visor, usa{" "}
+                        <span className="font-semibold text-white">
+                          Abrir fuera
+                        </span>
+                        .
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>

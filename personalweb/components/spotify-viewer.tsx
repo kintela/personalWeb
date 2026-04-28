@@ -1634,17 +1634,6 @@ export function SpotifyViewer({
     <section className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/6 px-6 py-8 shadow-[0_32px_90px_rgba(15,23,42,0.25)] backdrop-blur md:px-10 md:py-10">
       <div className="space-y-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-3">
-            <p className="text-xs font-medium uppercase tracking-[0.38em] text-cyan-300/85">
-              Spotify
-            </p>
-            <div className="space-y-3">
-              <h2 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">
-                Me flipan...
-              </h2>
-            </div>
-          </div>
-
           <div className="flex items-center gap-3 self-start lg:self-auto">
             <ShareCardButton
               anchorId="spotify"
