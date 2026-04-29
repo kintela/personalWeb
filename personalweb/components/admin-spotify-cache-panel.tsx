@@ -22,9 +22,19 @@ type SpotifyPlaylistCacheSyncGap = {
   lastSyncedAt: string | null;
 };
 
+type SpotifyAdminPlaylistListItem = {
+  playlistCacheId: number;
+  spotifyId: string;
+  name: string;
+  trackCount: number;
+  cachedTrackCount: number;
+  lastSyncedAt: string | null;
+};
+
 type AdminSpotifyCachePanelProps = {
   summary: SpotifyCacheSummary;
   syncGaps: SpotifyPlaylistCacheSyncGap[];
+  playlists: SpotifyAdminPlaylistListItem[];
 };
 
 type SyncStatus = "idle" | "running" | "success" | "error";
@@ -43,6 +53,7 @@ function formatSyncDate(value: string | null | undefined) {
 export function AdminSpotifyCachePanel({
   summary,
   syncGaps,
+  playlists,
 }: AdminSpotifyCachePanelProps) {
   const router = useRouter();
   const [status, setStatus] = useState<SyncStatus>("idle");
@@ -281,6 +292,67 @@ export function AdminSpotifyCachePanel({
                       >
                         Sincronizar
                       </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-300">
+              Listado de playlists
+            </h3>
+            <p className="text-sm text-slate-400">
+              Listas activas de Spotify ordenadas de mayor a menor número de canciones.
+            </p>
+          </div>
+          <p className="text-sm text-slate-400">
+            Total: {playlists.length.toLocaleString("es-ES")}
+          </p>
+        </div>
+
+        {playlists.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-300">
+            No hay playlists activas en caché.
+          </p>
+        ) : (
+          <div className="mt-4 max-h-[32rem] overflow-auto">
+            <table className="min-w-full border-separate border-spacing-y-2 text-left text-sm">
+              <thead className="text-xs uppercase tracking-[0.24em] text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Lista</th>
+                  <th className="px-3 py-2 font-medium">Canciones</th>
+                  <th className="px-3 py-2 font-medium">Caché</th>
+                  <th className="px-3 py-2 font-medium">Sync</th>
+                </tr>
+              </thead>
+              <tbody>
+                {playlists.map((playlist) => (
+                  <tr
+                    key={playlist.spotifyId}
+                    className="rounded-2xl bg-white/[0.04] text-slate-200"
+                  >
+                    <td className="rounded-l-2xl px-3 py-3">
+                      <div className="space-y-1">
+                        <p className="font-medium text-white">{playlist.name}</p>
+                        <p className="font-mono text-xs text-slate-500">
+                          {playlist.spotifyId}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 font-medium text-white">
+                      {playlist.trackCount.toLocaleString("es-ES")}
+                    </td>
+                    <td className="px-3 py-3 text-slate-400">
+                      {playlist.cachedTrackCount.toLocaleString("es-ES")}
+                    </td>
+                    <td className="rounded-r-2xl px-3 py-3 text-slate-400">
+                      {formatSyncDate(playlist.lastSyncedAt)}
                     </td>
                   </tr>
                 ))}

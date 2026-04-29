@@ -9,6 +9,7 @@ import {
 import { getPhotoAudit } from "@/lib/admin/photos-audit";
 import {
   getSpotifyCacheSummary,
+  readSpotifyAdminPlaylistList,
   readSpotifyCachedPlaylistSyncGaps,
 } from "@/lib/supabase/spotify-cache";
 import { getPhotoPublicUrl } from "@/lib/supabase/photos";
@@ -303,11 +304,13 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
     concertAssetsAudit,
     spotifyCacheSummary,
     spotifyCacheSyncGaps,
+    spotifyAdminPlaylistList,
   ] = await Promise.all([
     getPhotoAudit(),
     getConcertAssetsAudit(),
     getSpotifyCacheSummary(),
     readSpotifyCachedPlaylistSyncGaps(),
+    readSpotifyAdminPlaylistList(),
   ]);
   const bucketSearch = getSingleValue(searchParams.file).trim();
   const matchedBucketFiles = bucketSearch
@@ -373,6 +376,7 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
         <AdminSpotifyCachePanel
           summary={spotifyCacheSummary}
           syncGaps={spotifyCacheSyncGaps}
+          playlists={spotifyAdminPlaylistList}
         />
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

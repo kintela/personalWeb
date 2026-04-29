@@ -94,6 +94,15 @@ export type SpotifyPlaylistCacheSyncGap = {
   lastSyncedAt: string | null;
 };
 
+export type SpotifyAdminPlaylistListItem = {
+  playlistCacheId: number;
+  spotifyId: string;
+  name: string;
+  trackCount: number;
+  cachedTrackCount: number;
+  lastSyncedAt: string | null;
+};
+
 type SpotifyCacheMutationResult =
   | {
       ok: true;
@@ -368,6 +377,57 @@ export async function readSpotifyCachedPlaylistSyncGaps() {
     .sort((left, right) => {
       if (right.missingTrackCount !== left.missingTrackCount) {
         return right.missingTrackCount - left.missingTrackCount;
+      }
+
+      return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
+    });
+}
+
+export async function readSpotifyAdminPlaylistList() {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return [] as SpotifyAdminPlaylistListItem[];
+  }
+
+  const [{ data: playlists, error: playlistsError }, trackCounts] =
+    await Promise.all([
+      supabase
+        .from("spotify_playlists_cache")
+        .select("id, spotify_id, name, track_count, last_synced_at")
+        .eq("is_active", true)
+        .returns<
+          Array<{
+            id: number | string;
+            spotify_id: string;
+            name: string;
+            track_count: number | string | null;
+            last_synced_at: string | null;
+          }>
+        >(),
+      readSpotifyCachedPlaylistTrackCounts(),
+    ]);
+
+  if (playlistsError) {
+    return [] as SpotifyAdminPlaylistListItem[];
+  }
+
+  return (playlists ?? [])
+    .map((playlist) => {
+      const playlistCacheId = parseInteger(playlist.id);
+
+      return {
+        playlistCacheId,
+        spotifyId: playlist.spotify_id.trim(),
+        name: playlist.name.trim(),
+        trackCount: Math.max(0, parseInteger(playlist.track_count)),
+        cachedTrackCount: trackCounts.get(playlistCacheId) ?? 0,
+        lastSyncedAt: playlist.last_synced_at,
+      } satisfies SpotifyAdminPlaylistListItem;
+    })
+    .sort((left, right) => {
+      if (right.trackCount !== left.trackCount) {
+        return right.trackCount - left.trackCount;
       }
 
       return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
