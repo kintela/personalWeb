@@ -259,6 +259,28 @@ function YouTubeLogoIcon() {
   );
 }
 
+function ExternalEmbeddedVideoPlayer({
+  embedUrl,
+  title,
+  className,
+}: {
+  embedUrl: string;
+  title: string;
+  className?: string;
+}) {
+  return (
+    <iframe
+      src={embedUrl}
+      title={title}
+      allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+      allowFullScreen
+      loading="lazy"
+      referrerPolicy="strict-origin-when-cross-origin"
+      className={className}
+    />
+  );
+}
+
 function ArtistIcon() {
   return (
     <svg
@@ -1516,7 +1538,7 @@ export function SpotifyViewer({
     }
 
     if (!manualVideoUrl.trim()) {
-      setManualVideoError("Pega un enlace de YouTube antes de guardar.");
+      setManualVideoError("Pega un enlace de YouTube o DailyMotion antes de guardar.");
       return;
     }
 
@@ -1535,7 +1557,7 @@ export function SpotifyViewer({
           artists: selectedTrack.artistsLabel,
           album: selectedTrack.albumName ?? "",
           year: selectedTrackYear ?? "",
-          youtubeUrl: manualVideoUrl.trim(),
+          videoUrl: manualVideoUrl.trim(),
         }),
       });
       const payload = (await response.json()) as YouTubeMatchPayload;
@@ -2511,8 +2533,8 @@ export function SpotifyViewer({
                                       Vídeo manual
                                     </p>
                                     <p className="text-sm text-slate-300">
-                                      Pega un enlace de YouTube para reemplazar
-                                      el vídeo guardado de{" "}
+                                      Pega un enlace de YouTube o DailyMotion
+                                      para reemplazar el vídeo guardado de{" "}
                                       <span className="font-medium text-white">
                                         {selectedTrack.name}
                                       </span>
@@ -2529,7 +2551,7 @@ export function SpotifyViewer({
                                         setManualVideoUrl(event.target.value)
                                       }
                                       className="w-full rounded-2xl border border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
-                                      placeholder="https://www.youtube.com/watch?v=..."
+                                      placeholder="https://www.youtube.com/watch?v=... o https://www.dailymotion.com/video/..."
                                       inputMode="url"
                                       required
                                     />
@@ -2600,10 +2622,10 @@ export function SpotifyViewer({
                             <div className="flex flex-1 items-center justify-center rounded-[1.75rem] border border-rose-400/25 bg-rose-400/10 p-6">
                               <div className="mx-auto max-w-xl text-center">
                                 <p className="text-sm font-medium uppercase tracking-[0.28em] text-rose-200">
-                                  Error de YouTube
+                                  Error de vídeo
                                 </p>
                                 <p className="mt-4 text-sm leading-7 text-rose-100">
-                                  {videoError || "No he podido buscar el vídeo en YouTube."}
+                                  {videoError || "No he podido cargar el vídeo."}
                                 </p>
                               </div>
                             </div>
@@ -2621,13 +2643,21 @@ export function SpotifyViewer({
                                 }`}
                               >
                                 <div className={isVideoExtendedMode ? "h-full" : "aspect-video"}>
-                                  <YouTubeEmbeddedPlayer
-                                    videoId={selectedVideo.id}
-                                    title={selectedVideo.title}
-                                    autoplay
-                                    onEnded={handleAdvanceToNextTrack}
-                                    className="h-full w-full"
-                                  />
+                                  {selectedVideo.platform === "youtube" ? (
+                                    <YouTubeEmbeddedPlayer
+                                      videoId={selectedVideo.id}
+                                      title={selectedVideo.title}
+                                      autoplay
+                                      onEnded={handleAdvanceToNextTrack}
+                                      className="h-full w-full"
+                                    />
+                                  ) : (
+                                    <ExternalEmbeddedVideoPlayer
+                                      embedUrl={selectedVideo.embedUrl}
+                                      title={selectedVideo.title}
+                                      className="h-full w-full border-0"
+                                    />
+                                  )}
                                 </div>
                               </div>
                             </div>

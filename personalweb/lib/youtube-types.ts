@@ -1,5 +1,6 @@
 export type YouTubeMatchedVideoAsset = {
   id: string;
+  platform: "youtube" | "dailymotion";
   title: string;
   channelTitle: string;
   description: string | null;

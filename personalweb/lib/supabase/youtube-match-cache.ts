@@ -160,6 +160,31 @@ function hasStoredDuration(value: number | string | null | undefined) {
   return normalizeYouTubeDurationSeconds(value) !== null;
 }
 
+function getVideoPlatformFromRow(
+  row: Pick<YouTubeVideoMatchCacheRow, "external_url" | "embed_url">,
+) {
+  const candidateUrl = normalizeNullableValue(row.embed_url)
+    ?? normalizeNullableValue(row.external_url)
+    ?? "";
+
+  if (!candidateUrl) {
+    return "youtube" as const;
+  }
+
+  try {
+    const url = new URL(candidateUrl);
+    const hostname = url.hostname.toLocaleLowerCase("en-US").replace(/^www\./, "");
+
+    if (hostname === "dai.ly" || hostname === "dailymotion.com" || hostname.endsWith(".dailymotion.com")) {
+      return "dailymotion" as const;
+    }
+  } catch {
+    return "youtube" as const;
+  }
+
+  return "youtube" as const;
+}
+
 function chunkValues<T>(values: T[], chunkSize: number) {
   const chunks: T[][] = [];
 
@@ -240,6 +265,7 @@ async function hydrateRowsWithMissingDurations(
   const rowsMissingDuration = rows.filter(
     (row) =>
       row.has_match &&
+      getVideoPlatformFromRow(row) === "youtube" &&
       typeof row.video_id === "string" &&
       row.video_id.trim().length > 0 &&
       !hasStoredDuration(row.duration_seconds),
@@ -313,6 +339,7 @@ function mapRowToVideoAsset(
 
   return {
     id: row.video_id,
+    platform: getVideoPlatformFromRow(row),
     title: row.title,
     channelTitle: row.channel_title,
     description: normalizeNullableValue(row.description),

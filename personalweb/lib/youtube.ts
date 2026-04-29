@@ -214,6 +214,18 @@ function getNormalizedYouTubeUrl(value: string) {
     : `https://${trimmedValue}`;
 }
 
+function getNormalizedUrl(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmedValue)
+    ? trimmedValue
+    : `https://${trimmedValue}`;
+}
+
 function getYouTubePathVideoId(value: string | undefined) {
   const normalizedValue = value?.trim() ?? "";
 
@@ -258,6 +270,53 @@ function extractYouTubeVideoId(value: string) {
 
   if (["embed", "shorts", "live", "v"].includes(pathRoot ?? "")) {
     return getYouTubePathVideoId(pathVideoId);
+  }
+
+  return null;
+}
+
+function isValidDailymotionVideoId(value: string) {
+  return /^[A-Za-z0-9]+$/.test(value.trim());
+}
+
+function extractDailymotionVideoId(value: string) {
+  const trimmedValue = value.trim();
+
+  if (isValidDailymotionVideoId(trimmedValue) && trimmedValue.length >= 6) {
+    return trimmedValue;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(getNormalizedUrl(trimmedValue));
+  } catch {
+    return null;
+  }
+
+  const hostname = url.hostname.toLocaleLowerCase("en-US").replace(/^www\./, "");
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+
+  if (hostname === "dai.ly") {
+    const videoId = pathSegments[0] ?? "";
+
+    return isValidDailymotionVideoId(videoId) ? videoId : null;
+  }
+
+  if (hostname !== "dailymotion.com" && !hostname.endsWith(".dailymotion.com")) {
+    return null;
+  }
+
+  if (pathSegments[0] === "video") {
+    const videoId = pathSegments[1]?.split("_")[0] ?? "";
+
+    return isValidDailymotionVideoId(videoId) ? videoId : null;
+  }
+
+  if (pathSegments[0] === "embed" && pathSegments[1] === "video") {
+    const videoId = pathSegments[2]?.split("_")[0] ?? "";
+
+    return isValidDailymotionVideoId(videoId) ? videoId : null;
   }
 
   return null;
@@ -423,6 +482,7 @@ function buildMatchedVideoAssetFromVideoItem(
 
   return {
     id,
+    platform: "youtube",
     title,
     channelTitle,
     description: item.snippet?.description?.trim() || null,
@@ -434,6 +494,36 @@ function buildMatchedVideoAssetFromVideoItem(
     durationSeconds,
     durationLabel: formatYouTubeDurationLabel(durationSeconds),
     matchedQuery,
+  } satisfies YouTubeMatchedVideoAsset;
+}
+
+function buildManualDailymotionVideoAsset(
+  input: ManualYouTubeSongVideoInput,
+  videoId: string,
+): YouTubeMatchedVideoAsset {
+  const normalizedVideoId = videoId.trim();
+  const title = compactWhitespace(`${input.trackName} · ${input.artistsLabel}`);
+
+  return {
+    id: normalizedVideoId,
+    platform: "dailymotion",
+    title,
+    channelTitle: "Dailymotion",
+    description: null,
+    thumbnailUrl: `https://www.dailymotion.com/thumbnail/video/${encodeURIComponent(
+      normalizedVideoId,
+    )}`,
+    externalUrl: `https://www.dailymotion.com/video/${encodeURIComponent(
+      normalizedVideoId,
+    )}`,
+    embedUrl: `https://www.dailymotion.com/embed/video/${encodeURIComponent(
+      normalizedVideoId,
+    )}?autoplay=1`,
+    viewCount: 0,
+    viewCountLabel: "0",
+    durationSeconds: null,
+    durationLabel: null,
+    matchedQuery: `manual:dailymotion:${normalizedVideoId}`,
   } satisfies YouTubeMatchedVideoAsset;
 }
 
@@ -598,54 +688,81 @@ async function fetchYouTubeJson<T>(path: string, params: URLSearchParams) {
 export async function saveManualYouTubeSongVideo(
   input: ManualYouTubeSongVideoInput,
 ): Promise<YouTubeMatchedVideoAsset> {
-  if (!isYouTubeConfigured()) {
+  const videoId = extractYouTubeVideoId(input.videoUrl);
+
+  const cacheKey = getSearchCacheKey(input);
+
+  if (videoId) {
+    if (!isYouTubeConfigured()) {
+      throw new Error(
+        "Falta YOUTUBE_API_KEY para validar el vídeo manual en YouTube.",
+      );
+    }
+
+    const matchedQuery = `manual:${buildExternalUrl(videoId)}`;
+    const videoResponse = await fetchYouTubeJson<YouTubeVideoListResponse>(
+      "/videos",
+      new URLSearchParams({
+        part: "snippet,statistics,status,contentDetails",
+        id: videoId,
+        maxResults: "1",
+      }),
+    );
+    const matchedVideoItem = videoResponse.items?.[0];
+
+    if (!matchedVideoItem?.id) {
+      throw new Error("No he encontrado ese vídeo en YouTube.");
+    }
+
+    if (matchedVideoItem.status?.embeddable === false) {
+      throw new Error("Ese vídeo no permite reproducción embebida.");
+    }
+
+    const matchedVideo = buildMatchedVideoAssetFromVideoItem(
+      matchedVideoItem,
+      matchedQuery,
+    );
+
+    if (!matchedVideo) {
+      throw new Error("No he podido leer los datos de ese vídeo en YouTube.");
+    }
+
+    const saveResult = await upsertYouTubeMatchCache({
+      cacheKey,
+      trackName: input.trackName,
+      artistsLabel: input.artistsLabel,
+      albumName: input.albumName,
+      albumReleaseYear: input.albumReleaseYear,
+      matchedQuery,
+      video: matchedVideo,
+    });
+
+    if (!saveResult.ok) {
+      throw new Error(saveResult.error);
+    }
+
+    return matchedVideo;
+  }
+
+  const dailymotionVideoId = extractDailymotionVideoId(input.videoUrl);
+
+  if (!dailymotionVideoId) {
     throw new Error(
-      "Falta YOUTUBE_API_KEY para validar el vídeo manual en YouTube.",
+      "Pega un enlace válido de YouTube o DailyMotion, o un ID de vídeo compatible.",
     );
   }
 
-  const videoId = extractYouTubeVideoId(input.videoUrl);
-
-  if (!videoId) {
-    throw new Error("Pega un enlace válido de YouTube o un ID de vídeo.");
-  }
-
-  const matchedQuery = `manual:${buildExternalUrl(videoId)}`;
-  const cacheKey = getSearchCacheKey(input);
-  const videoResponse = await fetchYouTubeJson<YouTubeVideoListResponse>(
-    "/videos",
-    new URLSearchParams({
-      part: "snippet,statistics,status,contentDetails",
-      id: videoId,
-      maxResults: "1",
-    }),
+  const matchedVideo = buildManualDailymotionVideoAsset(
+    input,
+    dailymotionVideoId,
   );
-  const matchedVideoItem = videoResponse.items?.[0];
-
-  if (!matchedVideoItem?.id) {
-    throw new Error("No he encontrado ese vídeo en YouTube.");
-  }
-
-  if (matchedVideoItem.status?.embeddable === false) {
-    throw new Error("Ese vídeo no permite reproducción embebida.");
-  }
-
-  const matchedVideo = buildMatchedVideoAssetFromVideoItem(
-    matchedVideoItem,
-    matchedQuery,
-  );
-
-  if (!matchedVideo) {
-    throw new Error("No he podido leer los datos de ese vídeo en YouTube.");
-  }
-
   const saveResult = await upsertYouTubeMatchCache({
     cacheKey,
     trackName: input.trackName,
     artistsLabel: input.artistsLabel,
     albumName: input.albumName,
     albumReleaseYear: input.albumReleaseYear,
-    matchedQuery,
+    matchedQuery: matchedVideo.matchedQuery,
     video: matchedVideo,
   });
 
@@ -827,6 +944,7 @@ async function searchYouTubeSongVideoOnCacheMiss(
 
   const matchedVideo = {
     id: bestCandidate.id,
+    platform: "youtube",
     title: bestCandidate.title,
     channelTitle: bestCandidate.channelTitle,
     description: bestCandidate.description,

@@ -59,6 +59,7 @@ export async function POST(request: Request) {
     album,
     year,
     action,
+    videoUrl,
     youtubeUrl,
   } = (await request.json().catch(() => ({}))) as {
     track?: string;
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
     album?: string;
     year?: string;
     action?: string;
+    videoUrl?: string;
     youtubeUrl?: string;
   };
 
@@ -74,20 +76,20 @@ export async function POST(request: Request) {
   const albumName = String(album ?? "").trim();
   const albumReleaseYear = String(year ?? "").trim();
   const requestedAction = String(action ?? "").trim();
-  const manualYoutubeUrl = String(youtubeUrl ?? "").trim();
+  const manualVideoUrl = String(videoUrl ?? youtubeUrl ?? "").trim();
   const shouldSaveWithoutVideo = requestedAction === "without-video";
 
   if (
     !trackName ||
     !artistsLabel ||
-    (!shouldSaveWithoutVideo && !manualYoutubeUrl)
+    (!shouldSaveWithoutVideo && !manualVideoUrl)
   ) {
     return NextResponse.json(
       {
         ok: false,
         error: shouldSaveWithoutVideo
           ? "Necesito tema y artistas para guardar la canción sin vídeo."
-          : "Necesito tema, artistas y enlace de YouTube para guardar el vídeo manual.",
+          : "Necesito tema, artistas y enlace de vídeo para guardar el vídeo manual.",
       },
       { status: 400 },
     );
@@ -113,7 +115,7 @@ export async function POST(request: Request) {
       artistsLabel,
       albumName: albumName || null,
       albumReleaseYear: albumReleaseYear || null,
-      videoUrl: manualYoutubeUrl,
+      videoUrl: manualVideoUrl,
     });
 
     return NextResponse.json({
