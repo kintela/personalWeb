@@ -74,6 +74,66 @@ function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
 }
 
+function buildSpotifyPlaylistShareSlugBase(name: string) {
+  const normalizedSlug = name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es-ES")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return normalizedSlug || "playlist";
+}
+
+function buildSpotifyPlaylistShareSlugMaps(playlists: SpotifyPlaylistAsset[]) {
+  const playlistShareSlugById = new Map<string, string>();
+  const playlistIdByShareSlug = new Map<string, string>();
+  const slugUsageCount = new Map<string, number>();
+
+  for (const playlist of playlists) {
+    const baseSlug = buildSpotifyPlaylistShareSlugBase(playlist.name);
+    const nextUsageCount = (slugUsageCount.get(baseSlug) ?? 0) + 1;
+    slugUsageCount.set(baseSlug, nextUsageCount);
+
+    const shareSlug =
+      nextUsageCount === 1
+        ? baseSlug
+        : `${baseSlug}_${playlist.id.slice(0, 6).toLocaleLowerCase("es-ES")}`;
+
+    playlistShareSlugById.set(playlist.id, shareSlug);
+    playlistIdByShareSlug.set(shareSlug, playlist.id);
+  }
+
+  return {
+    playlistShareSlugById,
+    playlistIdByShareSlug,
+  };
+}
+
+function resolveSpotifyPlaylistShareValue(
+  playlists: SpotifyPlaylistAsset[],
+  sharedValue: string,
+) {
+  const normalizedSharedValue = sharedValue.trim();
+
+  if (!normalizedSharedValue) {
+    return null;
+  }
+
+  if (playlists.some((playlist) => playlist.id === normalizedSharedValue)) {
+    return normalizedSharedValue;
+  }
+
+  const { playlistIdByShareSlug } = buildSpotifyPlaylistShareSlugMaps(playlists);
+
+  return (
+    playlistIdByShareSlug.get(
+      normalizedSharedValue.toLocaleLowerCase("es-ES"),
+    ) ?? null
+  );
+}
+
 function matchesPlaylistTextFilter(
   playlist: SpotifyPlaylistAsset,
   normalizedFilterValue: string,
@@ -498,6 +558,11 @@ export function SpotifyViewer({
           playlistTrackSearchHitByPlaylistId.has(playlist.id),
       )
     : playlists;
+  const { playlistShareSlugById } = buildSpotifyPlaylistShareSlugMaps(playlists);
+  const resolvedSharedSpotifyPlaylistId = resolveSpotifyPlaylistShareValue(
+    playlists,
+    sharedSpotifyPlaylistId,
+  );
   const normalizedTrackFilterValue = trackFilterInput
     .trim()
     .toLocaleLowerCase("es-ES");
@@ -586,6 +651,9 @@ export function SpotifyViewer({
   })();
   const selectedPlaylist =
     playlists.find((playlist) => playlist.id === selectedPlaylistId) ?? null;
+  const selectedPlaylistShareSlug = selectedPlaylist
+    ? (playlistShareSlugById.get(selectedPlaylist.id) ?? selectedPlaylist.id)
+    : "";
   const selectedTrack =
     playlistTracks.find((track) => track.id === selectedTrackId) ??
     playbackOrderedTracks[0] ??
@@ -926,22 +994,18 @@ export function SpotifyViewer({
   }, [isNativeFullscreen, isVideoExtendedMode, selectedTrack]);
 
   useEffect(() => {
-    if (!sharedSpotifyPlaylistId) {
+    if (!resolvedSharedSpotifyPlaylistId) {
       return;
     }
 
-    if (!playlists.some((playlist) => playlist.id === sharedSpotifyPlaylistId)) {
-      return;
-    }
-
-    setSelectedPlaylistId(sharedSpotifyPlaylistId);
+    setSelectedPlaylistId(resolvedSharedSpotifyPlaylistId);
     setTrackFilterInput("");
     setIsTrackShuffleEnabled(false);
     setVideoCacheFilterMode("all");
     setShuffledTrackIds([]);
     setIsVideoExtendedMode(false);
     setShouldAutoEnterFullscreen(false);
-  }, [playlists, sharedSpotifyPlaylistId]);
+  }, [resolvedSharedSpotifyPlaylistId]);
 
   useEffect(() => {
     const currentValue = filterValue.trim();
@@ -1875,7 +1939,10 @@ export function SpotifyViewer({
                       <ShareCardButton
                         anchorId={`spotify-playlist-viewer-${playlist.id}`}
                         sectionId="spotify"
-                        queryValues={{ spotifyPlaylist: playlist.id }}
+                        queryValues={{
+                          spotifyPlaylist:
+                            playlistShareSlugById.get(playlist.id) ?? playlist.id,
+                        }}
                         className="absolute right-4 top-4 z-10"
                       />
 
@@ -2026,7 +2093,10 @@ export function SpotifyViewer({
                           <ShareCardButton
                             anchorId={selectedPlaylistViewerAnchorId}
                             sectionId="spotify"
-                            queryValues={{ spotifyPlaylist: selectedPlaylist.id }}
+                            queryValues={{
+                              spotifyPlaylist:
+                                selectedPlaylistShareSlug || selectedPlaylist.id,
+                            }}
                           />
                           <a
                             href={selectedPlaylist.externalUrl}
@@ -2349,7 +2419,9 @@ export function SpotifyViewer({
                                   anchorId={selectedTrackAnchorId}
                                   sectionId="spotify"
                                   queryValues={{
-                                    spotifyPlaylist: selectedPlaylist.id,
+                                    spotifyPlaylist:
+                                      selectedPlaylistShareSlug ||
+                                      selectedPlaylist.id,
                                     spotifyTrack: selectedTrack.id,
                                   }}
                                 />

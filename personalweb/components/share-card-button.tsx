@@ -49,8 +49,6 @@ function CheckIcon() {
 }
 
 export function ShareCardButton({
-  anchorId,
-  sectionId,
   className,
   queryKeys = [],
   queryValues,
@@ -97,12 +95,8 @@ export function ShareCardButton({
 
     params.delete("focus");
 
-    if (sectionId) {
-      params.set("focus", anchorId);
-    }
-
     const query = params.toString();
-    const shareUrl = `${window.location.origin}${pathname}${query ? `?${query}` : ""}#${encodeURIComponent(anchorId)}`;
+    const shareUrl = `${window.location.origin}${pathname}${query ? `?${query}` : ""}`;
 
     try {
       await navigator.clipboard.writeText(shareUrl);
