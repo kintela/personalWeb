@@ -103,6 +103,24 @@ export type SpotifyAdminPlaylistListItem = {
   lastSyncedAt: string | null;
 };
 
+export type SpotifyAdminDuplicateTrackItem = {
+  duplicateKey: string;
+  spotifyTrackId: string | null;
+  name: string;
+  artistsLabel: string;
+  occurrences: number;
+  positions: number[];
+};
+
+export type SpotifyAdminDuplicatePlaylistItem = {
+  playlistCacheId: number;
+  spotifyId: string;
+  name: string;
+  duplicateTrackCount: number;
+  duplicateOccurrenceCount: number;
+  tracks: SpotifyAdminDuplicateTrackItem[];
+};
+
 type SpotifyCacheMutationResult =
   | {
       ok: true;
@@ -428,6 +446,156 @@ export async function readSpotifyAdminPlaylistList() {
     .sort((left, right) => {
       if (right.trackCount !== left.trackCount) {
         return right.trackCount - left.trackCount;
+      }
+
+      return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
+    });
+}
+
+export async function readSpotifyAdminDuplicatePlaylists() {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return [] as SpotifyAdminDuplicatePlaylistItem[];
+  }
+
+  const [{ data: playlists, error: playlistsError }, { data: tracks, error: tracksError }] =
+    await Promise.all([
+      supabase
+        .from("spotify_playlists_cache")
+        .select("id, spotify_id, name")
+        .eq("is_active", true)
+        .returns<
+          Array<{
+            id: number | string;
+            spotify_id: string;
+            name: string;
+          }>
+        >(),
+      supabase
+        .from("spotify_playlist_tracks_cache")
+        .select(
+          "playlist_cache_id, spotify_track_id, position, name, artists_label, canonical_track_name",
+        )
+        .returns<
+          Array<{
+            playlist_cache_id: number | string;
+            spotify_track_id: string | null;
+            position: number | string;
+            name: string;
+            artists_label: string;
+            canonical_track_name: string;
+          }>
+        >(),
+    ]);
+
+  if (playlistsError || tracksError || !playlists?.length || !tracks?.length) {
+    return [] as SpotifyAdminDuplicatePlaylistItem[];
+  }
+
+  const activePlaylistIds = new Set(
+    playlists.map((playlist) => parseInteger(playlist.id)).filter((id) => id > 0),
+  );
+  const playlistMetaById = new Map(
+    playlists.map((playlist) => [
+      parseInteger(playlist.id),
+      {
+        spotifyId: playlist.spotify_id.trim(),
+        name: playlist.name.trim(),
+      },
+    ]),
+  );
+  const duplicateTracksByPlaylistId = new Map<
+    number,
+    Map<string, SpotifyAdminDuplicateTrackItem>
+  >();
+
+  for (const track of tracks) {
+    const playlistCacheId = parseInteger(track.playlist_cache_id);
+
+    if (!activePlaylistIds.has(playlistCacheId)) {
+      continue;
+    }
+
+    const spotifyTrackId = trimNullableValue(track.spotify_track_id);
+    const canonicalTrackName = track.canonical_track_name.trim();
+    const artistsLabel = track.artists_label.trim();
+    const duplicateKey = spotifyTrackId
+      ? `spotify:${spotifyTrackId}`
+      : `fallback:${canonicalTrackName}::${artistsLabel.toLocaleLowerCase("es-ES")}`;
+
+    let playlistTracks = duplicateTracksByPlaylistId.get(playlistCacheId);
+
+    if (!playlistTracks) {
+      playlistTracks = new Map<string, SpotifyAdminDuplicateTrackItem>();
+      duplicateTracksByPlaylistId.set(playlistCacheId, playlistTracks);
+    }
+
+    const existingTrack = playlistTracks.get(duplicateKey);
+    const position = parseInteger(track.position);
+
+    if (existingTrack) {
+      existingTrack.occurrences += 1;
+      existingTrack.positions.push(position);
+      continue;
+    }
+
+    playlistTracks.set(duplicateKey, {
+      duplicateKey,
+      spotifyTrackId,
+      name: track.name.trim(),
+      artistsLabel,
+      occurrences: 1,
+      positions: [position],
+    });
+  }
+
+  return [...duplicateTracksByPlaylistId.entries()]
+    .map(([playlistCacheId, playlistTracks]) => {
+      const playlistMeta = playlistMetaById.get(playlistCacheId);
+
+      if (!playlistMeta) {
+        return null;
+      }
+
+      const duplicateTracks = [...playlistTracks.values()]
+        .filter((track) => track.occurrences > 1)
+        .map((track) => ({
+          ...track,
+          positions: [...track.positions].sort((left, right) => left - right),
+        }))
+        .sort((left, right) => {
+          if (right.occurrences !== left.occurrences) {
+            return right.occurrences - left.occurrences;
+          }
+
+          return left.positions[0] - right.positions[0];
+        });
+
+      if (duplicateTracks.length === 0) {
+        return null;
+      }
+
+      return {
+        playlistCacheId,
+        spotifyId: playlistMeta.spotifyId,
+        name: playlistMeta.name,
+        duplicateTrackCount: duplicateTracks.length,
+        duplicateOccurrenceCount: duplicateTracks.reduce(
+          (total, track) => total + track.occurrences,
+          0,
+        ),
+        tracks: duplicateTracks,
+      } satisfies SpotifyAdminDuplicatePlaylistItem;
+    })
+    .filter((playlist): playlist is SpotifyAdminDuplicatePlaylistItem => Boolean(playlist))
+    .sort((left, right) => {
+      if (right.duplicateTrackCount !== left.duplicateTrackCount) {
+        return right.duplicateTrackCount - left.duplicateTrackCount;
+      }
+
+      if (right.duplicateOccurrenceCount !== left.duplicateOccurrenceCount) {
+        return right.duplicateOccurrenceCount - left.duplicateOccurrenceCount;
       }
 
       return left.name.localeCompare(right.name, "es", { sensitivity: "base" });

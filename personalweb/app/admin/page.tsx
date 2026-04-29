@@ -8,6 +8,7 @@ import {
 } from "@/lib/admin/concert-assets-audit";
 import { getPhotoAudit } from "@/lib/admin/photos-audit";
 import {
+  readSpotifyAdminDuplicatePlaylists,
   getSpotifyCacheSummary,
   readSpotifyAdminPlaylistList,
   readSpotifyCachedPlaylistSyncGaps,
@@ -305,12 +306,14 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
     spotifyCacheSummary,
     spotifyCacheSyncGaps,
     spotifyAdminPlaylistList,
+    spotifyAdminDuplicatePlaylists,
   ] = await Promise.all([
     getPhotoAudit(),
     getConcertAssetsAudit(),
     getSpotifyCacheSummary(),
     readSpotifyCachedPlaylistSyncGaps(),
     readSpotifyAdminPlaylistList(),
+    readSpotifyAdminDuplicatePlaylists(),
   ]);
   const bucketSearch = getSingleValue(searchParams.file).trim();
   const matchedBucketFiles = bucketSearch
@@ -377,6 +380,7 @@ export default async function AdminPage(props: { searchParams: SearchParams }) {
           summary={spotifyCacheSummary}
           syncGaps={spotifyCacheSyncGaps}
           playlists={spotifyAdminPlaylistList}
+          duplicatePlaylists={spotifyAdminDuplicatePlaylists}
         />
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

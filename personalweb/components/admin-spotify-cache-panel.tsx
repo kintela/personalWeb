@@ -31,10 +31,29 @@ type SpotifyAdminPlaylistListItem = {
   lastSyncedAt: string | null;
 };
 
+type SpotifyAdminDuplicateTrackItem = {
+  duplicateKey: string;
+  spotifyTrackId: string | null;
+  name: string;
+  artistsLabel: string;
+  occurrences: number;
+  positions: number[];
+};
+
+type SpotifyAdminDuplicatePlaylistItem = {
+  playlistCacheId: number;
+  spotifyId: string;
+  name: string;
+  duplicateTrackCount: number;
+  duplicateOccurrenceCount: number;
+  tracks: SpotifyAdminDuplicateTrackItem[];
+};
+
 type AdminSpotifyCachePanelProps = {
   summary: SpotifyCacheSummary;
   syncGaps: SpotifyPlaylistCacheSyncGap[];
   playlists: SpotifyAdminPlaylistListItem[];
+  duplicatePlaylists: SpotifyAdminDuplicatePlaylistItem[];
 };
 
 type SyncStatus = "idle" | "running" | "success" | "error";
@@ -54,6 +73,7 @@ export function AdminSpotifyCachePanel({
   summary,
   syncGaps,
   playlists,
+  duplicatePlaylists,
 }: AdminSpotifyCachePanelProps) {
   const router = useRouter();
   const [status, setStatus] = useState<SyncStatus>("idle");
@@ -358,6 +378,92 @@ export function AdminSpotifyCachePanel({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-300">
+              Playlists con temas repetidos
+            </h3>
+            <p className="text-sm text-slate-400">
+              Se detectan por `spotify_track_id` y, si falta, por nombre canónico más artista.
+            </p>
+          </div>
+          <p className="text-sm text-slate-400">
+            Total: {duplicatePlaylists.length.toLocaleString("es-ES")}
+          </p>
+        </div>
+
+        {duplicatePlaylists.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-300">
+            No hay playlists activas con temas repetidos en caché.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {duplicatePlaylists.map((playlist) => (
+              <section
+                key={playlist.spotifyId}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"
+              >
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-1">
+                    <h4 className="text-base font-semibold text-white">
+                      {playlist.name}
+                    </h4>
+                    <p className="font-mono text-xs text-slate-500">
+                      {playlist.spotifyId}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-400">
+                    <span>
+                      Temas repetidos: {playlist.duplicateTrackCount.toLocaleString("es-ES")}
+                    </span>
+                    <span>
+                      Apariciones: {playlist.duplicateOccurrenceCount.toLocaleString("es-ES")}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-full border-separate border-spacing-y-2 text-left text-sm">
+                    <thead className="text-xs uppercase tracking-[0.24em] text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Tema</th>
+                        <th className="px-3 py-2 font-medium">Veces</th>
+                        <th className="px-3 py-2 font-medium">Posiciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playlist.tracks.map((track) => (
+                        <tr
+                          key={track.duplicateKey}
+                          className="rounded-2xl bg-black/20 text-slate-200"
+                        >
+                          <td className="rounded-l-2xl px-3 py-3">
+                            <div className="space-y-1">
+                              <p className="font-medium text-white">{track.name}</p>
+                              <p className="text-slate-400">{track.artistsLabel}</p>
+                              <p className="font-mono text-xs text-slate-500">
+                                {track.spotifyTrackId ?? "sin spotify_track_id"}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 font-medium text-amber-100">
+                            {track.occurrences.toLocaleString("es-ES")}
+                          </td>
+                          <td className="rounded-r-2xl px-3 py-3 text-slate-300">
+                            {track.positions.join(", ")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ))}
           </div>
         )}
       </div>
