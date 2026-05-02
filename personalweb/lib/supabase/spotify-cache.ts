@@ -867,6 +867,48 @@ export async function readSpotifyCachedPlaylistTracks(playlistSpotifyId: string)
   return (data ?? []).map((row) => mapTrackCacheRowToAsset(row));
 }
 
+export async function readSpotifyCachedPlaylistTrackByPosition({
+  playlistSpotifyId,
+  position,
+}: {
+  playlistSpotifyId: string;
+  position: number;
+}) {
+  const supabase = createSupabaseServerClient();
+  const normalizedPlaylistSpotifyId = playlistSpotifyId.trim();
+  const normalizedPosition = Math.max(0, Math.trunc(position));
+
+  if (!supabase || !normalizedPlaylistSpotifyId || normalizedPosition <= 0) {
+    return null;
+  }
+
+  const { data: playlistRow, error: playlistError } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id")
+    .eq("spotify_id", normalizedPlaylistSpotifyId)
+    .eq("is_active", true)
+    .maybeSingle<{ id: number | string }>();
+
+  if (playlistError || !playlistRow) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("spotify_playlist_tracks_cache")
+    .select(
+      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, duration_ms, normalized_track_name, canonical_track_name",
+    )
+    .eq("playlist_cache_id", parseInteger(playlistRow.id))
+    .eq("position", normalizedPosition)
+    .maybeSingle<SpotifyPlaylistTrackCacheRow>();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return mapTrackCacheRowToAsset(data);
+}
+
 export async function updateSpotifyCachedPlaylistTrackLanguage({
   playlistSpotifyId,
   position,
@@ -947,6 +989,77 @@ export async function updateSpotifyCachedPlaylistTrackLanguage({
   return {
     ok: true,
     languageCode: trimNullableValue(updatedTrack.language_code),
+  };
+}
+
+export async function updateSpotifyCachedPlaylistTrackLanguagesForPlaylist({
+  playlistSpotifyId,
+  languageCode,
+}: {
+  playlistSpotifyId: string;
+  languageCode: string | null;
+}): Promise<{ ok: true; affectedCount: number } | { ok: false; error: string }> {
+  const supabase = createSupabaseServerClient();
+  const normalizedPlaylistSpotifyId = playlistSpotifyId.trim();
+  const normalizedLanguageCode = trimNullableValue(languageCode)?.toLocaleLowerCase(
+    "es-ES",
+  ) ?? null;
+
+  if (!supabase) {
+    return {
+      ok: false,
+      error: "Falta configurar Supabase para guardar el idioma de la playlist.",
+    };
+  }
+
+  if (!normalizedPlaylistSpotifyId) {
+    return {
+      ok: false,
+      error: "Falta la playlist de Spotify para actualizar el idioma.",
+    };
+  }
+
+  if (
+    normalizedLanguageCode !== null &&
+    !/^[a-z]{2}$/u.test(normalizedLanguageCode)
+  ) {
+    return {
+      ok: false,
+      error: "El idioma debe usar un código ISO de dos letras.",
+    };
+  }
+
+  const { data: playlistRow, error: playlistError } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id")
+    .eq("spotify_id", normalizedPlaylistSpotifyId)
+    .maybeSingle<{ id: number | string }>();
+
+  if (playlistError || !playlistRow) {
+    return {
+      ok: false,
+      error: "No he encontrado la playlist cacheada en Supabase.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("spotify_playlist_tracks_cache")
+    .update({
+      language_code: normalizedLanguageCode,
+    })
+    .eq("playlist_cache_id", parseInteger(playlistRow.id))
+    .select("id");
+
+  if (error) {
+    return {
+      ok: false,
+      error: error.message,
+    };
+  }
+
+  return {
+    ok: true,
+    affectedCount: Array.isArray(data) ? data.length : 0,
   };
 }
 

@@ -64,6 +64,26 @@ type TrackRatingPayload = {
 type TrackLanguagePayload = {
   ok?: boolean;
   languageCode?: string | null;
+  inferredLanguageCode?: string | null;
+  confidence?: number;
+  reason?: string;
+  saved?: boolean;
+  skipped?: boolean;
+  error?: string;
+};
+
+type BatchTrackLanguagePayload = {
+  ok?: boolean;
+  action?: string;
+  affectedCount?: number;
+  processedCount?: number;
+  savedEsCount?: number;
+  savedEnCount?: number;
+  unknownCount?: number;
+  instrumentalCount?: number;
+  missingVideoCount?: number;
+  skippedExistingCount?: number;
+  errorCount?: number;
   error?: string;
 };
 
@@ -587,6 +607,10 @@ export function SpotifyViewer({
   const [languageSavingTrackId, setLanguageSavingTrackId] = useState<string | null>(
     null,
   );
+  const [languageSuccess, setLanguageSuccess] = useState<string | null>(null);
+  const [playlistLanguageAction, setPlaylistLanguageAction] = useState<
+    "infer" | "set-es" | null
+  >(null);
   const playerViewportRef = useRef<HTMLDivElement | null>(null);
   const gridClassName =
     gridDensity === "dense"
@@ -820,6 +844,8 @@ export function SpotifyViewer({
     setRatingSavingTrackId(null);
     setLanguageError(null);
     setLanguageSavingTrackId(null);
+    setLanguageSuccess(null);
+    setPlaylistLanguageAction(null);
   }
 
   function clearSpotifyShareParams() {
@@ -990,6 +1016,8 @@ export function SpotifyViewer({
     setRatingSavingTrackId(null);
     setLanguageError(null);
     setLanguageSavingTrackId(null);
+    setLanguageSuccess(null);
+    setPlaylistLanguageAction(null);
   }, [selectedTrack?.id]);
 
   useEffect(() => {
@@ -1378,6 +1406,8 @@ export function SpotifyViewer({
     setRatingSavingTrackId(null);
     setLanguageError(null);
     setLanguageSavingTrackId(null);
+    setLanguageSuccess(null);
+    setPlaylistLanguageAction(null);
   }
 
   function markTrackVideoAsCached(trackId: string) {
@@ -1409,6 +1439,7 @@ export function SpotifyViewer({
     setSelectedTrackId(trackId);
     setRatingError(null);
     setLanguageError(null);
+    setLanguageSuccess(null);
   }
 
   function updateTrackRatingLocally(trackId: string, rating: number) {
@@ -1449,6 +1480,26 @@ export function SpotifyViewer({
         [selectedPlaylistId]: currentCache[selectedPlaylistId].map((track) =>
           track.id === trackId ? { ...track, languageCode } : track,
         ),
+      };
+    });
+  }
+
+  function updateAllTrackLanguagesLocally(languageCode: string | null) {
+    setPlaylistTracks((currentTracks) =>
+      currentTracks.map((track) => ({ ...track, languageCode })),
+    );
+
+    setTrackCache((currentCache) => {
+      if (!selectedPlaylistId || !currentCache[selectedPlaylistId]) {
+        return currentCache;
+      }
+
+      return {
+        ...currentCache,
+        [selectedPlaylistId]: currentCache[selectedPlaylistId].map((track) => ({
+          ...track,
+          languageCode,
+        })),
       };
     });
   }
@@ -1780,6 +1831,7 @@ export function SpotifyViewer({
     track: SpotifyPlaylistTrackAsset,
   ) {
     setLanguageError(null);
+    setLanguageSuccess(null);
 
     if (!isAdminUnlocked || !selectedPlaylist) {
       setSelectedTrackId(track.id);
@@ -1833,6 +1885,233 @@ export function SpotifyViewer({
       );
     } finally {
       setLanguageSavingTrackId(null);
+    }
+  }
+
+  async function handleInferTrackLanguage(track: SpotifyPlaylistTrackAsset) {
+    setLanguageError(null);
+    setLanguageSuccess(null);
+
+    if (!isAdminUnlocked || !selectedPlaylist) {
+      setSelectedTrackId(track.id);
+      setIsManualVideoPanelOpen(true);
+      setManualVideoSuccess("");
+      setLanguageError(
+        "Desbloquea la sesión admin para inferir el idioma con IA.",
+      );
+      setManualVideoError(
+        "Desbloquea la sesión admin para inferir el idioma con IA.",
+      );
+      return;
+    }
+
+    setLanguageSavingTrackId(track.id);
+
+    try {
+      const response = await fetch(
+        `/api/spotify/playlists/${encodeURIComponent(selectedPlaylist.id)}/tracks/infer-language`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            position: track.position,
+          }),
+        },
+      );
+      const payload = (await response.json()) as TrackLanguagePayload;
+
+      if (!response.ok || !payload.ok) {
+        if (response.status === 401) {
+          setIsAdminUnlocked(false);
+          setSelectedTrackId(track.id);
+          setIsManualVideoPanelOpen(true);
+        }
+
+        throw new Error(
+          payload.error ?? "No he podido inferir el idioma de la pista.",
+        );
+      }
+
+      if (typeof payload.languageCode === "string") {
+        updateTrackLanguageLocally(track.id, payload.languageCode);
+      }
+
+      if (payload.saved && payload.languageCode) {
+        setLanguageSuccess(
+          `IA: ${payload.languageCode.toUpperCase()} (${Math.round((payload.confidence ?? 0) * 100)}%). ${payload.reason ?? ""}`.trim(),
+        );
+        return;
+      }
+
+      if (payload.skipped) {
+        setLanguageSuccess(payload.reason ?? "La pista ya tenía idioma guardado.");
+        return;
+      }
+
+      setLanguageSuccess(
+        `IA sin guardado: ${(payload.inferredLanguageCode ?? "unknown").toUpperCase()} (${Math.round((payload.confidence ?? 0) * 100)}%). ${payload.reason ?? ""}`.trim(),
+      );
+    } catch (error) {
+      setLanguageError(
+        error instanceof Error
+          ? error.message
+          : "No he podido inferir el idioma de la pista.",
+      );
+    } finally {
+      setLanguageSavingTrackId(null);
+    }
+  }
+
+  async function handleInferPlaylistLanguage() {
+    if (!selectedPlaylist) {
+      return;
+    }
+
+    setLanguageError(null);
+    setLanguageSuccess(null);
+
+    if (!isAdminUnlocked) {
+      setIsManualVideoPanelOpen(true);
+      setManualVideoSuccess("");
+      setLanguageError(
+        "Desbloquea la sesión admin para inferir el idioma de toda la playlist.",
+      );
+      setManualVideoError(
+        "Desbloquea la sesión admin para inferir el idioma de toda la playlist.",
+      );
+      return;
+    }
+
+    setPlaylistLanguageAction("infer");
+
+    try {
+      const response = await fetch(
+        `/api/spotify/playlists/${encodeURIComponent(selectedPlaylist.id)}/tracks/batch-language`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action: "infer",
+          }),
+        },
+      );
+      const payload = (await response.json()) as BatchTrackLanguagePayload;
+
+      if (!response.ok || !payload.ok) {
+        if (response.status === 401) {
+          setIsAdminUnlocked(false);
+          setIsManualVideoPanelOpen(true);
+        }
+
+        throw new Error(
+          payload.error ?? "No he podido inferir el idioma de la playlist.",
+        );
+      }
+
+      const refreshedResponse = await fetch(
+        `/api/spotify/playlists/${encodeURIComponent(selectedPlaylist.id)}/tracks`,
+        {
+          method: "GET",
+          cache: "no-store",
+        },
+      );
+      const refreshedPayload =
+        (await refreshedResponse.json()) as SpotifyPlaylistTracksPayload;
+
+      if (refreshedResponse.ok && Array.isArray(refreshedPayload.tracks)) {
+        setPlaylistTracks(refreshedPayload.tracks);
+        setTrackCache((currentCache) => ({
+          ...currentCache,
+          [selectedPlaylist.id]: refreshedPayload.tracks ?? [],
+        }));
+      }
+
+      setLanguageSuccess(
+        [
+          `IA lista: ${payload.savedEsCount ?? 0} ES`,
+          `${payload.savedEnCount ?? 0} EN`,
+          `${payload.unknownCount ?? 0} unknown`,
+          `${payload.instrumentalCount ?? 0} instrumental`,
+          `${payload.missingVideoCount ?? 0} sin vídeo`,
+          `${payload.skippedExistingCount ?? 0} ya tenían idioma`,
+          `${payload.errorCount ?? 0} errores`,
+        ].join(" · "),
+      );
+    } catch (error) {
+      setLanguageError(
+        error instanceof Error
+          ? error.message
+          : "No he podido inferir el idioma de la playlist.",
+      );
+    } finally {
+      setPlaylistLanguageAction(null);
+    }
+  }
+
+  async function handleSetPlaylistSpanishLanguage() {
+    if (!selectedPlaylist) {
+      return;
+    }
+
+    setLanguageError(null);
+    setLanguageSuccess(null);
+
+    if (!isAdminUnlocked) {
+      setIsManualVideoPanelOpen(true);
+      setManualVideoSuccess("");
+      setLanguageError(
+        "Desbloquea la sesión admin para marcar toda la playlist como castellano.",
+      );
+      setManualVideoError(
+        "Desbloquea la sesión admin para marcar toda la playlist como castellano.",
+      );
+      return;
+    }
+
+    setPlaylistLanguageAction("set-es");
+
+    try {
+      const response = await fetch(
+        `/api/spotify/playlists/${encodeURIComponent(selectedPlaylist.id)}/tracks/batch-language`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action: "set-es",
+          }),
+        },
+      );
+      const payload = (await response.json()) as BatchTrackLanguagePayload;
+
+      if (!response.ok || !payload.ok) {
+        if (response.status === 401) {
+          setIsAdminUnlocked(false);
+          setIsManualVideoPanelOpen(true);
+        }
+
+        throw new Error(
+          payload.error ?? "No he podido marcar la playlist como castellano.",
+        );
+      }
+
+      updateAllTrackLanguagesLocally("es");
+      setLanguageSuccess(
+        `Marcadas manualmente como ES ${payload.affectedCount ?? 0} pistas de la playlist.`,
+      );
+    } catch (error) {
+      setLanguageError(
+        error instanceof Error
+          ? error.message
+          : "No he podido marcar la playlist como castellano.",
+      );
+    } finally {
+      setPlaylistLanguageAction(null);
     }
   }
 
@@ -2270,115 +2549,153 @@ export function SpotifyViewer({
                     >
                       {!isNativeFullscreen && !isVideoExtendedMode ? (
                         <div className="order-2 min-w-0 overflow-hidden rounded-[2rem] border border-white/10 bg-black/35 shadow-[0_24px_80px_rgba(0,0,0,0.38)] xl:order-1">
-                          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-                            <div>
-                              <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
-                                Canciones
-                              </p>
-                              <p className="mt-2 text-[0.62rem] uppercase tracking-[0.22em] text-slate-500">
-                                {filteredPlaylistTracks.length}{" "}
-                                {filteredPlaylistTracks.length === 1
-                                  ? "canción"
-                                  : "canciones"}
-                              </p>
+                          <div className="border-b border-white/10 px-5 py-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.28em] text-cyan-300/80">
+                                  Canciones
+                                </p>
+                                <p className="mt-2 text-[0.62rem] uppercase tracking-[0.22em] text-slate-500">
+                                  {filteredPlaylistTracks.length}{" "}
+                                  {filteredPlaylistTracks.length === 1
+                                    ? "canción"
+                                    : "canciones"}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleToggleTrackShuffle}
+                                  disabled={videoCacheFilterMode === "ranked"}
+                                  aria-label={
+                                    isTrackShuffleEnabled
+                                      ? "Desactivar orden aleatorio"
+                                      : "Activar orden aleatorio"
+                                  }
+                                  title={
+                                    isTrackShuffleEnabled
+                                      ? "Desactivar orden aleatorio"
+                                      : "Activar orden aleatorio"
+                                  }
+                                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                                    isTrackShuffleEnabled
+                                      ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
+                                      : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                                  }`}
+                                >
+                                  <ShuffleIcon />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleToggleUncachedVideoFilter}
+                                  aria-label={
+                                    videoCacheFilterMode === "uncached"
+                                      ? "Mostrar todas las canciones"
+                                      : "Mostrar canciones sin vídeo cacheado"
+                                  }
+                                  title={
+                                    videoCacheFilterMode === "uncached"
+                                      ? "Mostrar todas las canciones"
+                                      : "Mostrar canciones sin vídeo cacheado"
+                                  }
+                                  disabled={
+                                    videoCacheFilterMode !== "uncached" &&
+                                    uncachedTrackCount === 0
+                                  }
+                                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                                    videoCacheFilterMode === "uncached"
+                                      ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
+                                      : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                                  }`}
+                                >
+                                  <UncachedVideoFilterIcon />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleToggleCachedVideoFilter}
+                                  aria-label={
+                                    videoCacheFilterMode === "cached"
+                                      ? "Mostrar todas las canciones"
+                                      : "Mostrar canciones con vídeo cacheado"
+                                  }
+                                  title={
+                                    videoCacheFilterMode === "cached"
+                                      ? "Mostrar todas las canciones"
+                                      : "Mostrar canciones con vídeo cacheado"
+                                  }
+                                  disabled={
+                                    videoCacheFilterMode !== "cached" &&
+                                    cachedTrackCount === 0
+                                  }
+                                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                                    videoCacheFilterMode === "cached"
+                                      ? "border-emerald-300/55 bg-emerald-300/12 text-emerald-100"
+                                      : "border-white/12 bg-white/6 text-slate-200 hover:border-emerald-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                                  }`}
+                                >
+                                  <CachedVideoFilterIcon />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleToggleRankedTrackFilter}
+                                  aria-label={
+                                    videoCacheFilterMode === "ranked"
+                                      ? "Mostrar todas las canciones"
+                                      : "Mostrar canciones con ranking"
+                                  }
+                                  title={
+                                    videoCacheFilterMode === "ranked"
+                                      ? "Mostrar todas las canciones"
+                                      : "Mostrar canciones con ranking"
+                                  }
+                                  disabled={
+                                    videoCacheFilterMode !== "ranked" &&
+                                    rankedTrackCount === 0
+                                  }
+                                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                                    videoCacheFilterMode === "ranked"
+                                      ? "border-amber-300/55 bg-amber-300/12 text-amber-100"
+                                      : "border-white/12 bg-white/6 text-slate-200 hover:border-amber-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                                  }`}
+                                >
+                                  <RankedTrackFilterIcon />
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="mt-3 flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={handleToggleTrackShuffle}
-                                disabled={videoCacheFilterMode === "ranked"}
-                                aria-label={
-                                  isTrackShuffleEnabled
-                                    ? "Desactivar orden aleatorio"
-                                    : "Activar orden aleatorio"
+                                onClick={() => void handleInferPlaylistLanguage()}
+                                disabled={
+                                  playlistLanguageAction !== null ||
+                                  playlistTracks.length === 0
                                 }
-                                title={
-                                  isTrackShuffleEnabled
-                                    ? "Desactivar orden aleatorio"
-                                    : "Activar orden aleatorio"
-                                }
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
-                                  isTrackShuffleEnabled
-                                    ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
-                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                                aria-label="Inferir idioma con IA para toda la playlist"
+                                title="Inferir idioma con IA para toda la playlist"
+                                className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
+                                  playlistLanguageAction === "infer"
+                                    ? "border-fuchsia-300/55 bg-fuchsia-300/14 text-fuchsia-100"
+                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-fuchsia-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
                                 }`}
                               >
-                                <ShuffleIcon />
+                                IA lista
                               </button>
                               <button
                                 type="button"
-                                onClick={handleToggleUncachedVideoFilter}
-                                aria-label={
-                                  videoCacheFilterMode === "uncached"
-                                    ? "Mostrar todas las canciones"
-                                    : "Mostrar canciones sin vídeo cacheado"
-                                }
-                                title={
-                                  videoCacheFilterMode === "uncached"
-                                    ? "Mostrar todas las canciones"
-                                    : "Mostrar canciones sin vídeo cacheado"
-                                }
+                                onClick={() => void handleSetPlaylistSpanishLanguage()}
                                 disabled={
-                                  videoCacheFilterMode !== "uncached" &&
-                                  uncachedTrackCount === 0
+                                  playlistLanguageAction !== null ||
+                                  playlistTracks.length === 0
                                 }
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
-                                  videoCacheFilterMode === "uncached"
-                                    ? "border-cyan-300/55 bg-cyan-300/12 text-cyan-100"
-                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-cyan-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                                aria-label="Marcar toda la playlist como castellano"
+                                title="Marcar toda la playlist como castellano"
+                                className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
+                                  playlistLanguageAction === "set-es"
+                                    ? "border-rose-300/55 bg-rose-400/16 text-rose-100"
+                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-rose-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
                                 }`}
                               >
-                                <UncachedVideoFilterIcon />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleToggleCachedVideoFilter}
-                                aria-label={
-                                  videoCacheFilterMode === "cached"
-                                    ? "Mostrar todas las canciones"
-                                    : "Mostrar canciones con vídeo cacheado"
-                                }
-                                title={
-                                  videoCacheFilterMode === "cached"
-                                    ? "Mostrar todas las canciones"
-                                    : "Mostrar canciones con vídeo cacheado"
-                                }
-                                disabled={
-                                  videoCacheFilterMode !== "cached" &&
-                                  cachedTrackCount === 0
-                                }
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
-                                  videoCacheFilterMode === "cached"
-                                    ? "border-emerald-300/55 bg-emerald-300/12 text-emerald-100"
-                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-emerald-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-                                }`}
-                              >
-                                <CachedVideoFilterIcon />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleToggleRankedTrackFilter}
-                                aria-label={
-                                  videoCacheFilterMode === "ranked"
-                                    ? "Mostrar todas las canciones"
-                                    : "Mostrar canciones con ranking"
-                                }
-                                title={
-                                  videoCacheFilterMode === "ranked"
-                                    ? "Mostrar todas las canciones"
-                                    : "Mostrar canciones con ranking"
-                                }
-                                disabled={
-                                  videoCacheFilterMode !== "ranked" &&
-                                  rankedTrackCount === 0
-                                }
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
-                                  videoCacheFilterMode === "ranked"
-                                    ? "border-amber-300/55 bg-amber-300/12 text-amber-100"
-                                    : "border-white/12 bg-white/6 text-slate-200 hover:border-amber-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-                                }`}
-                              >
-                                <RankedTrackFilterIcon />
+                                ES lista
                               </button>
                             </div>
                           </div>
@@ -2424,6 +2741,11 @@ export function SpotifyViewer({
                                 {languageError ? (
                                   <div className="rounded-[1.1rem] border border-rose-400/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
                                     {languageError}
+                                  </div>
+                                ) : null}
+                                {languageSuccess ? (
+                                  <div className="rounded-[1.1rem] border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+                                    {languageSuccess}
                                   </div>
                                 ) : null}
                                 {playbackOrderedTracks.map((track) => {
@@ -2483,35 +2805,60 @@ export function SpotifyViewer({
                                             void handleSetTrackRating(track, nextRating)
                                           }
                                         />
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            void handleToggleTrackSpanishLanguage(track)
-                                          }
-                                          disabled={languageSavingTrackId === track.id}
-                                          aria-pressed={isSpanishTrack}
-                                          aria-label={
-                                            isSpanishTrack
-                                              ? `Quitar marca de castellano a ${track.name}`
-                                              : `Marcar ${track.name} como castellano`
-                                          }
-                                          title={
-                                            isSpanishTrack
-                                              ? "Quitar marca manual de castellano"
-                                              : "Marcar manualmente como castellano"
-                                          }
-                                          className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
-                                            isSpanishTrack
-                                              ? "border-rose-300/40 bg-rose-400/16 text-rose-100"
-                                              : "border-white/10 bg-black/15 text-slate-400 hover:border-cyan-300/35 hover:text-cyan-100"
-                                          } ${languageSavingTrackId === track.id ? "cursor-wait opacity-60" : ""}`}
-                                        >
-                                          {isSpanishTrack ? (
-                                            <span>ES</span>
-                                          ) : (
-                                            <LanguageToggleIcon />
-                                          )}
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              void handleInferTrackLanguage(track)
+                                            }
+                                            disabled={
+                                              languageSavingTrackId === track.id ||
+                                              Boolean(track.languageCode)
+                                            }
+                                            aria-label={`Inferir idioma con IA para ${track.name}`}
+                                            title={
+                                              track.languageCode
+                                                ? `La pista ya tiene idioma ${track.languageCode.toUpperCase()}`
+                                                : "Inferir idioma con IA usando el vídeo cacheado"
+                                            }
+                                            className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
+                                              track.languageCode
+                                                ? "border-white/10 bg-black/10 text-slate-600"
+                                                : "border-fuchsia-300/30 bg-fuchsia-300/10 text-fuchsia-100 hover:border-fuchsia-300/55"
+                                            } ${languageSavingTrackId === track.id ? "cursor-wait opacity-60" : ""}`}
+                                          >
+                                            IA
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              void handleToggleTrackSpanishLanguage(track)
+                                            }
+                                            disabled={languageSavingTrackId === track.id}
+                                            aria-pressed={isSpanishTrack}
+                                            aria-label={
+                                              isSpanishTrack
+                                                ? `Quitar marca de castellano a ${track.name}`
+                                                : `Marcar ${track.name} como castellano`
+                                            }
+                                            title={
+                                              isSpanishTrack
+                                                ? "Quitar marca manual de castellano"
+                                                : "Marcar manualmente como castellano"
+                                            }
+                                            className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
+                                              isSpanishTrack
+                                                ? "border-rose-300/40 bg-rose-400/16 text-rose-100"
+                                                : "border-white/10 bg-black/15 text-slate-400 hover:border-cyan-300/35 hover:text-cyan-100"
+                                            } ${languageSavingTrackId === track.id ? "cursor-wait opacity-60" : ""}`}
+                                          >
+                                            {isSpanishTrack ? (
+                                              <span>ES</span>
+                                            ) : (
+                                              <LanguageToggleIcon />
+                                            )}
+                                          </button>
+                                        </div>
                                       </div>
                                     </div>
                                   );

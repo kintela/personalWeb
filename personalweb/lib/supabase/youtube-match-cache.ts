@@ -500,6 +500,42 @@ export async function readYouTubeMatchCache(
   }
 }
 
+export async function readYouTubeMatchCacheDetails(cacheKey: string) {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return null;
+  }
+
+  try {
+    let { data, error } = await supabase
+      .from("youtube_video_matches")
+      .select(
+        "cache_key, track_name, artists_label, album_name, album_release_year, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count, duration_seconds, rating",
+      )
+      .eq("cache_key", cacheKey)
+      .maybeSingle<YouTubeVideoMatchCacheRow>();
+
+    if (error && isMissingDurationColumnError(error.message)) {
+      ({ data, error } = await supabase
+        .from("youtube_video_matches")
+        .select(
+          "cache_key, track_name, artists_label, album_name, album_release_year, matched_query, has_match, video_id, title, channel_title, description, thumbnail_url, external_url, embed_url, view_count, rating",
+        )
+        .eq("cache_key", cacheKey)
+        .maybeSingle<YouTubeVideoMatchCacheRow>());
+    }
+
+    if (error || !data) {
+      return null;
+    }
+
+    return mapRowToRankedVideoAsset(data);
+  } catch {
+    return null;
+  }
+}
+
 export async function readYouTubeMatchCacheTrackMetadata(cacheKeys: string[]) {
   const supabase = createSupabaseServerClient();
   const normalizedCacheKeys = [
