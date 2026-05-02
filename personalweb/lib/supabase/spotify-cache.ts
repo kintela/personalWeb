@@ -41,6 +41,7 @@ type SpotifyPlaylistTrackCacheRow = {
   artists_label: string;
   album_name: string | null;
   album_release_date: string | null;
+  language_code: string | null;
   duration_ms: number | string | null;
   normalized_track_name: string;
   canonical_track_name: string;
@@ -69,6 +70,7 @@ type ReplaceSpotifyPlaylistTracksInput = {
     artistsLabel: string;
     albumName: string | null;
     albumReleaseDate: string | null;
+    languageCode?: string | null;
     durationMs: number | null;
     isLocal: boolean;
     normalizedTrackName: string;
@@ -234,6 +236,7 @@ function mapTrackCacheRowToAsset(
     artistsLabel: row.artists_label.trim(),
     albumName: trimNullableValue(row.album_name),
     albumReleaseDate: trimNullableValue(row.album_release_date),
+    languageCode: trimNullableValue(row.language_code),
     durationMs,
     durationLabel: formatSpotifyDurationLabel(durationMs),
     youtubeCacheStatus: "uncached",
@@ -808,6 +811,7 @@ export async function replaceSpotifyCachedPlaylistTracks({
     artists_label: track.artistsLabel.trim(),
     album_name: trimNullableValue(track.albumName),
     album_release_date: trimNullableValue(track.albumReleaseDate),
+    language_code: trimNullableValue(track.languageCode),
     duration_ms: track.durationMs,
     is_local: track.isLocal,
     normalized_track_name: track.normalizedTrackName.trim(),
@@ -850,7 +854,7 @@ export async function readSpotifyCachedPlaylistTracks(playlistSpotifyId: string)
   const { data, error } = await supabase
     .from("spotify_playlist_tracks_cache")
     .select(
-      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, duration_ms, normalized_track_name, canonical_track_name",
+      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, duration_ms, normalized_track_name, canonical_track_name",
     )
     .eq("playlist_cache_id", parseInteger(playlistRow.id))
     .order("position", { ascending: true })
@@ -861,6 +865,89 @@ export async function readSpotifyCachedPlaylistTracks(playlistSpotifyId: string)
   }
 
   return (data ?? []).map((row) => mapTrackCacheRowToAsset(row));
+}
+
+export async function updateSpotifyCachedPlaylistTrackLanguage({
+  playlistSpotifyId,
+  position,
+  languageCode,
+}: {
+  playlistSpotifyId: string;
+  position: number;
+  languageCode: string | null;
+}): Promise<{ ok: true; languageCode: string | null } | { ok: false; error: string }> {
+  const supabase = createSupabaseServerClient();
+  const normalizedPlaylistSpotifyId = playlistSpotifyId.trim();
+  const normalizedPosition = Math.max(0, Math.trunc(position));
+  const normalizedLanguageCode = trimNullableValue(languageCode)?.toLocaleLowerCase(
+    "es-ES",
+  ) ?? null;
+
+  if (!supabase) {
+    return {
+      ok: false,
+      error: "Falta configurar Supabase para guardar el idioma del tema.",
+    };
+  }
+
+  if (!normalizedPlaylistSpotifyId || normalizedPosition <= 0) {
+    return {
+      ok: false,
+      error: "Faltan datos para localizar la canción cacheada.",
+    };
+  }
+
+  if (
+    normalizedLanguageCode !== null &&
+    !/^[a-z]{2}$/u.test(normalizedLanguageCode)
+  ) {
+    return {
+      ok: false,
+      error: "El idioma debe usar un código ISO de dos letras.",
+    };
+  }
+
+  const { data: playlistRow, error: playlistError } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id")
+    .eq("spotify_id", normalizedPlaylistSpotifyId)
+    .maybeSingle<{ id: number | string }>();
+
+  if (playlistError || !playlistRow) {
+    return {
+      ok: false,
+      error: "No he encontrado la playlist cacheada en Supabase.",
+    };
+  }
+
+  const { data: updatedTrack, error: updateError } = await supabase
+    .from("spotify_playlist_tracks_cache")
+    .update({
+      language_code: normalizedLanguageCode,
+    })
+    .eq("playlist_cache_id", parseInteger(playlistRow.id))
+    .eq("position", normalizedPosition)
+    .select("language_code")
+    .maybeSingle<{ language_code: string | null }>();
+
+  if (updateError) {
+    return {
+      ok: false,
+      error: updateError.message,
+    };
+  }
+
+  if (!updatedTrack) {
+    return {
+      ok: false,
+      error: "No he encontrado la canción cacheada para actualizar su idioma.",
+    };
+  }
+
+  return {
+    ok: true,
+    languageCode: trimNullableValue(updatedTrack.language_code),
+  };
 }
 
 export async function searchSpotifyCachedPlaylistsByTrackQuery(query: string) {

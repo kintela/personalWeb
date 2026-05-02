@@ -61,6 +61,12 @@ type TrackRatingPayload = {
   error?: string;
 };
 
+type TrackLanguagePayload = {
+  ok?: boolean;
+  languageCode?: string | null;
+  error?: string;
+};
+
 type SpotifyTrackStatus = "idle" | "loading" | "ready" | "error";
 type VideoCacheFilterMode = "all" | "uncached" | "cached" | "ranked";
 
@@ -427,6 +433,28 @@ function RankedTrackFilterIcon() {
   return <RatingStarIcon active={true} className="h-4 w-4" />;
 }
 
+function LanguageToggleIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M4 6h8" />
+      <path d="M8 4v2c0 3.6-1.55 6.8-4.2 9.15" />
+      <path d="M6.1 11.8c1.15 1.2 2.55 2.2 4.15 3" />
+      <path d="M14.25 6h.15" />
+      <path d="m13 18 3.2-8 3.2 8" />
+      <path d="M14.2 15.35h4" />
+    </svg>
+  );
+}
+
 function TrackRatingControl({
   trackName,
   rating,
@@ -553,6 +581,10 @@ export function SpotifyViewer({
   const [isManualVideoSaving, setIsManualVideoSaving] = useState(false);
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [ratingSavingTrackId, setRatingSavingTrackId] = useState<string | null>(
+    null,
+  );
+  const [languageError, setLanguageError] = useState<string | null>(null);
+  const [languageSavingTrackId, setLanguageSavingTrackId] = useState<string | null>(
     null,
   );
   const playerViewportRef = useRef<HTMLDivElement | null>(null);
@@ -786,6 +818,8 @@ export function SpotifyViewer({
     setIsManualVideoSaving(false);
     setRatingError(null);
     setRatingSavingTrackId(null);
+    setLanguageError(null);
+    setLanguageSavingTrackId(null);
   }
 
   function clearSpotifyShareParams() {
@@ -954,6 +988,8 @@ export function SpotifyViewer({
     setIsManualVideoSaving(false);
     setRatingError(null);
     setRatingSavingTrackId(null);
+    setLanguageError(null);
+    setLanguageSavingTrackId(null);
   }, [selectedTrack?.id]);
 
   useEffect(() => {
@@ -1340,6 +1376,8 @@ export function SpotifyViewer({
     setShouldAutoEnterFullscreen(true);
     setRatingError(null);
     setRatingSavingTrackId(null);
+    setLanguageError(null);
+    setLanguageSavingTrackId(null);
   }
 
   function markTrackVideoAsCached(trackId: string) {
@@ -1370,6 +1408,7 @@ export function SpotifyViewer({
   function handleSelectTrack(trackId: string) {
     setSelectedTrackId(trackId);
     setRatingError(null);
+    setLanguageError(null);
   }
 
   function updateTrackRatingLocally(trackId: string, rating: number) {
@@ -1388,6 +1427,27 @@ export function SpotifyViewer({
         ...currentCache,
         [selectedPlaylistId]: currentCache[selectedPlaylistId].map((track) =>
           track.id === trackId ? { ...track, rating } : track,
+        ),
+      };
+    });
+  }
+
+  function updateTrackLanguageLocally(trackId: string, languageCode: string | null) {
+    setPlaylistTracks((currentTracks) =>
+      currentTracks.map((track) =>
+        track.id === trackId ? { ...track, languageCode } : track,
+      ),
+    );
+
+    setTrackCache((currentCache) => {
+      if (!selectedPlaylistId || !currentCache[selectedPlaylistId]) {
+        return currentCache;
+      }
+
+      return {
+        ...currentCache,
+        [selectedPlaylistId]: currentCache[selectedPlaylistId].map((track) =>
+          track.id === trackId ? { ...track, languageCode } : track,
         ),
       };
     });
@@ -1713,6 +1773,66 @@ export function SpotifyViewer({
       );
     } finally {
       setRatingSavingTrackId(null);
+    }
+  }
+
+  async function handleToggleTrackSpanishLanguage(
+    track: SpotifyPlaylistTrackAsset,
+  ) {
+    setLanguageError(null);
+
+    if (!isAdminUnlocked || !selectedPlaylist) {
+      setSelectedTrackId(track.id);
+      setIsManualVideoPanelOpen(true);
+      setManualVideoSuccess("");
+      setLanguageError(
+        "Desbloquea la sesión admin para marcar esta pista como castellano.",
+      );
+      setManualVideoError(
+        "Desbloquea la sesión admin para marcar esta pista como castellano.",
+      );
+      return;
+    }
+
+    setLanguageSavingTrackId(track.id);
+
+    try {
+      const response = await fetch(
+        `/api/spotify/playlists/${encodeURIComponent(selectedPlaylist.id)}/tracks`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            position: track.position,
+            languageCode: track.languageCode === "es" ? null : "es",
+          }),
+        },
+      );
+      const payload = (await response.json()) as TrackLanguagePayload;
+
+      if (!response.ok || !payload.ok) {
+        if (response.status === 401) {
+          setIsAdminUnlocked(false);
+          setSelectedTrackId(track.id);
+          setIsManualVideoPanelOpen(true);
+        }
+
+        throw new Error(
+          payload.error ?? "No he podido guardar el idioma de la pista.",
+        );
+      }
+
+      updateTrackLanguageLocally(track.id, payload.languageCode ?? null);
+    } catch (error) {
+      setLanguageError(
+        error instanceof Error
+          ? error.message
+          : "No he podido guardar el idioma de la pista.",
+      );
+    } finally {
+      setLanguageSavingTrackId(null);
     }
   }
 
@@ -2301,8 +2421,14 @@ export function SpotifyViewer({
                                     {ratingError}
                                   </div>
                                 ) : null}
+                                {languageError ? (
+                                  <div className="rounded-[1.1rem] border border-rose-400/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+                                    {languageError}
+                                  </div>
+                                ) : null}
                                 {playbackOrderedTracks.map((track) => {
                                   const isSelected = selectedTrack?.id === track.id;
+                                  const isSpanishTrack = track.languageCode === "es";
 
                                   return (
                                     <div
@@ -2347,7 +2473,7 @@ export function SpotifyViewer({
                                           {track.durationLabel}
                                         </span>
                                       </div>
-                                      <div className="flex justify-start">
+                                      <div className="flex items-center justify-between gap-3">
                                         <TrackRatingControl
                                           trackName={track.name}
                                           rating={track.rating}
@@ -2357,6 +2483,35 @@ export function SpotifyViewer({
                                             void handleSetTrackRating(track, nextRating)
                                           }
                                         />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            void handleToggleTrackSpanishLanguage(track)
+                                          }
+                                          disabled={languageSavingTrackId === track.id}
+                                          aria-pressed={isSpanishTrack}
+                                          aria-label={
+                                            isSpanishTrack
+                                              ? `Quitar marca de castellano a ${track.name}`
+                                              : `Marcar ${track.name} como castellano`
+                                          }
+                                          title={
+                                            isSpanishTrack
+                                              ? "Quitar marca manual de castellano"
+                                              : "Marcar manualmente como castellano"
+                                          }
+                                          className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
+                                            isSpanishTrack
+                                              ? "border-rose-300/40 bg-rose-400/16 text-rose-100"
+                                              : "border-white/10 bg-black/15 text-slate-400 hover:border-cyan-300/35 hover:text-cyan-100"
+                                          } ${languageSavingTrackId === track.id ? "cursor-wait opacity-60" : ""}`}
+                                        >
+                                          {isSpanishTrack ? (
+                                            <span>ES</span>
+                                          ) : (
+                                            <LanguageToggleIcon />
+                                          )}
+                                        </button>
                                       </div>
                                     </div>
                                   );
