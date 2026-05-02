@@ -1888,82 +1888,6 @@ export function SpotifyViewer({
     }
   }
 
-  async function handleInferTrackLanguage(track: SpotifyPlaylistTrackAsset) {
-    setLanguageError(null);
-    setLanguageSuccess(null);
-
-    if (!isAdminUnlocked || !selectedPlaylist) {
-      setSelectedTrackId(track.id);
-      setIsManualVideoPanelOpen(true);
-      setManualVideoSuccess("");
-      setLanguageError(
-        "Desbloquea la sesión admin para inferir el idioma con IA.",
-      );
-      setManualVideoError(
-        "Desbloquea la sesión admin para inferir el idioma con IA.",
-      );
-      return;
-    }
-
-    setLanguageSavingTrackId(track.id);
-
-    try {
-      const response = await fetch(
-        `/api/spotify/playlists/${encodeURIComponent(selectedPlaylist.id)}/tracks/infer-language`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            position: track.position,
-          }),
-        },
-      );
-      const payload = (await response.json()) as TrackLanguagePayload;
-
-      if (!response.ok || !payload.ok) {
-        if (response.status === 401) {
-          setIsAdminUnlocked(false);
-          setSelectedTrackId(track.id);
-          setIsManualVideoPanelOpen(true);
-        }
-
-        throw new Error(
-          payload.error ?? "No he podido inferir el idioma de la pista.",
-        );
-      }
-
-      if (typeof payload.languageCode === "string") {
-        updateTrackLanguageLocally(track.id, payload.languageCode);
-      }
-
-      if (payload.saved && payload.languageCode) {
-        setLanguageSuccess(
-          `IA: ${payload.languageCode.toUpperCase()} (${Math.round((payload.confidence ?? 0) * 100)}%). ${payload.reason ?? ""}`.trim(),
-        );
-        return;
-      }
-
-      if (payload.skipped) {
-        setLanguageSuccess(payload.reason ?? "La pista ya tenía idioma guardado.");
-        return;
-      }
-
-      setLanguageSuccess(
-        `IA sin guardado: ${(payload.inferredLanguageCode ?? "unknown").toUpperCase()} (${Math.round((payload.confidence ?? 0) * 100)}%). ${payload.reason ?? ""}`.trim(),
-      );
-    } catch (error) {
-      setLanguageError(
-        error instanceof Error
-          ? error.message
-          : "No he podido inferir el idioma de la pista.",
-      );
-    } finally {
-      setLanguageSavingTrackId(null);
-    }
-  }
-
   async function handleInferPlaylistLanguage() {
     if (!selectedPlaylist) {
       return;
@@ -2805,60 +2729,35 @@ export function SpotifyViewer({
                                             void handleSetTrackRating(track, nextRating)
                                           }
                                         />
-                                        <div className="flex items-center gap-2">
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              void handleInferTrackLanguage(track)
-                                            }
-                                            disabled={
-                                              languageSavingTrackId === track.id ||
-                                              Boolean(track.languageCode)
-                                            }
-                                            aria-label={`Inferir idioma con IA para ${track.name}`}
-                                            title={
-                                              track.languageCode
-                                                ? `La pista ya tiene idioma ${track.languageCode.toUpperCase()}`
-                                                : "Inferir idioma con IA usando el vídeo cacheado"
-                                            }
-                                            className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
-                                              track.languageCode
-                                                ? "border-white/10 bg-black/10 text-slate-600"
-                                                : "border-fuchsia-300/30 bg-fuchsia-300/10 text-fuchsia-100 hover:border-fuchsia-300/55"
-                                            } ${languageSavingTrackId === track.id ? "cursor-wait opacity-60" : ""}`}
-                                          >
-                                            IA
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              void handleToggleTrackSpanishLanguage(track)
-                                            }
-                                            disabled={languageSavingTrackId === track.id}
-                                            aria-pressed={isSpanishTrack}
-                                            aria-label={
-                                              isSpanishTrack
-                                                ? `Quitar marca de castellano a ${track.name}`
-                                                : `Marcar ${track.name} como castellano`
-                                            }
-                                            title={
-                                              isSpanishTrack
-                                                ? "Quitar marca manual de castellano"
-                                                : "Marcar manualmente como castellano"
-                                            }
-                                            className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
-                                              isSpanishTrack
-                                                ? "border-rose-300/40 bg-rose-400/16 text-rose-100"
-                                                : "border-white/10 bg-black/15 text-slate-400 hover:border-cyan-300/35 hover:text-cyan-100"
-                                            } ${languageSavingTrackId === track.id ? "cursor-wait opacity-60" : ""}`}
-                                          >
-                                            {isSpanishTrack ? (
-                                              <span>ES</span>
-                                            ) : (
-                                              <LanguageToggleIcon />
-                                            )}
-                                          </button>
-                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            void handleToggleTrackSpanishLanguage(track)
+                                          }
+                                          disabled={languageSavingTrackId === track.id}
+                                          aria-pressed={isSpanishTrack}
+                                          aria-label={
+                                            isSpanishTrack
+                                              ? `Quitar marca de castellano a ${track.name}`
+                                              : `Marcar ${track.name} como castellano`
+                                          }
+                                          title={
+                                            isSpanishTrack
+                                              ? "Quitar marca manual de castellano"
+                                              : "Marcar manualmente como castellano"
+                                          }
+                                          className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
+                                            isSpanishTrack
+                                              ? "border-rose-300/40 bg-rose-400/16 text-rose-100"
+                                              : "border-white/10 bg-black/15 text-slate-400 hover:border-cyan-300/35 hover:text-cyan-100"
+                                          } ${languageSavingTrackId === track.id ? "cursor-wait opacity-60" : ""}`}
+                                        >
+                                          {isSpanishTrack ? (
+                                            <span>ES</span>
+                                          ) : (
+                                            <LanguageToggleIcon />
+                                          )}
+                                        </button>
                                       </div>
                                     </div>
                                   );

@@ -21,14 +21,23 @@ import {
   getSpotifyCacheSummary,
   markMissingSpotifyCachedPlaylistsInactive,
   readSpotifyCachedPlaylistTrackCounts,
+  readSpotifyCachedPlaylistTrackByPosition,
   readSpotifyCachedPlaylistSyncState,
   readSpotifyCachedPlaylistTracks,
   readSpotifyCachedPlaylists,
   replaceSpotifyCachedPlaylistTracks,
   searchSpotifyCachedPlaylistsByTrackQuery,
+  updateSpotifyCachedPlaylistTrackLanguage,
   upsertSpotifyCachedPlaylists,
 } from "@/lib/supabase/spotify-cache";
-import { readYouTubeMatchCacheTrackMetadata } from "@/lib/supabase/youtube-match-cache";
+import {
+  readYouTubeMatchCacheDetails,
+  readYouTubeMatchCacheTrackMetadata,
+} from "@/lib/supabase/youtube-match-cache";
+import {
+  inferTrackLanguageFromText,
+  isOpenAiLanguageInferenceConfigured,
+} from "@/lib/openai-language";
 import { getYouTubeSongVideoCacheKey } from "@/lib/youtube";
 
 const SPOTIFY_ACCOUNTS_BASE_URL = "https://accounts.spotify.com";
@@ -52,6 +61,7 @@ const SPOTIFY_PLAYLIST_TRACK_SEARCH_MIN_QUERY_LENGTH = 4;
 const SPOTIFY_PLAYLIST_TRACK_INDEX_CONCURRENCY = 2;
 const SPOTIFY_PLAYLIST_TRACK_PAGE_LIMIT = 50;
 const SPOTIFY_SUPABASE_CACHE_TTL_MS = 6 * 60 * 60_000;
+const SPOTIFY_LANGUAGE_INFERENCE_MAX_PER_SYNC = 12;
 
 type SpotifyTokenResponse = {
   access_token: string;
@@ -186,6 +196,8 @@ export type SpotifyPlaylistCacheSyncResult = {
   rateLimited: boolean;
   retryAfterMs: number | null;
   stoppedAtPlaylistId: string | null;
+  inferredLanguageProcessedCount: number;
+  inferredLanguageSavedCount: number;
   startedAt: string;
   finishedAt: string;
 };
@@ -933,6 +945,91 @@ async function hydrateSpotifyTrackYouTubeMetadata(
   }));
 }
 
+async function inferMissingSpotifyTrackLanguagesForPlaylist(
+  playlistSpotifyId: string,
+  limit = SPOTIFY_LANGUAGE_INFERENCE_MAX_PER_SYNC,
+) {
+  if (!isOpenAiLanguageInferenceConfigured() || limit <= 0) {
+    return {
+      processedCount: 0,
+      savedCount: 0,
+    };
+  }
+
+  const cachedTracks = await readSpotifyCachedPlaylistTracks(playlistSpotifyId);
+  const pendingTracks = cachedTracks
+    .filter((track) => !track.languageCode)
+    .slice(0, limit);
+
+  let processedCount = 0;
+  let savedCount = 0;
+
+  for (const track of pendingTracks) {
+    const cacheKey = getYouTubeSongVideoCacheKey({
+      trackName: track.name,
+      artistsLabel: track.artistsLabel,
+      albumName: track.albumName,
+      albumReleaseYear: track.albumReleaseDate?.slice(0, 4) ?? null,
+    });
+    const cachedVideo = await readYouTubeMatchCacheDetails(cacheKey);
+
+    if (!cachedVideo?.video) {
+      continue;
+    }
+
+    processedCount += 1;
+
+    try {
+      const inference = await inferTrackLanguageFromText({
+        trackName: track.name,
+        artistsLabel: track.artistsLabel,
+        albumName: track.albumName,
+        albumReleaseYear: track.albumReleaseDate?.slice(0, 4) ?? null,
+        youtubeTitle: cachedVideo.video.title,
+        youtubeDescription: cachedVideo.video.description,
+        youtubeChannelTitle: cachedVideo.video.channelTitle,
+        matchedQuery: cachedVideo.matchedQuery,
+      });
+
+      if (inference.languageCode !== "es" && inference.languageCode !== "en") {
+        continue;
+      }
+
+      const currentTrack = await readSpotifyCachedPlaylistTrackByPosition({
+        playlistSpotifyId,
+        position: track.position,
+      });
+
+      if (!currentTrack || currentTrack.languageCode) {
+        continue;
+      }
+
+      const updateResult = await updateSpotifyCachedPlaylistTrackLanguage({
+        playlistSpotifyId,
+        position: track.position,
+        languageCode: inference.languageCode,
+      });
+
+      if (updateResult.ok && updateResult.languageCode) {
+        savedCount += 1;
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          `[spotify-language-inference] ${playlistSpotifyId} pista ${track.position}: ${
+            error instanceof Error ? error.message : "Error desconocido."
+          }`,
+        );
+      }
+    }
+  }
+
+  return {
+    processedCount,
+    savedCount,
+  };
+}
+
 export async function syncSpotifyOwnedPlaylistCache(options?: {
   force?: boolean;
   playlistId?: string;
@@ -962,6 +1059,8 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
       rateLimited: false,
       retryAfterMs: null,
       stoppedAtPlaylistId: null,
+      inferredLanguageProcessedCount: 0,
+      inferredLanguageSavedCount: 0,
       startedAt,
       finishedAt: new Date().toISOString(),
     } satisfies SpotifyPlaylistCacheSyncResult;
@@ -1009,6 +1108,8 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
         rateLimited: false,
         retryAfterMs: null,
         stoppedAtPlaylistId: null,
+        inferredLanguageProcessedCount: 0,
+        inferredLanguageSavedCount: 0,
         startedAt,
         finishedAt: new Date().toISOString(),
       } satisfies SpotifyPlaylistCacheSyncResult;
@@ -1059,6 +1160,8 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
     const completedPlaylists: SpotifyPlaylistCacheSyncResult["completedPlaylists"] =
       [];
     const failedPlaylists: SpotifyPlaylistCacheSyncResult["failedPlaylists"] = [];
+    let inferredLanguageProcessedCount = 0;
+    let inferredLanguageSavedCount = 0;
     let rateLimited = false;
     let retryAfterMs: number | null = null;
     let stoppedAtPlaylistId: string | null = null;
@@ -1110,6 +1213,12 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
           name: playlist.name.trim(),
           trackCount: trackItems.length,
         });
+
+        const languageInferenceResult =
+          await inferMissingSpotifyTrackLanguagesForPlaylist(playlist.id);
+        inferredLanguageProcessedCount +=
+          languageInferenceResult.processedCount;
+        inferredLanguageSavedCount += languageInferenceResult.savedCount;
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Error desconocido.";
@@ -1146,6 +1255,8 @@ export async function syncSpotifyOwnedPlaylistCache(options?: {
       rateLimited,
       retryAfterMs,
       stoppedAtPlaylistId,
+      inferredLanguageProcessedCount,
+      inferredLanguageSavedCount,
       startedAt,
       finishedAt: new Date().toISOString(),
     } satisfies SpotifyPlaylistCacheSyncResult;
