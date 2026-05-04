@@ -700,9 +700,6 @@ export function SpotifyViewer({
                 });
               })
         : textFilteredPlaylistTracks;
-  const visibleCachedTrackCount = filteredPlaylistTracks.filter(
-    (track) => track.youtubeCacheStatus === "cached",
-  ).length;
   const playbackOrderedTracks = (() => {
     if (videoCacheFilterMode === "ranked") {
       return filteredPlaylistTracks;
