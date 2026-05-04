@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import type { ChangeEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -63,6 +63,9 @@ type TopicContextState = {
 };
 
 const GUITAR_VIEWER_GRID_STORAGE_KEY = "guitar-viewer-grid-density";
+const LYRIC_ZOOM_MIN = 0.75;
+const LYRIC_ZOOM_MAX = 2.5;
+const LYRIC_ZOOM_STEP = 0.25;
 
 function getTopicCountLabel(count: number) {
   return `${count} tema${count === 1 ? "" : "s"}`;
@@ -465,9 +468,26 @@ export function GuitarViewer({
     useState<SelectedGuitarTablature | null>(null);
   const [selectedGroup, setSelectedGroup] = useState(groupValue);
   const [selectedTopic, setSelectedTopic] = useState(topicValue);
+  const [lyricZoom, setLyricZoom] = useState(1);
+  const [lyricImageNaturalSize, setLyricImageNaturalSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [lyricViewportSize, setLyricViewportSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [gridDensity, setGridDensity] = usePersistedGridDensity(
     GUITAR_VIEWER_GRID_STORAGE_KEY,
   );
+  const lyricViewportRef = useRef<HTMLDivElement | null>(null);
+  const lyricDragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startScrollLeft: number;
+    startScrollTop: number;
+  } | null>(null);
   const [topicContextById, setTopicContextById] = useState<
     Record<string, TopicContextState>
   >(() => {
@@ -503,6 +523,45 @@ export function GuitarViewer({
   useEffect(() => {
     setSelectedTopic(topicValue);
   }, [topicValue]);
+
+  useEffect(() => {
+    setLyricZoom(1);
+    setLyricImageNaturalSize(null);
+    setLyricViewportSize(null);
+  }, [selectedLyricImage]);
+
+  useEffect(() => {
+    if (!selectedLyricImage) {
+      return;
+    }
+
+    const viewport = lyricViewportRef.current;
+
+    if (!viewport) {
+      return;
+    }
+
+    const updateViewportSize = () => {
+      setLyricViewportSize({
+        width: viewport.clientWidth,
+        height: viewport.clientHeight,
+      });
+    };
+
+    updateViewportSize();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateViewportSize();
+    });
+
+    resizeObserver.observe(viewport);
+    window.addEventListener("resize", updateViewportSize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateViewportSize);
+    };
+  }, [selectedLyricImage]);
 
   useEffect(() => {
     if (!topicValue) {
@@ -580,6 +639,67 @@ export function GuitarViewer({
   const closeVideoViewer = () => setSelectedVideo(null);
   const closeLyricViewer = () => setSelectedLyricImage(null);
   const closeTablatureViewer = () => setSelectedTablature(null);
+  const increaseLyricZoom = () =>
+    setLyricZoom((currentValue) =>
+      Math.min(LYRIC_ZOOM_MAX, currentValue + LYRIC_ZOOM_STEP),
+    );
+  const decreaseLyricZoom = () =>
+    setLyricZoom((currentValue) =>
+      Math.max(LYRIC_ZOOM_MIN, currentValue - LYRIC_ZOOM_STEP),
+    );
+  const resetLyricZoom = () => setLyricZoom(1);
+
+  function handleLyricPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (lyricZoom <= 1) {
+      return;
+    }
+
+    const viewport = lyricViewportRef.current;
+
+    if (!viewport) {
+      return;
+    }
+
+    lyricDragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startScrollLeft: viewport.scrollLeft,
+      startScrollTop: viewport.scrollTop,
+    };
+
+    viewport.setPointerCapture(event.pointerId);
+  }
+
+  function handleLyricPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const viewport = lyricViewportRef.current;
+    const dragState = lyricDragStateRef.current;
+
+    if (!viewport || !dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - dragState.startX;
+    const deltaY = event.clientY - dragState.startY;
+
+    viewport.scrollLeft = dragState.startScrollLeft - deltaX;
+    viewport.scrollTop = dragState.startScrollTop - deltaY;
+  }
+
+  function handleLyricPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const viewport = lyricViewportRef.current;
+    const dragState = lyricDragStateRef.current;
+
+    if (!viewport || !dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    lyricDragStateRef.current = null;
+
+    if (viewport.hasPointerCapture(event.pointerId)) {
+      viewport.releasePointerCapture(event.pointerId);
+    }
+  }
 
   function applySelection({
     nextGroupValue,
@@ -751,6 +871,24 @@ export function GuitarViewer({
   const activeTablatureImage = selectedTablature
     ? selectedTablature.images[selectedTablature.activeIndex] ?? null
     : null;
+  const lyricImageBaseWidth =
+    lyricImageNaturalSize && lyricViewportSize
+      ? Math.min(
+          lyricViewportSize.width,
+          lyricViewportSize.height *
+            (lyricImageNaturalSize.width / lyricImageNaturalSize.height),
+        )
+      : null;
+  const lyricImageWidth = lyricImageBaseWidth
+    ? Math.round(lyricImageBaseWidth * lyricZoom)
+    : null;
+  const lyricImageHeight =
+    lyricImageNaturalSize && lyricImageWidth
+      ? Math.round(
+          lyricImageWidth *
+            (lyricImageNaturalSize.height / lyricImageNaturalSize.width),
+        )
+      : null;
 
   useEffect(() => {
     setTopicContextError(null);
@@ -1437,23 +1575,102 @@ export function GuitarViewer({
                         </p>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={closeLyricViewer}
-                        className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
-                      >
-                        Cerrar
-                      </button>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/20 px-2 py-2">
+                          <button
+                            type="button"
+                            onClick={decreaseLyricZoom}
+                            disabled={lyricZoom <= LYRIC_ZOOM_MIN}
+                            className="rounded-full border border-white/12 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6 disabled:cursor-not-allowed disabled:border-white/8 disabled:text-slate-500"
+                          >
+                            -
+                          </button>
+                          <button
+                            type="button"
+                            onClick={resetLyricZoom}
+                            className="min-w-16 rounded-full border border-white/12 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                          >
+                            {Math.round(lyricZoom * 100)}%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={increaseLyricZoom}
+                            disabled={lyricZoom >= LYRIC_ZOOM_MAX}
+                            className="rounded-full border border-white/12 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6 disabled:cursor-not-allowed disabled:border-white/8 disabled:text-slate-500"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={closeLyricViewer}
+                          className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/40 hover:bg-white/6"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
                     </div>
 
                     <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/45 p-3 sm:p-4">
-                      <div className="flex items-center justify-center">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={selectedLyricImage.imageSrc}
-                          alt={`Letra de ${selectedLyricImage.title}`}
-                          className="h-auto max-h-[calc(100vh-10rem)] w-auto max-w-full rounded-[1.1rem] object-contain"
-                        />
+                      <div
+                        ref={lyricViewportRef}
+                        onPointerDown={handleLyricPointerDown}
+                        onPointerMove={handleLyricPointerMove}
+                        onPointerUp={handleLyricPointerUp}
+                        onPointerCancel={handleLyricPointerUp}
+                        className={`max-h-[calc(100vh-10rem)] overflow-auto ${
+                          lyricZoom > 1 ? "cursor-grab active:cursor-grabbing" : ""
+                        }`}
+                        style={{ touchAction: "none" }}
+                      >
+                        <div
+                          className={`flex ${
+                            lyricImageWidth &&
+                            lyricViewportSize &&
+                            lyricImageWidth < lyricViewportSize.width
+                              ? "justify-center"
+                              : "justify-start"
+                          } ${
+                            lyricImageHeight &&
+                            lyricViewportSize &&
+                            lyricImageHeight < lyricViewportSize.height
+                              ? "items-center"
+                              : "items-start"
+                          }`}
+                          style={{
+                            minWidth: lyricViewportSize
+                              ? `${lyricViewportSize.width}px`
+                              : "100%",
+                            minHeight: lyricViewportSize
+                              ? `${lyricViewportSize.height}px`
+                              : "auto",
+                            width: lyricImageWidth ? `${lyricImageWidth}px` : "100%",
+                            height: lyricImageHeight
+                              ? `${lyricImageHeight}px`
+                              : "auto",
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={selectedLyricImage.imageSrc}
+                            alt={`Letra de ${selectedLyricImage.title}`}
+                            draggable={false}
+                            onDragStart={(event) => event.preventDefault()}
+                            className="block h-auto max-w-none rounded-[1.1rem] object-contain select-none"
+                            onLoad={(event) => {
+                              setLyricImageNaturalSize({
+                                width: event.currentTarget.naturalWidth,
+                                height: event.currentTarget.naturalHeight,
+                              });
+                            }}
+                            style={{
+                              width: lyricImageWidth
+                                ? `${lyricImageWidth}px`
+                                : `${Math.round(lyricZoom * 100)}%`,
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
