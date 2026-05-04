@@ -618,7 +618,9 @@ export function SpotifyViewer({
       : gridDensity === "compact"
         ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         : "grid gap-5 xl:grid-cols-2 2xl:grid-cols-3";
-  const normalizedFilterValue = filterInput.trim().toLocaleLowerCase("es-ES");
+  const appliedFilterValue = filterValue.trim();
+  const normalizedFilterValue = appliedFilterValue.toLocaleLowerCase("es-ES");
+  const hasPendingFilterChanges = appliedFilterValue !== filterInput.trim();
   const shouldSearchTracksInPlaylists =
     normalizedFilterValue.length >= PLAYLIST_TRACK_SEARCH_MIN_LENGTH;
   const cachedPlaylistTrackSearchHits = shouldSearchTracksInPlaylists
@@ -759,23 +761,26 @@ export function SpotifyViewer({
     selectedTrackIndex >= 0 &&
     selectedTrackIndex < playbackOrderedTracks.length - 1;
 
-  const applyFilter = useEffectEvent((nextFilterValue: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    const normalizedValue = nextFilterValue.trim();
+  const applyFilter = useCallback(
+    (nextFilterValue: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      const normalizedValue = nextFilterValue.trim();
 
-    if (normalizedValue) {
-      params.set("spotifyFilter", normalizedValue);
-    } else {
-      params.delete("spotifyFilter");
-    }
+      if (normalizedValue) {
+        params.set("spotifyFilter", normalizedValue);
+      } else {
+        params.delete("spotifyFilter");
+      }
 
-    startTransition(() => {
-      router.replace(
-        params.toString() ? `${pathname}?${params.toString()}` : pathname,
-        { scroll: false },
-      );
-    });
-  });
+      startTransition(() => {
+        router.replace(
+          params.toString() ? `${pathname}?${params.toString()}` : pathname,
+          { scroll: false },
+        );
+      });
+    },
+    [pathname, router, searchParams],
+  );
 
   const requestNativeFullscreen = useCallback(async () => {
     if (typeof document === "undefined") {
@@ -945,7 +950,7 @@ export function SpotifyViewer({
           setPlaylistTrackSearchError(null);
 
           const params = new URLSearchParams({
-            q: filterInput.trim(),
+            q: appliedFilterValue,
           });
           const response = await fetch(
             `/api/spotify/playlists/search?${params.toString()}`,
@@ -994,7 +999,7 @@ export function SpotifyViewer({
   }, [
     configured,
     connected,
-    filterInput,
+    appliedFilterValue,
     normalizedFilterValue,
     playlistTrackSearchCache,
     shouldSearchTracksInPlaylists,
@@ -1092,21 +1097,6 @@ export function SpotifyViewer({
     setIsVideoExtendedMode(false);
     setShouldAutoEnterFullscreen(false);
   }, [resolvedSharedSpotifyPlaylistId]);
-
-  useEffect(() => {
-    const currentValue = filterValue.trim();
-    const nextValue = filterInput.trim();
-
-    if (currentValue === nextValue) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      applyFilter(filterInput);
-    }, 180);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [filterInput, filterValue]);
 
   useEffect(() => {
     if (!selectedPlaylist) {
@@ -1392,6 +1382,11 @@ export function SpotifyViewer({
 
   function handleReset() {
     setFilterInput("");
+    applyFilter("");
+  }
+
+  function handleApplyFilter() {
+    applyFilter(filterInput);
   }
 
   function handleOpenPlaylistViewer(playlistId: string) {
@@ -2141,7 +2136,13 @@ export function SpotifyViewer({
                   <p className="text-xs font-medium uppercase tracking-[0.38em] text-slate-300">
                     Filtro
                   </p>
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      handleApplyFilter();
+                    }}
+                    className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-center"
+                  >
                     <input
                       type="search"
                       value={filterInput}
@@ -2151,23 +2152,31 @@ export function SpotifyViewer({
                     />
 
                     <button
+                      type="submit"
+                      disabled={!hasPendingFilterChanges}
+                      className="rounded-2xl border border-cyan-300/35 bg-cyan-300/12 px-6 py-4 text-base text-cyan-50 transition hover:border-cyan-300/60 hover:bg-cyan-300/18 hover:text-white disabled:cursor-default disabled:border-white/10 disabled:bg-black/10 disabled:text-slate-500"
+                    >
+                      Aplicar
+                    </button>
+
+                    <button
                       type="button"
                       onClick={handleReset}
                       className="rounded-2xl border border-white/12 bg-black/20 px-6 py-4 text-base text-slate-100 transition hover:border-white/25 hover:text-white"
                     >
                       Limpiar
                     </button>
-                  </div>
+                  </form>
                 </div>
 
-                {filterInput.trim() ? (
+                {appliedFilterValue ? (
                   <div className="space-y-1 text-sm text-slate-300">
                     {isPlaylistTrackSearchInFlight &&
                     filteredPlaylists.length === 0 ? (
                       <p>
                         Buscando playlists para{" "}
                         <span className="font-semibold text-white">
-                          {filterInput.trim()}
+                          {appliedFilterValue}
                         </span>
                         ...
                       </p>
@@ -2175,7 +2184,7 @@ export function SpotifyViewer({
                       <p>
                         {filteredPlaylists.length} playlists encontradas para{" "}
                         <span className="font-semibold text-white">
-                          {filterInput.trim()}
+                          {appliedFilterValue}
                         </span>
                       </p>
                     )}
@@ -2187,7 +2196,7 @@ export function SpotifyViewer({
                       </p>
                     ) : null}
                     {!shouldSearchTracksInPlaylists &&
-                    filterInput.trim().length > 0 ? (
+                    appliedFilterValue.length > 0 ? (
                       <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                         La búsqueda por tema se activa a partir de 4 caracteres
                       </p>
