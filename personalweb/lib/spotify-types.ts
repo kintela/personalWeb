@@ -9,6 +9,7 @@ export type SpotifyPlaylistAsset = {
   trackCount: number;
   visibilityLabel: string;
   collaborative: boolean;
+  isVirtual?: boolean;
 };
 
 export type SpotifyQuickAccessAsset = {
@@ -18,6 +19,7 @@ export type SpotifyQuickAccessAsset = {
   href: string;
   imageUrl: string | null;
   kind: "artist" | "playlist";
+  openInNewTab?: boolean;
 };
 
 export type SpotifyPlaylistTrackAsset = {

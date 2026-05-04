@@ -2223,8 +2223,8 @@ export function SpotifyViewer({
                   <a
                     key={accessLink.id}
                     href={accessLink.href}
-                    target="_blank"
-                    rel="noreferrer"
+                    target={accessLink.openInNewTab === false ? undefined : "_blank"}
+                    rel={accessLink.openInNewTab === false ? undefined : "noreferrer"}
                     className="group flex items-center gap-4 rounded-[1.35rem] border border-white/10 bg-black/20 px-4 py-4 transition hover:border-cyan-300/45 hover:bg-cyan-300/10"
                   >
                     <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/12 bg-white/6 text-slate-100 transition group-hover:border-cyan-300/50 group-hover:text-white">
@@ -2340,16 +2340,18 @@ export function SpotifyViewer({
                             >
                               <YouTubeLogoIcon />
                             </button>
-                            <a
-                              href={playlist.externalUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              aria-label={`Escuchar ${playlist.name} en Spotify`}
-                              title={`Escuchar ${playlist.name} en Spotify`}
-                              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-emerald-300/40 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.3),rgba(15,23,42,0.92))] text-white shadow-[0_10px_24px_rgba(29,185,84,0.16)] transition hover:border-emerald-200/55 hover:bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.42),rgba(15,23,42,0.96))] hover:shadow-[0_14px_32px_rgba(29,185,84,0.22)]"
-                            >
-                              <SpotifyLogoIcon />
-                            </a>
+                            {playlist.isVirtual ? null : (
+                              <a
+                                href={playlist.externalUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                aria-label={`Escuchar ${playlist.name} en Spotify`}
+                                title={`Escuchar ${playlist.name} en Spotify`}
+                                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-emerald-300/40 bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.3),rgba(15,23,42,0.92))] text-white shadow-[0_10px_24px_rgba(29,185,84,0.16)] transition hover:border-emerald-200/55 hover:bg-[radial-gradient(circle_at_top,rgba(29,185,84,0.42),rgba(15,23,42,0.96))] hover:shadow-[0_14px_32px_rgba(29,185,84,0.22)]"
+                              >
+                                <SpotifyLogoIcon />
+                              </a>
+                            )}
                           </div>
                         </div>
 
@@ -2452,14 +2454,16 @@ export function SpotifyViewer({
                                 selectedPlaylistShareSlug || selectedPlaylist.id,
                             }}
                           />
-                          <a
-                            href={selectedPlaylist.externalUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-emerald-300/45 hover:text-white"
-                          >
-                            Abrir en Spotify
-                          </a>
+                          {selectedPlaylist.isVirtual ? null : (
+                            <a
+                              href={selectedPlaylist.externalUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-full border border-white/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-100 transition hover:border-emerald-300/45 hover:text-white"
+                            >
+                              Abrir en Spotify
+                            </a>
+                          )}
                           <button
                             type="button"
                             onClick={handleClosePlaylistViewer}

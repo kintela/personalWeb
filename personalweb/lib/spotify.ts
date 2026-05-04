@@ -23,6 +23,7 @@ import {
   readSpotifyCachedPlaylistTrackCounts,
   readSpotifyCachedPlaylistTrackByPosition,
   readSpotifyCachedPlaylistSyncState,
+  readSpotifyCachedTracksByLanguageCode,
   readSpotifyCachedPlaylistTracks,
   readSpotifyCachedPlaylists,
   replaceSpotifyCachedPlaylistTracks,
@@ -62,6 +63,7 @@ const SPOTIFY_PLAYLIST_TRACK_INDEX_CONCURRENCY = 2;
 const SPOTIFY_PLAYLIST_TRACK_PAGE_LIMIT = 50;
 const SPOTIFY_SUPABASE_CACHE_TTL_MS = 6 * 60 * 60_000;
 const SPOTIFY_LANGUAGE_INFERENCE_MAX_PER_SYNC = 12;
+const SPOTIFY_VIRTUAL_CASTILIAN_PLAYLIST_ID = "virtual-language-es";
 
 type SpotifyTokenResponse = {
   access_token: string;
@@ -644,6 +646,20 @@ function buildLegacyQuickAccess(
   } satisfies SpotifyQuickAccessAsset;
 }
 
+function buildCastilianQuickAccess(): SpotifyQuickAccessAsset {
+  return {
+    id: `playlist-${SPOTIFY_VIRTUAL_CASTILIAN_PLAYLIST_ID}`,
+    label: "En castellano",
+    eyebrow: "Lista",
+    href: `/spotify?spotifyPlaylist=${encodeURIComponent(
+      SPOTIFY_VIRTUAL_CASTILIAN_PLAYLIST_ID,
+    )}`,
+    imageUrl: null,
+    kind: "playlist",
+    openInNewTab: false,
+  } satisfies SpotifyQuickAccessAsset;
+}
+
 function buildSpotifyQuickAccess(playlists: SpotifyPlaylistAsset[]) {
   return [
     buildSpotifyArtistQuickAccess(KINTELA_SPOTIFY_ARTIST_ID, "kintela"),
@@ -651,6 +667,7 @@ function buildSpotifyQuickAccess(playlists: SpotifyPlaylistAsset[]) {
       DESGARRAMANTAS_SPOTIFY_ARTIST_ID,
       "Desgarramantas",
     ),
+    buildCastilianQuickAccess(),
     buildLegacyQuickAccess(playlists),
   ].filter((asset): asset is SpotifyQuickAccessAsset => asset !== null);
 }
@@ -670,6 +687,30 @@ function buildSpotifyPlaylistListResult(
     loginHref: getSpotifyLoginPath(),
     callbackPath: getSpotifyCallbackPath(),
   } satisfies SpotifyPlaylistListResult;
+}
+
+async function buildCastilianVirtualPlaylist() {
+  const tracks = await readSpotifyCachedTracksByLanguageCode("es");
+
+  return {
+    playlist: {
+      id: SPOTIFY_VIRTUAL_CASTILIAN_PLAYLIST_ID,
+      name: "En castellano",
+      description:
+        "Selección virtual con todos los temas marcados en caché con language_code = es.",
+      imageUrl: null,
+      externalUrl: `/spotify?spotifyPlaylist=${encodeURIComponent(
+        SPOTIFY_VIRTUAL_CASTILIAN_PLAYLIST_ID,
+      )}`,
+      embedUrl: "",
+      ownerName: "kintela.es",
+      trackCount: tracks.length,
+      visibilityLabel: "Virtual",
+      collaborative: false,
+      isVirtual: true,
+    } satisfies SpotifyPlaylistAsset,
+    tracks,
+  };
 }
 
 function normalizeAlbumReleaseDate(value: string | undefined) {
@@ -1664,11 +1705,15 @@ export async function getSpotifyPlaylistList(): Promise<SpotifyPlaylistListResul
 
   try {
     const persistedPlaylists = await readSpotifyCachedPlaylists();
+    const castilianVirtualPlaylist = await buildCastilianVirtualPlaylist();
+    const playlistsWithVirtual = castilianVirtualPlaylist.playlist.trackCount > 0
+      ? [castilianVirtualPlaylist.playlist, ...persistedPlaylists]
+      : persistedPlaylists;
 
-    if (persistedPlaylists.length > 0) {
+    if (playlistsWithVirtual.length > 0) {
       const persistedResult = buildSpotifyPlaylistListResult(
-        persistedPlaylists,
-        persistedPlaylists[0]?.ownerName ?? null,
+        playlistsWithVirtual,
+        persistedPlaylists[0]?.ownerName ?? castilianVirtualPlaylist.playlist.ownerName,
       );
 
       cacheSpotifyPlaylistListResult(persistedResult);
@@ -1721,6 +1766,25 @@ export async function getSpotifyPlaylistTracks(playlistId: string) {
 
   if (!normalizedPlaylistId) {
     throw new Error("Falta el identificador de la playlist de Spotify.");
+  }
+
+  if (normalizedPlaylistId === SPOTIFY_VIRTUAL_CASTILIAN_PLAYLIST_ID) {
+    const languageTracks = await readSpotifyCachedTracksByLanguageCode("es");
+
+    if (languageTracks.length === 0) {
+      throw new Error(
+        "No hay canciones marcadas con language_code = es en la caché de Spotify.",
+      );
+    }
+
+    const sortedLanguageTracks = [...languageTracks]
+      .sort(compareSpotifyTracks)
+      .map((track, index) => ({
+        ...track,
+        position: index + 1,
+      }));
+
+    return hydrateSpotifyTrackYouTubeMetadata(sortedLanguageTracks);
   }
 
   try {

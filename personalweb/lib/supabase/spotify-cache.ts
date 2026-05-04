@@ -867,6 +867,56 @@ export async function readSpotifyCachedPlaylistTracks(playlistSpotifyId: string)
   return (data ?? []).map((row) => mapTrackCacheRowToAsset(row));
 }
 
+export async function readSpotifyCachedTracksByLanguageCode(languageCode: string) {
+  const supabase = createSupabaseServerClient();
+  const normalizedLanguageCode = trimNullableValue(languageCode)?.toLocaleLowerCase(
+    "es-ES",
+  );
+
+  if (!supabase || !normalizedLanguageCode) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const { data: playlists, error: playlistsError } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id")
+    .eq("is_active", true)
+    .returns<Array<{ id: number | string }>>();
+
+  if (playlistsError || !playlists?.length) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const activePlaylistIds = playlists
+    .map((playlist) => parseInteger(playlist.id))
+    .filter((playlistId) => playlistId > 0);
+
+  if (activePlaylistIds.length === 0) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const { data, error } = await supabase
+    .from("spotify_playlist_tracks_cache")
+    .select(
+      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, duration_ms, normalized_track_name, canonical_track_name",
+    )
+    .in("playlist_cache_id", activePlaylistIds)
+    .eq("language_code", normalizedLanguageCode)
+    .order("album_release_date", { ascending: true })
+    .order("name", { ascending: true })
+    .order("artists_label", { ascending: true })
+    .returns<SpotifyPlaylistTrackCacheRow[]>();
+
+  if (error) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  return (data ?? []).map((row, index) => ({
+    ...mapTrackCacheRowToAsset(row),
+    position: index + 1,
+  }));
+}
+
 export async function readSpotifyCachedPlaylistTrackByPosition({
   playlistSpotifyId,
   position,
