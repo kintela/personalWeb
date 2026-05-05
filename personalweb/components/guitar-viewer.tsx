@@ -511,6 +511,7 @@ export function GuitarViewer({
   const [spotifyLoadingTopicId, setSpotifyLoadingTopicId] =
     useState<string | null>(null);
   const [topicContextError, setTopicContextError] = useState<string | null>(null);
+  const [showCompactGeneralVideos, setShowCompactGeneralVideos] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -871,6 +872,8 @@ export function GuitarViewer({
   const activeTablatureImage = selectedTablature
     ? selectedTablature.images[selectedTablature.activeIndex] ?? null
     : null;
+  const generalVideosWithCover = videos.filter((video) => Boolean(video.imageSrc));
+  const generalVideosWithoutCover = videos.filter((video) => !video.imageSrc);
   const lyricImageBaseWidth =
     lyricImageNaturalSize && lyricViewportSize
       ? Math.min(
@@ -1154,93 +1157,169 @@ export function GuitarViewer({
                   </span>
                 </div>
 
-                <div className={gridClassName}>
-                  {videos.map((video) => {
-                    const platformLabel = formatPlatformLabel(video.platform);
-                    const anchorId = `guitarra-video-${video.id}`;
+                {generalVideosWithCover.length > 0 ? (
+                  <div className={gridClassName}>
+                    {generalVideosWithCover.map((video) => {
+                      const platformLabel = formatPlatformLabel(video.platform);
+                      const anchorId = `guitarra-video-${video.id}`;
 
-                    return (
-                      <article
-                        key={video.id}
-                        id={anchorId}
-                        className="relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
-                      >
-                        <ShareCardButton
-                          anchorId={anchorId}
-                          sectionId="guitarra"
-                          queryKeys={["guitarGroup", "guitarTheme"]}
-                          className="absolute right-4 top-4 z-10"
-                        />
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openVideoViewer(
-                              video.link,
-                              video.title,
-                              platformLabel
-                                ? `${platformLabel} · vídeo general`
-                                : "Vídeo general",
-                            )
-                          }
-                          className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-inset"
+                      return (
+                        <article
+                          key={video.id}
+                          id={anchorId}
+                          className="relative flex h-full scroll-mt-32 flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(15,23,42,0.25)]"
                         >
+                          <ShareCardButton
+                            anchorId={anchorId}
+                            sectionId="guitarra"
+                            queryKeys={["guitarGroup", "guitarTheme"]}
+                            className="absolute right-4 top-4 z-10"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openVideoViewer(
+                                video.link,
+                                video.title,
+                                platformLabel
+                                  ? `${platformLabel} · vídeo general`
+                                  : "Vídeo general",
+                              )
+                            }
+                            className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 focus-visible:ring-inset"
+                          >
                             <div className="group relative aspect-[4/3] overflow-hidden bg-slate-900">
-                              {video.imageSrc ? (
-                                <Image
-                                  src={video.imageSrc}
-                                  alt={`Carátula de ${video.title}`}
-                                  fill
-                                  unoptimized
-                                  className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                                  sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 33vw, 25vw"
-                                />
-                              ) : (
-                                <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] px-8 text-center text-sm uppercase tracking-[0.3em] text-slate-400">
-                                  Sin carátula
-                                </div>
-                              )}
+                              <Image
+                                src={video.imageSrc ?? ""}
+                                alt={`Carátula de ${video.title}`}
+                                fill
+                                unoptimized
+                                className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                                sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 33vw, 25vw"
+                              />
                               <VideoInfoHover info={video.info} />
                             </div>
                           </button>
 
-                        <div className="flex flex-1 flex-col gap-4 p-5">
-                          <div className="flex flex-wrap gap-2">
-                            {platformLabel ? (
-                              <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
-                                {platformLabel}
-                              </span>
-                            ) : null}
-                          </div>
+                          <div className="flex flex-1 flex-col gap-4 p-5">
+                            <div className="flex flex-wrap gap-2">
+                              {platformLabel ? (
+                                <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-slate-200">
+                                  {platformLabel}
+                                </span>
+                              ) : null}
+                            </div>
 
-                          <div className="space-y-2">
-                            <h3 className="text-xl font-semibold leading-tight text-white">
-                              {video.title}
-                            </h3>
-                          </div>
+                            <div className="space-y-2">
+                              <h3 className="text-xl font-semibold leading-tight text-white">
+                                {video.title}
+                              </h3>
+                            </div>
 
-                          <div className="mt-auto flex flex-wrap gap-3 pt-1">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openVideoViewer(
-                                  video.link,
-                                  video.title,
-                                  platformLabel
-                                    ? `${platformLabel} · vídeo general`
-                                    : "Vídeo general",
-                                )
-                              }
-                              className="rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
-                            >
-                              Ver vídeo
-                            </button>
+                            <div className="mt-auto flex flex-wrap gap-3 pt-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openVideoViewer(
+                                    video.link,
+                                    video.title,
+                                    platformLabel
+                                      ? `${platformLabel} · vídeo general`
+                                      : "Vídeo general",
+                                  )
+                                }
+                                className="rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
+                              >
+                                Ver vídeo
+                              </button>
+                            </div>
                           </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {generalVideosWithoutCover.length > 0 ? (
+                  <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/35">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowCompactGeneralVideos((currentValue) => !currentValue)
+                      }
+                      className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.03]"
+                      aria-expanded={showCompactGeneralVideos}
+                    >
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-white">
+                          Vídeos sin carátula
+                        </p>
+                        <p className="text-sm text-slate-300">
+                          {getVideoCountLabel(generalVideosWithoutCover.length)} en
+                          formato compacto
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[0.68rem] uppercase tracking-[0.18em] text-slate-200">
+                        {showCompactGeneralVideos ? "Ocultar" : "Mostrar"}
+                      </span>
+                    </button>
+
+                    {showCompactGeneralVideos ? (
+                      <div className="border-t border-white/10 px-3 py-3">
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          {generalVideosWithoutCover.map((video) => {
+                            const platformLabel = formatPlatformLabel(video.platform);
+                            const anchorId = `guitarra-video-${video.id}`;
+
+                            return (
+                              <article
+                                key={video.id}
+                                id={anchorId}
+                                className="flex scroll-mt-32 items-center justify-between gap-3 rounded-[1.2rem] border border-white/10 bg-black/20 px-4 py-3"
+                              >
+                                <div className="min-w-0 space-y-2">
+                                  {platformLabel ? (
+                                    <span className="inline-flex rounded-full border border-white/12 bg-white/6 px-2.5 py-1 text-[0.64rem] font-medium uppercase tracking-[0.16em] text-slate-200">
+                                      {platformLabel}
+                                    </span>
+                                  ) : null}
+                                  <p className="text-sm font-medium leading-6 text-white">
+                                    {video.title}
+                                  </p>
+                                </div>
+
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <ShareCardButton
+                                    anchorId={anchorId}
+                                    sectionId="guitarra"
+                                    queryKeys={["guitarGroup", "guitarTheme"]}
+                                    className="shrink-0"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openVideoViewer(
+                                        video.link,
+                                        video.title,
+                                        platformLabel
+                                          ? `${platformLabel} · vídeo general`
+                                          : "Vídeo general",
+                                      )
+                                    }
+                                    className="rounded-full border border-cyan-300/35 bg-cyan-300/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/65 hover:bg-cyan-300/18 hover:text-white"
+                                  >
+                                    Ver vídeo
+                                  </button>
+                                </div>
+                              </article>
+                            );
+                          })}
                         </div>
-                      </article>
-                    );
-                  })}
-                </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
