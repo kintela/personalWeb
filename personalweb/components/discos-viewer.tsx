@@ -273,6 +273,43 @@ function EditIcon() {
   );
 }
 
+function InfoIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10v6" />
+      <path d="M12 7.25h.01" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m7 7 10 10" />
+      <path d="m17 7-10 10" />
+    </svg>
+  );
+}
+
 export function DiscosViewer({
   discos,
   configured,
@@ -308,6 +345,7 @@ export function DiscosViewer({
   const [editingDiscoId, setEditingDiscoId] = useState("");
   const [discoEditSuccess, setDiscoEditSuccess] = useState("");
   const [discoFeedbackId, setDiscoFeedbackId] = useState("");
+  const [infoDiscoId, setInfoDiscoId] = useState("");
   const [yearFilters, setYearFilters] = useState<Record<string, YearFilterState>>(
     {},
   );
@@ -326,6 +364,7 @@ export function DiscosViewer({
 
   useEffect(() => {
     setCurrentDiscos(sortDiscoAssets(discos));
+    setInfoDiscoId("");
   }, [discos]);
 
   useEffect(() => {
@@ -967,6 +1006,36 @@ export function DiscosViewer({
                                     </button>
                                   ) : null}
 
+                                  {disco.observations ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setInfoDiscoId((currentValue) =>
+                                          currentValue === disco.id ? "" : disco.id,
+                                        )
+                                      }
+                                      aria-label={`Mostrar información de ${disco.title}`}
+                                      aria-pressed={infoDiscoId === disco.id}
+                                      title={
+                                        infoDiscoId === disco.id
+                                          ? `Ocultar información de ${disco.title}`
+                                          : `Mostrar información de ${disco.title}`
+                                      }
+                                      className={`absolute left-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border bg-slate-950/72 text-slate-100 shadow-[0_10px_25px_rgba(2,6,23,0.35)] backdrop-blur transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${
+                                        infoDiscoId === disco.id
+                                          ? "border-cyan-300/60 bg-cyan-300/14 text-cyan-100"
+                                          : "border-white/15 hover:border-cyan-300/60 hover:bg-cyan-300/14 hover:text-white"
+                                      }`}
+                                    >
+                                      <span className="sr-only">
+                                        {infoDiscoId === disco.id
+                                          ? `Ocultar información de ${disco.title}`
+                                          : `Mostrar información de ${disco.title}`}
+                                      </span>
+                                      <InfoIcon />
+                                    </button>
+                                  ) : null}
+
                                   {disco.coverSrc ? (
                                     <Image
                                       src={disco.coverSrc}
@@ -1044,12 +1113,28 @@ export function DiscosViewer({
                                     </p>
                                   ) : null}
                                 </div>
-                                <InfoHover
-                                  info={disco.observations}
-                                  overlayClassName="pointer-events-none absolute inset-0 z-[1] bg-slate-950/76 opacity-0 transition duration-300 group-hover:opacity-100"
-                                  wrapperClassName="pointer-events-none absolute inset-3 z-[2] opacity-0 transition duration-300 group-hover:pointer-events-auto group-hover:opacity-100"
-                                  panelClassName="flex h-full max-h-full overflow-y-auto rounded-[1.35rem] border border-cyan-300/25 bg-slate-950/94 p-4 text-sm leading-7 text-slate-100 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur-md"
-                                />
+                                {infoDiscoId === disco.id ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      aria-label={`Cerrar información de ${disco.title}`}
+                                      title={`Cerrar información de ${disco.title}`}
+                                      onClick={() => setInfoDiscoId("")}
+                                      className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-slate-950/72 text-slate-100 shadow-[0_10px_25px_rgba(2,6,23,0.35)] backdrop-blur transition hover:border-cyan-300/60 hover:bg-cyan-300/14 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                                    >
+                                      <span className="sr-only">
+                                        Cerrar información de {disco.title}
+                                      </span>
+                                      <CloseIcon />
+                                    </button>
+                                    <InfoHover
+                                      info={disco.observations}
+                                      overlayClassName="absolute inset-0 z-10 bg-slate-950/76"
+                                      wrapperClassName="absolute inset-3 z-[11]"
+                                      panelClassName="flex h-full max-h-full overflow-y-auto rounded-[1.35rem] border border-cyan-300/25 bg-slate-950/94 p-4 pr-12 text-sm leading-7 text-slate-100 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur-md"
+                                    />
+                                  </>
+                                ) : null}
                               </article>
                             );
                           })}
