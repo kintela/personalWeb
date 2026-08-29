@@ -74,6 +74,12 @@ type TrackLanguagePayload = {
   error?: string;
 };
 
+type TrackWomenPowerPayload = {
+  ok?: boolean;
+  womenPower?: boolean;
+  error?: string;
+};
+
 type BatchTrackLanguagePayload = {
   ok?: boolean;
   action?: string;
@@ -478,6 +484,25 @@ function LanguageToggleIcon() {
   );
 }
 
+function WomenPowerIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <circle cx="12" cy="8" r="4.25" />
+      <path d="M12 12.25V21" />
+      <path d="M8.5 17.25h7" />
+    </svg>
+  );
+}
+
 function TrackRatingControl({
   trackName,
   rating,
@@ -612,6 +637,9 @@ export function SpotifyViewer({
   const [languageSavingTrackId, setLanguageSavingTrackId] = useState<string | null>(
     null,
   );
+  const [womenPowerSavingTrackId, setWomenPowerSavingTrackId] = useState<
+    string | null
+  >(null);
   const [languageSuccess, setLanguageSuccess] = useState<string | null>(null);
   const [playlistLanguageAction, setPlaylistLanguageAction] = useState<
     "infer" | "set-es" | null
@@ -883,6 +911,7 @@ export function SpotifyViewer({
     setRatingSavingTrackId(null);
     setLanguageError(null);
     setLanguageSavingTrackId(null);
+    setWomenPowerSavingTrackId(null);
     setLanguageSuccess(null);
     setPlaylistLanguageAction(null);
   }
@@ -1060,6 +1089,7 @@ export function SpotifyViewer({
     setRatingSavingTrackId(null);
     setLanguageError(null);
     setLanguageSavingTrackId(null);
+    setWomenPowerSavingTrackId(null);
     setLanguageSuccess(null);
     setPlaylistLanguageAction(null);
   }, [selectedTrack?.id]);
@@ -1440,6 +1470,7 @@ export function SpotifyViewer({
     setRatingSavingTrackId(null);
     setLanguageError(null);
     setLanguageSavingTrackId(null);
+    setWomenPowerSavingTrackId(null);
     setLanguageSuccess(null);
     setPlaylistLanguageAction(null);
   }
@@ -1525,6 +1556,27 @@ export function SpotifyViewer({
         ...currentCache,
         [selectedPlaylistId]: currentCache[selectedPlaylistId].map((track) =>
           track.id === trackId ? { ...track, languageCode } : track,
+        ),
+      };
+    });
+  }
+
+  function updateTrackWomenPowerLocally(trackId: string, womenPower: boolean) {
+    setPlaylistTracks((currentTracks) =>
+      currentTracks.map((track) =>
+        track.id === trackId ? { ...track, womenPower } : track,
+      ),
+    );
+
+    setTrackCache((currentCache) => {
+      if (!selectedPlaylistId || !currentCache[selectedPlaylistId]) {
+        return currentCache;
+      }
+
+      return {
+        ...currentCache,
+        [selectedPlaylistId]: currentCache[selectedPlaylistId].map((track) =>
+          track.id === trackId ? { ...track, womenPower } : track,
         ),
       };
     });
@@ -1896,14 +1948,14 @@ export function SpotifyViewer({
 
     try {
       const response = await fetch(
-        `/api/spotify/playlists/${encodeURIComponent(selectedPlaylist.id)}/tracks`,
+        `/api/spotify/playlists/${encodeURIComponent(track.sourcePlaylistId ?? selectedPlaylist.id)}/tracks`,
         {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            position: track.position,
+            position: track.sourcePosition ?? track.position,
             languageCode: track.languageCode === "es" ? null : "es",
           }),
         },
@@ -1931,6 +1983,70 @@ export function SpotifyViewer({
       );
     } finally {
       setLanguageSavingTrackId(null);
+    }
+  }
+
+  async function handleToggleTrackWomenPower(track: SpotifyPlaylistTrackAsset) {
+    setLanguageError(null);
+    setLanguageSuccess(null);
+
+    if (!isAdminUnlocked || !selectedPlaylist) {
+      setSelectedTrackId(track.id);
+      setIsManualVideoPanelOpen(true);
+      setManualVideoSuccess("");
+      setLanguageError(
+        "Desbloquea la sesión admin para cambiar la marca Women Power.",
+      );
+      setManualVideoError(
+        "Desbloquea la sesión admin para cambiar la marca Women Power.",
+      );
+      return;
+    }
+
+    setWomenPowerSavingTrackId(track.id);
+
+    try {
+      const response = await fetch(
+        `/api/spotify/playlists/${encodeURIComponent(track.sourcePlaylistId ?? selectedPlaylist.id)}/tracks`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            position: track.sourcePosition ?? track.position,
+            womenPower: !track.womenPower,
+          }),
+        },
+      );
+      const payload = (await response.json()) as TrackWomenPowerPayload;
+
+      if (!response.ok || !payload.ok || typeof payload.womenPower !== "boolean") {
+        if (response.status === 401) {
+          setIsAdminUnlocked(false);
+          setSelectedTrackId(track.id);
+          setIsManualVideoPanelOpen(true);
+        }
+
+        throw new Error(
+          payload.error ?? "No he podido guardar la marca Women Power.",
+        );
+      }
+
+      updateTrackWomenPowerLocally(track.id, payload.womenPower);
+      setLanguageSuccess(
+        payload.womenPower
+          ? "Tema añadido a Women Power."
+          : "Tema eliminado de Women Power.",
+      );
+    } catch (error) {
+      setLanguageError(
+        error instanceof Error
+          ? error.message
+          : "No he podido guardar la marca Women Power.",
+      );
+    } finally {
+      setWomenPowerSavingTrackId(null);
     }
   }
 
@@ -2771,6 +2887,7 @@ export function SpotifyViewer({
                                 {playbackOrderedTracks.map((track) => {
                                   const isSelected = selectedTrack?.id === track.id;
                                   const isSpanishTrack = track.languageCode === "es";
+                                  const isWomenPowerTrack = track.womenPower;
 
                                   return (
                                     <div
@@ -2825,35 +2942,66 @@ export function SpotifyViewer({
                                             void handleSetTrackRating(track, nextRating)
                                           }
                                         />
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            void handleToggleTrackSpanishLanguage(track)
-                                          }
-                                          disabled={languageSavingTrackId === track.id}
-                                          aria-pressed={isSpanishTrack}
-                                          aria-label={
-                                            isSpanishTrack
-                                              ? `Quitar marca de castellano a ${track.name}`
-                                              : `Marcar ${track.name} como castellano`
-                                          }
-                                          title={
-                                            isSpanishTrack
-                                              ? "Quitar marca manual de castellano"
-                                              : "Marcar manualmente como castellano"
-                                          }
-                                          className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
-                                            isSpanishTrack
-                                              ? "border-rose-300/40 bg-rose-400/16 text-rose-100"
-                                              : "border-white/10 bg-black/15 text-slate-400 hover:border-cyan-300/35 hover:text-cyan-100"
-                                          } ${languageSavingTrackId === track.id ? "cursor-wait opacity-60" : ""}`}
-                                        >
-                                          {isSpanishTrack ? (
-                                            <span>ES</span>
-                                          ) : (
-                                            <LanguageToggleIcon />
-                                          )}
-                                        </button>
+                                        {selectedPlaylist.isSearchResult ? null : (
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                void handleToggleTrackWomenPower(track)
+                                              }
+                                              disabled={
+                                                womenPowerSavingTrackId === track.id
+                                              }
+                                              aria-pressed={isWomenPowerTrack}
+                                              aria-label={
+                                                isWomenPowerTrack
+                                                  ? `Quitar ${track.name} de Women Power`
+                                                  : `Añadir ${track.name} a Women Power`
+                                              }
+                                              title={
+                                                isWomenPowerTrack
+                                                  ? "Quitar de Women Power"
+                                                  : "Marcar como cantada por mujeres"
+                                              }
+                                              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                                                isWomenPowerTrack
+                                                  ? "border-fuchsia-300/45 bg-fuchsia-400/18 text-fuchsia-100"
+                                                  : "border-white/10 bg-black/15 text-slate-400 hover:border-fuchsia-300/40 hover:text-fuchsia-100"
+                                              } ${womenPowerSavingTrackId === track.id ? "cursor-wait opacity-60" : ""}`}
+                                            >
+                                              <WomenPowerIcon />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                void handleToggleTrackSpanishLanguage(track)
+                                              }
+                                              disabled={languageSavingTrackId === track.id}
+                                              aria-pressed={isSpanishTrack}
+                                              aria-label={
+                                                isSpanishTrack
+                                                  ? `Quitar marca de castellano a ${track.name}`
+                                                  : `Marcar ${track.name} como castellano`
+                                              }
+                                              title={
+                                                isSpanishTrack
+                                                  ? "Quitar marca manual de castellano"
+                                                  : "Marcar manualmente como castellano"
+                                              }
+                                              className={`inline-flex h-8 items-center justify-center rounded-full border px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] transition ${
+                                                isSpanishTrack
+                                                  ? "border-rose-300/40 bg-rose-400/16 text-rose-100"
+                                                  : "border-white/10 bg-black/15 text-slate-400 hover:border-cyan-300/35 hover:text-cyan-100"
+                                              } ${languageSavingTrackId === track.id ? "cursor-wait opacity-60" : ""}`}
+                                            >
+                                              {isSpanishTrack ? (
+                                                <span>ES</span>
+                                              ) : (
+                                                <LanguageToggleIcon />
+                                              )}
+                                            </button>
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   );

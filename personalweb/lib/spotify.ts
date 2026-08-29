@@ -24,6 +24,7 @@ import {
   readSpotifyCachedPlaylistTrackByPosition,
   readSpotifyCachedPlaylistSyncState,
   readSpotifyCachedTracksByLanguageCode,
+  readSpotifyCachedWomenPowerTracks,
   readSpotifyCachedPlaylistTracks,
   readSpotifyCachedPlaylists,
   replaceSpotifyCachedPlaylistTracks,
@@ -65,6 +66,7 @@ const SPOTIFY_PLAYLIST_TRACK_PAGE_LIMIT = 50;
 const SPOTIFY_SUPABASE_CACHE_TTL_MS = 6 * 60 * 60_000;
 const SPOTIFY_LANGUAGE_INFERENCE_MAX_PER_SYNC = 12;
 const SPOTIFY_VIRTUAL_CASTILIAN_PLAYLIST_ID = "virtual-language-es";
+const SPOTIFY_VIRTUAL_WOMEN_POWER_PLAYLIST_ID = "virtual-women-power";
 
 type SpotifyTokenResponse = {
   access_token: string;
@@ -489,6 +491,10 @@ function cacheSpotifyPlaylistListResult(result: SpotifyPlaylistListResult) {
   };
 }
 
+export function invalidateSpotifyPlaylistListCache() {
+  spotifyPlaylistListCache = null;
+}
+
 function getCachedSpotifyPlaylistTrackQueryHits(
   normalizedQuery: string,
   options?: { allowStale?: boolean },
@@ -661,6 +667,20 @@ function buildCastilianQuickAccess(): SpotifyQuickAccessAsset {
   } satisfies SpotifyQuickAccessAsset;
 }
 
+function buildWomenPowerQuickAccess(): SpotifyQuickAccessAsset {
+  return {
+    id: `playlist-${SPOTIFY_VIRTUAL_WOMEN_POWER_PLAYLIST_ID}`,
+    label: "Women Power",
+    eyebrow: "Lista",
+    href: `/spotify?spotifyPlaylist=${encodeURIComponent(
+      SPOTIFY_VIRTUAL_WOMEN_POWER_PLAYLIST_ID,
+    )}`,
+    imageUrl: null,
+    kind: "playlist",
+    openInNewTab: false,
+  } satisfies SpotifyQuickAccessAsset;
+}
+
 function buildSpotifyQuickAccess(playlists: SpotifyPlaylistAsset[]) {
   return [
     buildSpotifyArtistQuickAccess(KINTELA_SPOTIFY_ARTIST_ID, "kintela"),
@@ -669,6 +689,7 @@ function buildSpotifyQuickAccess(playlists: SpotifyPlaylistAsset[]) {
       "Desgarramantas",
     ),
     buildCastilianQuickAccess(),
+    buildWomenPowerQuickAccess(),
     buildLegacyQuickAccess(playlists),
   ].filter((asset): asset is SpotifyQuickAccessAsset => asset !== null);
 }
@@ -702,6 +723,30 @@ async function buildCastilianVirtualPlaylist() {
       imageUrl: null,
       externalUrl: `/spotify?spotifyPlaylist=${encodeURIComponent(
         SPOTIFY_VIRTUAL_CASTILIAN_PLAYLIST_ID,
+      )}`,
+      embedUrl: "",
+      ownerName: "kintela.es",
+      trackCount: tracks.length,
+      visibilityLabel: "Virtual",
+      collaborative: false,
+      isVirtual: true,
+    } satisfies SpotifyPlaylistAsset,
+    tracks,
+  };
+}
+
+async function buildWomenPowerVirtualPlaylist() {
+  const tracks = await readSpotifyCachedWomenPowerTracks();
+
+  return {
+    playlist: {
+      id: SPOTIFY_VIRTUAL_WOMEN_POWER_PLAYLIST_ID,
+      name: "Women Power",
+      description:
+        "Selección virtual con todos los temas marcados como cantados por mujeres.",
+      imageUrl: null,
+      externalUrl: `/spotify?spotifyPlaylist=${encodeURIComponent(
+        SPOTIFY_VIRTUAL_WOMEN_POWER_PLAYLIST_ID,
       )}`,
       embedUrl: "",
       ownerName: "kintela.es",
@@ -1727,11 +1772,19 @@ export async function getSpotifyPlaylistList(): Promise<SpotifyPlaylistListResul
   }
 
   try {
-    const persistedPlaylists = await readSpotifyCachedPlaylists();
-    const castilianVirtualPlaylist = await buildCastilianVirtualPlaylist();
-    const playlistsWithVirtual = castilianVirtualPlaylist.playlist.trackCount > 0
-      ? [castilianVirtualPlaylist.playlist, ...persistedPlaylists]
-      : persistedPlaylists;
+    const [persistedPlaylists, castilianVirtualPlaylist, womenPowerVirtualPlaylist] =
+      await Promise.all([
+        readSpotifyCachedPlaylists(),
+        buildCastilianVirtualPlaylist(),
+        buildWomenPowerVirtualPlaylist(),
+      ]);
+    const virtualPlaylists = [
+      ...(castilianVirtualPlaylist.playlist.trackCount > 0
+        ? [castilianVirtualPlaylist.playlist]
+        : []),
+      womenPowerVirtualPlaylist.playlist,
+    ];
+    const playlistsWithVirtual = [...virtualPlaylists, ...persistedPlaylists];
 
     if (playlistsWithVirtual.length > 0) {
       const persistedResult = buildSpotifyPlaylistListResult(
@@ -1808,6 +1861,18 @@ export async function getSpotifyPlaylistTracks(playlistId: string) {
       }));
 
     return hydrateSpotifyTrackYouTubeMetadata(sortedLanguageTracks);
+  }
+
+  if (normalizedPlaylistId === SPOTIFY_VIRTUAL_WOMEN_POWER_PLAYLIST_ID) {
+    const womenPowerTracks = await readSpotifyCachedWomenPowerTracks();
+    const sortedWomenPowerTracks = [...womenPowerTracks]
+      .sort(compareSpotifyTracks)
+      .map((track, index) => ({
+        ...track,
+        position: index + 1,
+      }));
+
+    return hydrateSpotifyTrackYouTubeMetadata(sortedWomenPowerTracks);
   }
 
   try {

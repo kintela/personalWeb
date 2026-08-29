@@ -31,10 +31,13 @@ export type SpotifyPlaylistTrackAsset = {
   albumName: string | null;
   albumReleaseDate: string | null;
   languageCode: string | null;
+  womenPower: boolean;
   durationMs: number | null;
   durationLabel: string;
   youtubeCacheStatus: "cached" | "uncached";
   rating: number;
+  sourcePlaylistId?: string;
+  sourcePosition?: number;
 };
 
 export type SpotifyPlaylistTrackSearchPreviewAsset = {

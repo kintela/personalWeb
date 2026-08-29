@@ -42,6 +42,7 @@ type SpotifyPlaylistTrackCacheRow = {
   album_name: string | null;
   album_release_date: string | null;
   language_code: string | null;
+  women_power: boolean | null;
   duration_ms: number | string | null;
   normalized_track_name: string;
   canonical_track_name: string;
@@ -237,6 +238,7 @@ function mapTrackCacheRowToAsset(
     albumName: trimNullableValue(row.album_name),
     albumReleaseDate: trimNullableValue(row.album_release_date),
     languageCode: trimNullableValue(row.language_code),
+    womenPower: Boolean(row.women_power),
     durationMs,
     durationLabel: formatSpotifyDurationLabel(durationMs),
     youtubeCacheStatus: "uncached",
@@ -854,7 +856,7 @@ export async function readSpotifyCachedPlaylistTracks(playlistSpotifyId: string)
   const { data, error } = await supabase
     .from("spotify_playlist_tracks_cache")
     .select(
-      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, duration_ms, normalized_track_name, canonical_track_name",
+      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, women_power, duration_ms, normalized_track_name, canonical_track_name",
     )
     .eq("playlist_cache_id", parseInteger(playlistRow.id))
     .order("position", { ascending: true })
@@ -879,9 +881,9 @@ export async function readSpotifyCachedTracksByLanguageCode(languageCode: string
 
   const { data: playlists, error: playlistsError } = await supabase
     .from("spotify_playlists_cache")
-    .select("id")
+    .select("id, spotify_id")
     .eq("is_active", true)
-    .returns<Array<{ id: number | string }>>();
+    .returns<Array<{ id: number | string; spotify_id: string }>>();
 
   if (playlistsError || !playlists?.length) {
     return [] as SpotifyPlaylistTrackAsset[];
@@ -890,6 +892,12 @@ export async function readSpotifyCachedTracksByLanguageCode(languageCode: string
   const activePlaylistIds = playlists
     .map((playlist) => parseInteger(playlist.id))
     .filter((playlistId) => playlistId > 0);
+  const playlistSpotifyIdByCacheId = new Map(
+    playlists.map((playlist) => [
+      parseInteger(playlist.id),
+      playlist.spotify_id.trim(),
+    ]),
+  );
 
   if (activePlaylistIds.length === 0) {
     return [] as SpotifyPlaylistTrackAsset[];
@@ -898,7 +906,7 @@ export async function readSpotifyCachedTracksByLanguageCode(languageCode: string
   const { data, error } = await supabase
     .from("spotify_playlist_tracks_cache")
     .select(
-      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, duration_ms, normalized_track_name, canonical_track_name",
+      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, women_power, duration_ms, normalized_track_name, canonical_track_name",
     )
     .in("playlist_cache_id", activePlaylistIds)
     .eq("language_code", normalizedLanguageCode)
@@ -913,6 +921,78 @@ export async function readSpotifyCachedTracksByLanguageCode(languageCode: string
 
   return (data ?? []).map((row, index) => ({
     ...mapTrackCacheRowToAsset(row),
+    position: index + 1,
+    sourcePlaylistId:
+      playlistSpotifyIdByCacheId.get(parseInteger(row.playlist_cache_id)) ??
+      undefined,
+    sourcePosition: Math.max(1, parseInteger(row.position)),
+  }));
+}
+
+export async function readSpotifyCachedWomenPowerTracks() {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const { data: playlists, error: playlistsError } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id, spotify_id")
+    .eq("is_active", true)
+    .returns<Array<{ id: number | string; spotify_id: string }>>();
+
+  if (playlistsError || !playlists?.length) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const activePlaylistIds = playlists
+    .map((playlist) => parseInteger(playlist.id))
+    .filter((playlistId) => playlistId > 0);
+  const playlistSpotifyIdByCacheId = new Map(
+    playlists.map((playlist) => [
+      parseInteger(playlist.id),
+      playlist.spotify_id.trim(),
+    ]),
+  );
+
+  if (activePlaylistIds.length === 0) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const { data, error } = await supabase
+    .from("spotify_playlist_tracks_cache")
+    .select(
+      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, women_power, duration_ms, normalized_track_name, canonical_track_name",
+    )
+    .in("playlist_cache_id", activePlaylistIds)
+    .eq("women_power", true)
+    .order("artists_label", { ascending: true })
+    .order("name", { ascending: true })
+    .returns<SpotifyPlaylistTrackCacheRow[]>();
+
+  if (error) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const uniqueTracks = new Map<string, SpotifyPlaylistTrackAsset>();
+
+  for (const row of data ?? []) {
+    const track = mapTrackCacheRowToAsset(row);
+
+    if (!uniqueTracks.has(track.id)) {
+      uniqueTracks.set(track.id, {
+        ...track,
+        sourcePlaylistId:
+          playlistSpotifyIdByCacheId.get(parseInteger(row.playlist_cache_id)) ??
+          undefined,
+        sourcePosition: Math.max(1, parseInteger(row.position)),
+      });
+    }
+  }
+
+  return [...uniqueTracks.values()].map((track, index) => ({
+    ...track,
     position: index + 1,
   }));
 }
@@ -946,7 +1026,7 @@ export async function readSpotifyCachedPlaylistTrackByPosition({
   const { data, error } = await supabase
     .from("spotify_playlist_tracks_cache")
     .select(
-      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, duration_ms, normalized_track_name, canonical_track_name",
+      "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, women_power, duration_ms, normalized_track_name, canonical_track_name",
     )
     .eq("playlist_cache_id", parseInteger(playlistRow.id))
     .eq("position", normalizedPosition)
@@ -1040,6 +1120,68 @@ export async function updateSpotifyCachedPlaylistTrackLanguage({
     ok: true,
     languageCode: trimNullableValue(updatedTrack.language_code),
   };
+}
+
+export async function updateSpotifyCachedPlaylistTrackWomenPower({
+  playlistSpotifyId,
+  position,
+  womenPower,
+}: {
+  playlistSpotifyId: string;
+  position: number;
+  womenPower: boolean;
+}): Promise<{ ok: true; womenPower: boolean } | { ok: false; error: string }> {
+  const supabase = createSupabaseServerClient();
+  const normalizedPlaylistSpotifyId = playlistSpotifyId.trim();
+  const normalizedPosition = Math.max(0, Math.trunc(position));
+
+  if (!supabase) {
+    return {
+      ok: false,
+      error: "Falta configurar Supabase para guardar la marca Women Power.",
+    };
+  }
+
+  if (!normalizedPlaylistSpotifyId || normalizedPosition <= 0) {
+    return {
+      ok: false,
+      error: "Faltan datos para localizar la canción cacheada.",
+    };
+  }
+
+  const { data: playlistRow, error: playlistError } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id")
+    .eq("spotify_id", normalizedPlaylistSpotifyId)
+    .maybeSingle<{ id: number | string }>();
+
+  if (playlistError || !playlistRow) {
+    return {
+      ok: false,
+      error: "No he encontrado la playlist cacheada en Supabase.",
+    };
+  }
+
+  const { data: updatedTrack, error: updateError } = await supabase
+    .from("spotify_playlist_tracks_cache")
+    .update({ women_power: womenPower })
+    .eq("playlist_cache_id", parseInteger(playlistRow.id))
+    .eq("position", normalizedPosition)
+    .select("women_power")
+    .maybeSingle<{ women_power: boolean | null }>();
+
+  if (updateError) {
+    return { ok: false, error: updateError.message };
+  }
+
+  if (!updatedTrack) {
+    return {
+      ok: false,
+      error: "No he encontrado la canción cacheada para actualizar Women Power.",
+    };
+  }
+
+  return { ok: true, womenPower: Boolean(updatedTrack.women_power) };
 }
 
 export async function updateSpotifyCachedPlaylistTrackLanguagesForPlaylist({
@@ -1248,7 +1390,7 @@ export async function searchSpotifyCachedTracksByQuery(query: string) {
     const { data, error } = await supabase
       .from("spotify_playlist_tracks_cache")
       .select(
-        "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, duration_ms, normalized_track_name, canonical_track_name",
+        "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, women_power, duration_ms, normalized_track_name, canonical_track_name",
       )
       .in("playlist_cache_id", activePlaylistIds)
       .or(

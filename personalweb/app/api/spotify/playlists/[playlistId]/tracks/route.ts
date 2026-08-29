@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
-import { getSpotifyPlaylistTracks } from "@/lib/spotify";
-import { updateSpotifyCachedPlaylistTrackLanguage } from "@/lib/supabase/spotify-cache";
+import {
+  getSpotifyPlaylistTracks,
+  invalidateSpotifyPlaylistListCache,
+} from "@/lib/spotify";
+import {
+  updateSpotifyCachedPlaylistTrackLanguage,
+  updateSpotifyCachedPlaylistTrackWomenPower,
+} from "@/lib/supabase/spotify-cache";
 
 export const runtime = "nodejs";
 
@@ -46,9 +52,10 @@ export async function PATCH(
   }
 
   const { playlistId } = await context.params;
-  const { position, languageCode } = (await request.json().catch(() => ({}))) as {
+  const { position, languageCode, womenPower } = (await request.json().catch(() => ({}))) as {
     position?: number;
     languageCode?: string | null;
+    womenPower?: boolean;
   };
   const normalizedPosition = Number.parseInt(String(position ?? ""), 10);
 
@@ -62,11 +69,18 @@ export async function PATCH(
     );
   }
 
-  const result = await updateSpotifyCachedPlaylistTrackLanguage({
-    playlistSpotifyId: playlistId,
-    position: normalizedPosition,
-    languageCode: languageCode ?? null,
-  });
+  const isWomenPowerUpdate = typeof womenPower === "boolean";
+  const result = isWomenPowerUpdate
+    ? await updateSpotifyCachedPlaylistTrackWomenPower({
+        playlistSpotifyId: playlistId,
+        position: normalizedPosition,
+        womenPower,
+      })
+    : await updateSpotifyCachedPlaylistTrackLanguage({
+        playlistSpotifyId: playlistId,
+        position: normalizedPosition,
+        languageCode: languageCode ?? null,
+      });
 
   if (!result.ok) {
     return NextResponse.json(
@@ -78,8 +92,7 @@ export async function PATCH(
     );
   }
 
-  return NextResponse.json({
-    ok: true,
-    languageCode: result.languageCode,
-  });
+  invalidateSpotifyPlaylistListCache();
+
+  return NextResponse.json(result);
 }
