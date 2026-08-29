@@ -10,6 +10,7 @@ export type SpotifyPlaylistAsset = {
   visibilityLabel: string;
   collaborative: boolean;
   isVirtual?: boolean;
+  isSearchResult?: boolean;
 };
 
 export type SpotifyQuickAccessAsset = {

@@ -1150,12 +1150,17 @@ export async function searchSpotifyCachedPlaylistsByTrackQuery(query: string) {
   );
   const escapedNormalizedQuery = escapeLikeValue(normalizedQuery);
   const escapedCanonicalQuery = escapeLikeValue(canonicalQuery || normalizedQuery);
+  const escapedArtistQuery = normalizedQuery
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(escapeLikeValue)
+    .join("%");
   const { data: tracks, error: tracksError } = await supabase
     .from("spotify_playlist_tracks_cache")
     .select("playlist_cache_id, position, name, artists_label")
     .in("playlist_cache_id", activePlaylistIds)
     .or(
-      `normalized_track_name.ilike.%${escapedNormalizedQuery}%,canonical_track_name.ilike.%${escapedCanonicalQuery}%`,
+      `normalized_track_name.ilike.%${escapedNormalizedQuery}%,canonical_track_name.ilike.%${escapedCanonicalQuery}%,artists_label.ilike.%${escapedArtistQuery}%`,
     )
     .order("position", { ascending: true })
     .returns<
@@ -1205,6 +1210,84 @@ export async function searchSpotifyCachedPlaylistsByTrackQuery(query: string) {
       { sensitivity: "base" },
     ),
   );
+}
+
+export async function searchSpotifyCachedTracksByQuery(query: string) {
+  const supabase = createSupabaseServerClient();
+  const normalizedQuery = normalizeSpotifyMatchValue(query);
+  const canonicalQuery = canonicalizeSpotifyTrackNameForMatch(query);
+
+  if (!supabase || !normalizedQuery) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const { data: playlists, error: playlistsError } = await supabase
+    .from("spotify_playlists_cache")
+    .select("id")
+    .eq("is_active", true)
+    .returns<Array<{ id: number | string }>>();
+
+  if (playlistsError || !playlists?.length) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const activePlaylistIds = playlists
+    .map((playlist) => parseInteger(playlist.id))
+    .filter((playlistId) => playlistId > 0);
+  const escapedNormalizedQuery = escapeLikeValue(normalizedQuery);
+  const escapedCanonicalQuery = escapeLikeValue(canonicalQuery || normalizedQuery);
+  const escapedArtistQuery = normalizedQuery
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(escapeLikeValue)
+    .join("%");
+  const rows: SpotifyPlaylistTrackCacheRow[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("spotify_playlist_tracks_cache")
+      .select(
+        "id, playlist_cache_id, spotify_track_id, position, name, artists_label, album_name, album_release_date, language_code, duration_ms, normalized_track_name, canonical_track_name",
+      )
+      .in("playlist_cache_id", activePlaylistIds)
+      .or(
+        `normalized_track_name.ilike.%${escapedNormalizedQuery}%,canonical_track_name.ilike.%${escapedCanonicalQuery}%,artists_label.ilike.%${escapedArtistQuery}%`,
+      )
+      .order("artists_label", { ascending: true })
+      .order("name", { ascending: true })
+      .range(from, from + pageSize - 1)
+      .returns<SpotifyPlaylistTrackCacheRow[]>();
+
+    if (error) {
+      return [] as SpotifyPlaylistTrackAsset[];
+    }
+
+    const pageRows = data ?? [];
+    rows.push(...pageRows);
+
+    if (pageRows.length < pageSize) {
+      break;
+    }
+  }
+
+  const uniqueTracks = new Map<string, SpotifyPlaylistTrackAsset>();
+
+  for (const row of rows) {
+    const track = mapTrackCacheRowToAsset(row);
+    const duplicateKey = track.id || [track.name, track.artistsLabel]
+      .join("::")
+      .toLocaleLowerCase("es-ES");
+
+    if (!uniqueTracks.has(duplicateKey)) {
+      uniqueTracks.set(duplicateKey, track);
+    }
+  }
+
+  return [...uniqueTracks.values()].map((track, index) => ({
+    ...track,
+    position: index + 1,
+  }));
 }
 
 export async function findSpotifyCachedTopicMatch({

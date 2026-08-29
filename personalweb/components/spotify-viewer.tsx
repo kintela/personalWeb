@@ -7,6 +7,7 @@ import {
   startTransition,
   useEffect,
   useEffectEvent,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -46,6 +47,7 @@ type SpotifyPlaylistTracksPayload = {
 
 type SpotifyPlaylistSearchPayload = {
   hits?: SpotifyPlaylistTrackSearchHitAsset[];
+  tracks?: SpotifyPlaylistTrackAsset[];
   error?: string;
 };
 
@@ -94,7 +96,8 @@ const SPOTIFY_VIEWER_GRID_STORAGE_KEY = "spotify-viewer-grid-density";
 const TRACK_RATING_VALUES = [1, 2, 3, 4, 5] as const;
 const UNCACHED_YOUTUBE_LOOKUP_DEBOUNCE_MS = 900;
 const PLAYLIST_TRACK_SEARCH_DEBOUNCE_MS = 700;
-const PLAYLIST_TRACK_SEARCH_MIN_LENGTH = 4;
+const PLAYLIST_TRACK_SEARCH_MIN_LENGTH = 2;
+const SPOTIFY_SEARCH_RESULTS_PLAYLIST_ID = "virtual-search-results";
 
 function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
@@ -566,6 +569,8 @@ export function SpotifyViewer({
   const [playlistTrackSearchCache, setPlaylistTrackSearchCache] = useState<
     Record<string, SpotifyPlaylistTrackSearchHitAsset[]>
   >({});
+  const [playlistTrackSearchResultsCache, setPlaylistTrackSearchResultsCache] =
+    useState<Record<string, SpotifyPlaylistTrackAsset[]>>({});
   const [playlistTrackSearchStatus, setPlaylistTrackSearchStatus] =
     useState<SpotifyTrackStatus>("idle");
   const [playlistTrackSearchError, setPlaylistTrackSearchError] = useState<
@@ -625,6 +630,9 @@ export function SpotifyViewer({
     normalizedFilterValue.length >= PLAYLIST_TRACK_SEARCH_MIN_LENGTH;
   const cachedPlaylistTrackSearchHits = shouldSearchTracksInPlaylists
     ? playlistTrackSearchCache[normalizedFilterValue] ?? []
+    : [];
+  const cachedPlaylistTrackSearchResults = shouldSearchTracksInPlaylists
+    ? playlistTrackSearchResultsCache[normalizedFilterValue] ?? []
     : [];
   const playlistTrackSearchHitByPlaylistId = new Map(
     cachedPlaylistTrackSearchHits.map((hit) => [hit.playlistId, hit]),
@@ -726,8 +734,37 @@ export function SpotifyViewer({
 
     return [...orderedTracks, ...missingTracks];
   })();
+  const searchResultsPlaylist = useMemo<SpotifyPlaylistAsset | null>(() => {
+    if (
+      selectedPlaylistId !== SPOTIFY_SEARCH_RESULTS_PLAYLIST_ID ||
+      !appliedFilterValue ||
+      cachedPlaylistTrackSearchResults.length === 0
+    ) {
+      return null;
+    }
+
+    return {
+      id: SPOTIFY_SEARCH_RESULTS_PLAYLIST_ID,
+      name: `Resultados para “${appliedFilterValue}”`,
+      description: `Canciones encontradas por título o artista en todas tus playlists.`,
+      imageUrl: null,
+      externalUrl: "",
+      embedUrl: "",
+      ownerName: "kintela.es",
+      trackCount: cachedPlaylistTrackSearchResults.length,
+      visibilityLabel: "Virtual",
+      collaborative: false,
+      isVirtual: true,
+      isSearchResult: true,
+    };
+  }, [
+    appliedFilterValue,
+    cachedPlaylistTrackSearchResults.length,
+    selectedPlaylistId,
+  ]);
   const selectedPlaylist =
-    playlists.find((playlist) => playlist.id === selectedPlaylistId) ?? null;
+    playlists.find((playlist) => playlist.id === selectedPlaylistId) ??
+    searchResultsPlaylist;
   const selectedPlaylistShareSlug = selectedPlaylist
     ? (playlistShareSlugById.get(selectedPlaylist.id) ?? selectedPlaylist.id)
     : "";
@@ -968,10 +1005,15 @@ export function SpotifyViewer({
           }
 
           const nextHits = Array.isArray(payload.hits) ? payload.hits : [];
+          const nextTracks = Array.isArray(payload.tracks) ? payload.tracks : [];
 
           setPlaylistTrackSearchCache((currentValue) => ({
             ...currentValue,
             [normalizedFilterValue]: nextHits,
+          }));
+          setPlaylistTrackSearchResultsCache((currentValue) => ({
+            ...currentValue,
+            [normalizedFilterValue]: nextTracks,
           }));
           setPlaylistTrackSearchStatus("ready");
         } catch (error) {
@@ -1400,6 +1442,18 @@ export function SpotifyViewer({
     setLanguageSavingTrackId(null);
     setLanguageSuccess(null);
     setPlaylistLanguageAction(null);
+  }
+
+  function handleOpenSearchResults() {
+    if (cachedPlaylistTrackSearchResults.length === 0) {
+      return;
+    }
+
+    setTrackCache((currentCache) => ({
+      ...currentCache,
+      [SPOTIFY_SEARCH_RESULTS_PLAYLIST_ID]: cachedPlaylistTrackSearchResults,
+    }));
+    handleOpenPlaylistViewer(SPOTIFY_SEARCH_RESULTS_PLAYLIST_ID);
   }
 
   function markTrackVideoAsCached(trackId: string) {
@@ -2144,7 +2198,7 @@ export function SpotifyViewer({
                       type="search"
                       value={filterInput}
                       onChange={(event) => setFilterInput(event.target.value)}
-                      placeholder="Buscar por lista, descripción o tema..."
+                      placeholder="Buscar por lista, descripción, tema o artista..."
                       className="w-full rounded-2xl border border-white/10 bg-[#060b1d] px-4 py-4 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/70"
                     />
 
@@ -2189,19 +2243,19 @@ export function SpotifyViewer({
                       <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/80">
                         {cachedPlaylistTrackSearchHits.length} coincidencia
                         {cachedPlaylistTrackSearchHits.length === 1 ? "" : "s"}{" "}
-                        por tema dentro de tus playlists
+                        por tema o artista dentro de tus playlists
                       </p>
                     ) : null}
                     {!shouldSearchTracksInPlaylists &&
                     appliedFilterValue.length > 0 ? (
                       <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                        La búsqueda por tema se activa a partir de 4 caracteres
+                        La búsqueda por tema o artista se activa a partir de 2 caracteres
                       </p>
                     ) : null}
                     {shouldSearchTracksInPlaylists &&
                     playlistTrackSearchStatus === "loading" ? (
                       <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/80">
-                        Buscando también temas dentro de tus playlists...
+                        Buscando también temas y artistas dentro de tus playlists...
                       </p>
                     ) : null}
                     {playlistTrackSearchError ? (
@@ -2213,6 +2267,34 @@ export function SpotifyViewer({
                 ) : null}
               </div>
             </div>
+
+            {cachedPlaylistTrackSearchResults.length > 0 ? (
+              <button
+                type="button"
+                onClick={handleOpenSearchResults}
+                className="group flex w-full flex-col gap-4 rounded-[2rem] border border-cyan-300/30 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),rgba(2,6,23,0.82)_52%)] px-5 py-5 text-left shadow-[0_18px_50px_rgba(8,145,178,0.1)] transition hover:border-cyan-200/55 hover:bg-cyan-300/10 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <span className="min-w-0">
+                  <span className="block text-[0.68rem] font-medium uppercase tracking-[0.28em] text-cyan-300/80">
+                    Resultados combinados
+                  </span>
+                  <span className="mt-2 block text-xl font-semibold text-white">
+                    Escuchar {cachedPlaylistTrackSearchResults.length}{" "}
+                    {cachedPlaylistTrackSearchResults.length === 1
+                      ? "canción encontrada"
+                      : "canciones encontradas"}
+                  </span>
+                  <span className="mt-1 block text-sm leading-6 text-slate-300">
+                    Coincidencias por título o artista reunidas desde todas tus playlists,
+                    sin canciones duplicadas.
+                  </span>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-3 rounded-full border border-cyan-300/35 bg-cyan-300/12 px-5 py-3 text-sm font-medium uppercase tracking-[0.18em] text-cyan-50 transition group-hover:border-cyan-200/60 group-hover:bg-cyan-300/18">
+                  Escuchar resultados
+                  <span aria-hidden="true">→</span>
+                </span>
+              </button>
+            ) : null}
 
             <div className="rounded-[2rem] border border-white/10 bg-slate-950/35 p-4">
               <div className="grid gap-3 md:grid-cols-3">
@@ -2322,7 +2404,7 @@ export function SpotifyViewer({
                             </span>
                             {trackSearchHit ? (
                               <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.16em] text-cyan-100">
-                                Tema encontrado
+                                Tema o artista encontrado
                               </span>
                             ) : null}
                           </div>
@@ -2363,7 +2445,7 @@ export function SpotifyViewer({
                           ) : null}
                           {trackSearchHit ? (
                             <p className="text-sm leading-7 text-cyan-100/85">
-                              Coincide con el tema{" "}
+                              Coincide con{" "}
                               <span className="font-semibold text-white">
                                 {trackSearchHit.matchedTrack.trackName}
                               </span>
@@ -2443,14 +2525,16 @@ export function SpotifyViewer({
                         </div>
 
                         <div className="flex items-center gap-3">
-                          <ShareCardButton
-                            anchorId={selectedPlaylistViewerAnchorId}
-                            sectionId="spotify"
-                            queryValues={{
-                              spotifyPlaylist:
-                                selectedPlaylistShareSlug || selectedPlaylist.id,
-                            }}
-                          />
+                          {selectedPlaylist.isSearchResult ? null : (
+                            <ShareCardButton
+                              anchorId={selectedPlaylistViewerAnchorId}
+                              sectionId="spotify"
+                              queryValues={{
+                                spotifyPlaylist:
+                                  selectedPlaylistShareSlug || selectedPlaylist.id,
+                              }}
+                            />
+                          )}
                           {selectedPlaylist.isVirtual ? null : (
                             <a
                               href={selectedPlaylist.externalUrl}
@@ -2596,6 +2680,7 @@ export function SpotifyViewer({
                                 </button>
                               </div>
                             </div>
+                            {selectedPlaylist.isSearchResult ? null : (
                             <div className="mt-3 flex items-center gap-2">
                               <button
                                 type="button"
@@ -2632,6 +2717,7 @@ export function SpotifyViewer({
                                 ES lista
                               </button>
                             </div>
+                            )}
                           </div>
 
                           <div className="border-b border-white/10 px-3 py-3">

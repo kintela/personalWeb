@@ -28,6 +28,7 @@ import {
   readSpotifyCachedPlaylists,
   replaceSpotifyCachedPlaylistTracks,
   searchSpotifyCachedPlaylistsByTrackQuery,
+  searchSpotifyCachedTracksByQuery,
   updateSpotifyCachedPlaylistTrackLanguage,
   upsertSpotifyCachedPlaylists,
 } from "@/lib/supabase/spotify-cache";
@@ -58,7 +59,7 @@ const SPOTIFY_PLAYLIST_LIST_CACHE_TTL_MS = 2 * 60_000;
 const SPOTIFY_PLAYLIST_TRACK_INDEX_CACHE_TTL_MS = 10 * 60_000;
 const SPOTIFY_PLAYLIST_TRACK_QUERY_CACHE_TTL_MS = 10 * 60_000;
 const SPOTIFY_RATE_LIMIT_FALLBACK_MS = 30_000;
-const SPOTIFY_PLAYLIST_TRACK_SEARCH_MIN_QUERY_LENGTH = 4;
+const SPOTIFY_PLAYLIST_TRACK_SEARCH_MIN_QUERY_LENGTH = 2;
 const SPOTIFY_PLAYLIST_TRACK_INDEX_CONCURRENCY = 2;
 const SPOTIFY_PLAYLIST_TRACK_PAGE_LIMIT = 50;
 const SPOTIFY_SUPABASE_CACHE_TTL_MS = 6 * 60 * 60_000;
@@ -1519,7 +1520,10 @@ export async function searchSpotifyOwnedPlaylistsByTrackQuery(
         entry.tracks.find(
           (track) =>
             track.normalizedTrackName.includes(normalizedQuery) ||
-            track.canonicalTrackName.includes(normalizedQuery),
+            track.canonicalTrackName.includes(normalizedQuery) ||
+            normalizeSpotifyMatchValue(track.trackArtistsLabel).includes(
+              normalizedQuery,
+            ),
         ) ?? null;
 
       if (!matchedTrack) {
@@ -1557,6 +1561,25 @@ export async function searchSpotifyOwnedPlaylistsByTrackQuery(
 
     return [];
   }
+}
+
+export async function searchSpotifyOwnedTracksByQuery(query: string) {
+  if (!isSpotifyConfigured() || !isSpotifyConnected()) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const normalizedQuery = normalizeSpotifyMatchValue(query);
+
+  if (
+    !normalizedQuery ||
+    normalizedQuery.length < SPOTIFY_PLAYLIST_TRACK_SEARCH_MIN_QUERY_LENGTH
+  ) {
+    return [] as SpotifyPlaylistTrackAsset[];
+  }
+
+  const tracks = await searchSpotifyCachedTracksByQuery(query);
+
+  return hydrateSpotifyTrackYouTubeMetadata(tracks);
 }
 
 export async function findSpotifyTopicMatchInOwnedPlaylists({

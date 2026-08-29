@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { searchSpotifyCachedPlaylistsByTrackQuery } from "@/lib/supabase/spotify-cache";
+import {
+  searchSpotifyOwnedPlaylistsByTrackQuery,
+  searchSpotifyOwnedTracksByQuery,
+} from "@/lib/spotify";
 
 export const runtime = "nodejs";
 
@@ -7,14 +10,17 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q")?.trim() ?? "";
 
-  if (!query || query.length < 4) {
+  if (!query || query.length < 2) {
     return NextResponse.json({ hits: [] });
   }
 
   try {
-    const hits = await searchSpotifyCachedPlaylistsByTrackQuery(query);
+    const [hits, tracks] = await Promise.all([
+      searchSpotifyOwnedPlaylistsByTrackQuery(query),
+      searchSpotifyOwnedTracksByQuery(query),
+    ]);
 
-    return NextResponse.json({ hits });
+    return NextResponse.json({ hits, tracks });
   } catch (error) {
     const message =
       error instanceof Error
