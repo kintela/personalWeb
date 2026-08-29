@@ -109,6 +109,27 @@ function getPlaylistCountLabel(count: number) {
   return `${count} lista${count === 1 ? "" : "s"}`;
 }
 
+function buildShareableTrackListText(
+  playlistName: string,
+  tracks: SpotifyPlaylistTrackAsset[],
+) {
+  const trackLines = tracks.map((track, index) => {
+    const heading = `${index + 1}. ${track.name} — ${track.artistsLabel}`;
+    const hasSpotifyTrackId = /^[a-zA-Z0-9]{22}$/u.test(track.id);
+
+    return hasSpotifyTrackId
+      ? `${heading}\nhttps://open.spotify.com/track/${encodeURIComponent(track.id)}`
+      : heading;
+  });
+
+  return [
+    `🎵 ${playlistName}`,
+    `${tracks.length} ${tracks.length === 1 ? "tema" : "temas"}`,
+    "",
+    ...trackLines,
+  ].join("\n");
+}
+
 function buildSpotifyPlaylistShareSlugBase(name: string) {
   const normalizedSlug = name
     .normalize("NFKD")
@@ -2641,7 +2662,23 @@ export function SpotifyViewer({
                         </div>
 
                         <div className="flex items-center gap-3">
-                          {selectedPlaylist.isSearchResult ? null : (
+                          {selectedPlaylist.isSearchResult ? (
+                            <ShareCardButton
+                              anchorId={selectedPlaylistViewerAnchorId}
+                              sectionId="spotify"
+                              queryValues={{
+                                spotifyFilter: appliedFilterValue,
+                              }}
+                              shareTitle={selectedPlaylist.name}
+                              shareText={buildShareableTrackListText(
+                                selectedPlaylist.name,
+                                playlistTracks,
+                              )}
+                              preferNativeShare
+                              buttonLabel={`Compartir ${playlistTracks.length} temas`}
+                              copiedLabel="Lista copiada"
+                            />
+                          ) : (
                             <ShareCardButton
                               anchorId={selectedPlaylistViewerAnchorId}
                               sectionId="spotify"

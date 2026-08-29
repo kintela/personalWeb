@@ -10,6 +10,11 @@ type ShareCardButtonProps = {
   className?: string;
   queryKeys?: readonly string[];
   queryValues?: Readonly<Record<string, string | null | undefined>>;
+  shareText?: string;
+  shareTitle?: string;
+  preferNativeShare?: boolean;
+  buttonLabel?: string;
+  copiedLabel?: string;
 };
 
 function ShareIcon() {
@@ -52,6 +57,11 @@ export function ShareCardButton({
   className,
   queryKeys = [],
   queryValues,
+  shareText,
+  shareTitle,
+  preferNativeShare = false,
+  buttonLabel,
+  copiedLabel = "Enlace copiado",
 }: ShareCardButtonProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -97,16 +107,38 @@ export function ShareCardButton({
 
     const query = params.toString();
     const shareUrl = `${window.location.origin}${pathname}${query ? `?${query}` : ""}`;
+    const normalizedShareText = shareText?.trim() ?? "";
+
+    if (preferNativeShare && typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: shareTitle?.trim() || undefined,
+          text: normalizedShareText || undefined,
+          url: shareUrl,
+        });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+      }
+    }
+
+    const clipboardValue = [normalizedShareText, shareUrl]
+      .filter(Boolean)
+      .join("\n\n");
 
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(clipboardValue);
       setCopied(true);
     } catch {
-      window.prompt("Copia este enlace:", shareUrl);
+      window.prompt("Copia este contenido:", clipboardValue);
     }
   }
 
-  const label = copied ? "Enlace copiado" : "Copiar enlace";
+  const label = copied
+    ? copiedLabel
+    : buttonLabel ?? (preferNativeShare ? "Compartir" : "Copiar enlace");
 
   return (
     <button
